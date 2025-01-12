@@ -1,0 +1,47 @@
+name: Static Analysis
+'on':
+  push:
+    branches:
+      - 'master'
+  pull_request:
+    branches:
+      - 'master'
+env:
+  BUILD_TYPE: Release
+jobs:
+  static-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@v1.1.1
+        with:
+          version: latest
+          cache: true
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.19
+      - name: Install Clang-20
+        run: |
+          sudo apt update
+          wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 20 all
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-20 10
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-20 10
+          sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-20 10
+      - name: Install tools
+        run: |
+          sudo apt install cppcheck
+      - name: Configure CMake
+        run: >-
+          cmake -B ${{github.workspace}}/build
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+          -Dsph_ENABLE_CPPCHECK=ON
+          -Dsph_ENABLE_CLANG_TIDY=ON
+          -Dsph_WARNINGS_AS_ERRORS=ON
+          -DGLFW_BUILD_WAYLAND=OFF
+
+      - name: Build
+        run: 'cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}'
