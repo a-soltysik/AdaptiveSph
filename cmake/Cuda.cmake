@@ -22,6 +22,8 @@ macro(sph_target_link_cuda target)
         set(CMAKE_CUDA_STANDARD "${CMAKE_CXX_STANDARD}")
     endif()
 
+    set_target_properties(${target} PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
+
     # -fPIC
     set_target_properties(${target} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 

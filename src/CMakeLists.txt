@@ -1,7 +1,4 @@
 add_executable(AdaptiveSph main.cpp)
-#sph_suppress_ipo()
-add_subdirectory(cuda)
-#sph_resume_ipo()
 
 target_link_libraries(AdaptiveSph PRIVATE sph::sph_options sph::sph_warnings AdaptiveSphCuda)
 
@@ -18,3 +15,9 @@ if(WIN32)
         CACHE FILEPATH "Host side compiler used by NVCC" FORCE)
 endif(WIN32)
 target_include_directories(AdaptiveSph PRIVATE "${CMAKE_BINARY_DIR}/configured_files/include")
+
+set_target_properties(AdaptiveSph PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)

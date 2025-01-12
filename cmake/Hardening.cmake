@@ -81,8 +81,11 @@ macro(
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${NEW_LINK_OPTIONS}")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${NEW_CXX_DEFINITIONS}")
     else()
-        target_compile_options(${target} INTERFACE ${NEW_COMPILE_OPTIONS})
-        target_link_options(${target} INTERFACE ${NEW_LINK_OPTIONS})
-        target_compile_definitions(${target} INTERFACE ${NEW_CXX_DEFINITIONS})
+        target_compile_options(${target}
+                               INTERFACE $<$<OR:$<COMPILE_LANGUAGE:CXX>,$<COMPILE_LANGUAGE:C>>:${NEW_COMPILE_OPTIONS}>)
+        target_link_options(${target} INTERFACE
+                            $<$<OR:$<COMPILE_LANGUAGE:CXX>,$<COMPILE_LANGUAGE:C>>:${NEW_LINK_OPTIONS}>)
+        target_compile_definitions(
+            ${target} INTERFACE $<$<OR:$<COMPILE_LANGUAGE:CXX>,$<COMPILE_LANGUAGE:C>>:${NEW_CXX_DEFINITIONS}>)
     endif()
 endmacro()

@@ -6,15 +6,10 @@ endif()
 
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-project(
-    AdaptiveSph
-    VERSION 0.0.1
-    LANGUAGES CXX CUDA)
+project(AdaptiveSph LANGUAGES CXX CUDA)
 
 include(cmake/PreventInSourceBuilds.cmake)
 include(ProjectOptions.cmake)
-
-set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER})
 
 sph_setup_options()
 
@@ -32,6 +27,7 @@ add_library(sph::sph_warnings ALIAS sph_warnings)
 add_subdirectory(configured_files)
 
 add_subdirectory(src)
+add_subdirectory(cuda)
 
 if(MSVC)
     get_all_installable_targets(all_targets)

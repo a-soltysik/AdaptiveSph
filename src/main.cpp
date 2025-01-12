@@ -1,4 +1,4 @@
-extern void helloWorld();
+#include <cuda/kernel.cuh>
 
 auto main() -> int
 {
