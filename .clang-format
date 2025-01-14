@@ -1,0 +1,45 @@
+BasedOnStyle: Google
+AccessModifierOffset: -4
+AlignArrayOfStructures: Left
+AllowAllArgumentsOnNextLine: false
+AllowShortBlocksOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: None
+AllowShortLoopsOnASingleLine: false
+BinPackArguments: false
+BinPackParameters: false
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterEnum: true
+  AfterClass: true
+  AfterControlStatement: Always
+  AfterFunction: true
+  AfterNamespace: true
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeWhile: true
+  BeforeLambdaBody: false
+BreakBeforeBraces: Custom
+ColumnLimit: 120
+DerivePointerAlignment: false
+FixNamespaceComments: false
+IndentCaseLabels: false
+IndentGotoLabels: false
+IndentPPDirectives: AfterHash
+IndentRequiresClause: false
+IndentWidth: 4
+InsertBraces: true
+LambdaBodyIndentation: Signature
+PackConstructorInitializers: Never
+ReflowComments: false
+SeparateDefinitionBlocks: Always
+SpaceAfterCStyleCast: true
+SpaceBeforeCpp11BracedList: true
+SpaceInEmptyBlock: true
+Standard: c++20
+TabWidth: 4
+QualifierAlignment: Custom
+QualifierOrder: [ 'inline', 'static', 'constexpr', 'const', 'volatile', 'type' ]

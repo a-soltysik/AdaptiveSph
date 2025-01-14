@@ -1,0 +1,24 @@
+name: Formatting Check
+on:
+  push:
+    branches:
+      - 'master'
+  pull_request:
+    branches:
+      - 'master'
+jobs:
+  clang-format-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run clang-format check
+        uses: jidicula/clang-format-action@v4.14.0
+        with:
+          clang-format-version: '19'
+  cmake-format-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run cmake-format check
+        uses: puneetmatharu/cmake-format-lint-action@v1.0.5
+        with:
+          args: --check -c .cmake-format.yaml

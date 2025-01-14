@@ -1,0 +1,79 @@
+name: CodeQL
+
+on:
+  push:
+    branches:
+      - 'master'
+  pull_request:
+    branches:
+      - 'master'
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'cpp' ]
+        compiler:
+          - gcc-13
+        generator:
+          - Ninja
+        build_type:
+          - Debug
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install X11
+      run: |
+        sudo apt update
+        sudo apt install xorg-dev
+
+    - name: Install Vulkan SDK
+      uses: humbletim/install-vulkan-sdk@v1.1.1
+      with:
+        version: 1.3.296.0
+        cache: true
+
+    - name: Install CUDA Toolkit
+      uses: Jimver/cuda-toolkit@v0.2.19
+      with:
+          log-file-suffix: '${{github.job}}-${{matrix.compiler}}-${{matrix.build_type}}.txt'
+
+    - name: Setup Cache
+      uses: ./.github/actions/setup-cache
+      with:
+        compiler: ${{ matrix.compiler }}
+        build_type: ${{ matrix.build_type }}
+
+    - name: Setup Cpp
+      uses: aminya/setup-cpp@v1
+      with:
+        compiler: ${{ matrix.compiler }}
+        cmake: true
+        ninja: true
+        ccache: true
+
+    - name: Configure CMake
+      run: >-
+        cmake -S . -B ./build -G "${{matrix.generator}}"
+        -DCMAKE_BUILD_TYPE=${{matrix.build_type}}
+        -DGLFW_BUILD_WAYLAND=OFF
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: ${{ matrix.language }}
+
+    - name: Build
+      run: |
+        cmake --build ./build --config ${{matrix.build_type}}
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
