@@ -1,5 +1,8 @@
 name: CodeQL
 
+env:
+  CCACHE_CONFIGPATH: '~/.cache/ccache'
+
 on:
   push:
     branches:
@@ -52,6 +55,11 @@ jobs:
         compiler: ${{ matrix.compiler }}
         build_type: ${{ matrix.build_type }}
 
+    - name: Project Name
+      uses: cardinalby/export-env-action@v2
+      with:
+        envFile: '.github/constants.env'
+
     - name: Setup Cpp
       uses: aminya/setup-cpp@v1
       with:
@@ -65,15 +73,17 @@ jobs:
         cmake -S . -B ./build -G "${{matrix.generator}}"
         -DCMAKE_BUILD_TYPE=${{matrix.build_type}}
         -DGLFW_BUILD_WAYLAND=OFF
+        -DCPM_SOURCE_CACHE="~/.cache/CPM"
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v2
+      uses: github/codeql-action/init@v3
       with:
         languages: ${{ matrix.language }}
+        config-file: ./.github/codeql/codeql-config.yml
 
     - name: Build
       run: |
         cmake --build ./build --config ${{matrix.build_type}}
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
+      uses: github/codeql-action/analyze@v3
