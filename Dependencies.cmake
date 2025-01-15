@@ -6,10 +6,10 @@ include(cmake/CPM.cmake)
 function(sph_setup_dependencies)
 
     if(NOT TARGET fmtlib::fmtlib)
-        CPMAddPackage("gh:fmtlib/fmt#11.1.1")
+        cpmaddpackage("gh:fmtlib/fmt#11.1.1")
     endif()
     if(NOT TARGET PD::Engine)
-        CPMAddPackage("gh:a-soltysik/Panda#1.0.1")
+        cpmaddpackage("gh:a-soltysik/Panda#1.0.2")
     endif()
 
 endfunction()
