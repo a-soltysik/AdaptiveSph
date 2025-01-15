@@ -18,7 +18,6 @@ endmacro()
 
 macro(sph_setup_options)
     option(sph_ENABLE_HARDENING "Enable hardening" ON)
-    option(sph_ENABLE_COVERAGE "Enable coverage reporting" OFF)
     cmake_dependent_option(
         sph_ENABLE_GLOBAL_HARDENING
         "Attempt to push hardening options to built dependencies"
@@ -114,7 +113,7 @@ macro(sph_local_options)
     add_library(sph_warnings INTERFACE)
     add_library(sph_options INTERFACE)
 
-    if (sph_ENABLE_WARNINGS)
+    if(sph_ENABLE_WARNINGS)
         include(cmake/CompilerWarnings.cmake)
         sph_set_project_warnings(
             sph_warnings
@@ -165,9 +164,9 @@ macro(sph_local_options)
         )
     endif()
 
-    if (sph_ENABLE_IWYU)
+    if(sph_ENABLE_IWYU)
         sph_enable_include_what_you_use()
-    endif ()
+    endif()
 
     if(sph_ENABLE_HARDENING AND NOT sph_ENABLE_GLOBAL_HARDENING)
         include(cmake/Hardening.cmake)

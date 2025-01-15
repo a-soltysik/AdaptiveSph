@@ -1,4 +1,8 @@
 name: Build
+
+env:
+  CCACHE_CONFIGPATH: '~/.cache/ccache'
+
 on:
   push:
     branches:
@@ -55,6 +59,11 @@ jobs:
           compiler: ${{ matrix.compiler }}
           build_type: ${{ matrix.build_type }}
 
+      - name: Project Name
+        uses: cardinalby/export-env-action@v2
+        with:
+          envFile: '.github/constants.env'
+
       - name: Setup Cpp
         uses: aminya/setup-cpp@v1
         with:
@@ -71,6 +80,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{matrix.build_type}}
             -D${{ env.PROJECT_NAME }}_ENABLE_CACHE=ON
             -DGLFW_BUILD_WAYLAND=OFF
+            -DCPM_SOURCE_CACHE="~/.cache/CPM"
       - name: Build
         run: |
           cmake --build ./build --config ${{matrix.build_type}}
@@ -113,6 +123,11 @@ jobs:
           compiler: ${{ matrix.compiler }}
           build_type: ${{ matrix.build_type }}
 
+      - name: Project Name
+        uses: cardinalby/export-env-action@v2
+        with:
+          envFile: '.github/constants.env'
+
       - name: Setup Cpp
         uses: aminya/setup-cpp@v0.45.0
         with:
@@ -133,6 +148,7 @@ jobs:
           -D${{ env.PROJECT_NAME }}_ENABLE_CLANG_TIDY=ON 
           -D${{ env.PROJECT_NAME }}_ENABLE_CPPCHECK=ON 
           -DGLFW_BUILD_WAYLAND=OFF
+          -DCPM_SOURCE_CACHE="~/.cache/CPM"
       - name: Build
         run: |
           cmake --build ./build --config ${{matrix.build_type}}
