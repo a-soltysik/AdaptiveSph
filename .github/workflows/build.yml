@@ -94,7 +94,7 @@ jobs:
           - ubuntu-latest
         compiler:
           - gcc-13
-          - llvm-18
+          - llvm-20
         build_type:
           - Debug
     steps:
@@ -144,7 +144,7 @@ jobs:
           -D${{ env.PROJECT_NAME }}_ENABLE_IPO=ON
           -DCMAKE_BUILD_TYPE=${{matrix.build_type}}
           -D${{ env.PROJECT_NAME }}_ENABLE_CACHE=ON
-          -D${{ env.PROJECT_NAME }}_WARNINGS_AS_ERRORS=ON
+          -D${{ env.PROJECT_NAME }}_ENABLE_WARNINGS_AS_ERRORS=ON
           -D${{ env.PROJECT_NAME }}_ENABLE_CLANG_TIDY=ON 
           -D${{ env.PROJECT_NAME }}_ENABLE_CPPCHECK=ON 
           -DGLFW_BUILD_WAYLAND=OFF

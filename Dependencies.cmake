@@ -1,15 +1,22 @@
 include(cmake/CPM.cmake)
 
-# Done as a function so that updates to variables like
-# CMAKE_CXX_FLAGS don't propagate out to other
-# targets
 function(sph_setup_dependencies)
 
     if(NOT TARGET fmtlib::fmtlib)
         cpmaddpackage("gh:fmtlib/fmt#11.1.1")
     endif()
     if(NOT TARGET PD::Engine)
-        cpmaddpackage("gh:a-soltysik/Panda#1.0.2")
+        cpmaddpackage("gh:a-soltysik/Panda#1.1.0")
+    endif()
+    if(NOT TARGET glfw)
+        cpmaddpackage("gh:glfw/glfw#3.4")
+    endif()
+    if(NOT TARGET glm)
+        cpmaddpackage("gh:g-truc/glm#1.0.1")
+    endif()
+    if(NOT TARGET imgui)
+        cpmaddpackage("gh:ocornut/imgui@1.91.6")
+        add_subdirectory(ext/imgui-cmake)
     endif()
 
 endfunction()

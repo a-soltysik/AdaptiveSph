@@ -1,19 +1,23 @@
 ---
 Checks: "*,
-        -abseil-*,
-        -altera-*,
-        -android-*,
-        -fuchsia-*,
-        -google-*,
-        -llvm*,
-        -zircon-*,
-"
-WarningsAsErrors: ''
-HeaderFilterRegex: ''
-FormatStyle:     none
+  -abseil-*,
+  -altera-*,
+  -android-*,
+  -fuchsia-*,
+  -google-*,
+  -llvm*,
+  -zircon-*
+  -bugprone-easily-swappable-parameters,
+  -cppcoreguidelines-pro-type-union-access,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -readability-magic-numbers"
+WarningsAsErrors: ""
+HeaderFilterRegex: ""
+FormatStyle: none
 
 CheckOptions:
   - key: readability-identifier-length.IgnoredVariableNames
-    value: 'x|y|z'
+    value: "x|y|z|u|v|it"
   - key: readability-identifier-length.IgnoredParameterNames
-    value: 'x|y|z'
+    value: "x|y|z|u|v"
