@@ -4,6 +4,7 @@ out/
 out/coverage/*
 cmake-build-*/
 conan-cache/
+compile_commands.json
 
 # User spesific settings
 CMakeUserPresets.json
@@ -38,3 +39,6 @@ Thumbs.db
 # CMake
 CMakeFiles
 CMakeCache.txt
+
+# cache
+.cache/

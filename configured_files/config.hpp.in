@@ -2,4 +2,10 @@
 
 namespace sph::config {
 inline constexpr std::string_view project_name = "@PROJECT_NAME@";
+
+#if defined(NDEBUG)
+inline constexpr auto isDebug = false;
+#else
+inline constexpr auto isDebug = true;
+#endif
 }

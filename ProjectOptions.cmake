@@ -30,7 +30,7 @@ macro(sph_setup_options)
     if(NOT PROJECT_IS_TOP_LEVEL OR sph_PACKAGING_MAINTAINER_MODE)
         option(sph_ENABLE_IPO "Enable IPO/LTO" OFF)
         option(sph_ENABLE_WARNINGS "Enable warnings" OFF)
-        option(sph_WARNINGS_AS_ERRORS "Treat Warnings As Errors" OFF)
+        option(sph_ENABLE_WARNINGS_AS_ERRORS "Treat Warnings As Errors" OFF)
         option(sph_ENABLE_USER_LINKER "Enable user-selected linker" OFF)
         option(sph_ENABLE_SANITIZER_ADDRESS "Enable address sanitizer" OFF)
         option(sph_ENABLE_SANITIZER_LEAK "Enable leak sanitizer" OFF)
@@ -43,10 +43,11 @@ macro(sph_setup_options)
         option(sph_ENABLE_IWYU "Enable include-what-you-use analysis" OFF)
         option(sph_ENABLE_PCH "Enable precompiled headers" OFF)
         option(sph_ENABLE_CACHE "Enable ccache" OFF)
+        option(sph_ENABLE_COMPILE_COMMANDS "Enable support for compile_commnads.json" OFF)
     else()
         option(sph_ENABLE_IPO "Enable IPO/LTO" OFF)
         option(sph_ENABLE_WARNINGS "Enable warnings" ON)
-        option(sph_WARNINGS_AS_ERRORS "Treat Warnings As Errors" OFF)
+        option(sph_ENABLE_WARNINGS_AS_ERRORS "Treat Warnings As Errors" OFF)
         option(sph_ENABLE_USER_LINKER "Enable user-selected linker" OFF)
         option(sph_ENABLE_SANITIZER_ADDRESS "Enable address sanitizer" OFF)
         option(sph_ENABLE_SANITIZER_LEAK "Enable leak sanitizer" OFF)
@@ -59,13 +60,14 @@ macro(sph_setup_options)
         option(sph_ENABLE_IWYU "Enable include-what-you-use analysis" OFF)
         option(sph_ENABLE_PCH "Enable precompiled headers" OFF)
         option(sph_ENABLE_CACHE "Enable ccache" OFF)
+        option(sph_ENABLE_COMPILE_COMMANDS "Enable support for compile_commnads.json" ON)
     endif()
 
     if(NOT PROJECT_IS_TOP_LEVEL)
         mark_as_advanced(
             sph_ENABLE_IPO
             sph_ENABLE_WARNINGS
-            sph_WARNINGS_AS_ERRORS
+            sph_ENABLE_WARNINGS_AS_ERRORS
             sph_ENABLE_USER_LINKER
             sph_ENABLE_SANITIZER_ADDRESS
             sph_ENABLE_SANITIZER_LEAK
@@ -77,7 +79,8 @@ macro(sph_setup_options)
             sph_ENABLE_CPPCHECK
             sph_ENABLE_IWYU
             sph_ENABLE_PCH
-            sph_ENABLE_CACHE)
+            sph_ENABLE_CACHE
+            sph_ENABLE_COMPILE_COMMANDS)
     endif()
 
 endmacro()
@@ -110,6 +113,11 @@ macro(sph_local_options)
         include(cmake/StandardProjectSettings.cmake)
     endif()
 
+    if(sph_ENABLE_COMPILE_COMMANDS)
+        include(cmake/CompileCommands.cmake)
+        sph_enable_compile_commands()
+    endif()
+
     add_library(sph_warnings INTERFACE)
     add_library(sph_options INTERFACE)
 
@@ -117,7 +125,7 @@ macro(sph_local_options)
         include(cmake/CompilerWarnings.cmake)
         sph_set_project_warnings(
             sph_warnings
-            ${sph_WARNINGS_AS_ERRORS}
+            ${sph_ENABLE_WARNINGS_AS_ERRORS}
             ""
             ""
             ""
@@ -156,11 +164,11 @@ macro(sph_local_options)
 
     include(cmake/StaticAnalyzers.cmake)
     if(sph_ENABLE_CLANG_TIDY)
-        sph_enable_clang_tidy(sph_options ${sph_WARNINGS_AS_ERRORS})
+        sph_enable_clang_tidy(sph_options ${sph_ENABLE_WARNINGS_AS_ERRORS})
     endif()
 
     if(sph_ENABLE_CPPCHECK)
-        sph_enable_cppcheck(${sph_WARNINGS_AS_ERRORS} "" # override cppcheck options
+        sph_enable_cppcheck(${sph_ENABLE_WARNINGS_AS_ERRORS} "" # override cppcheck options
         )
     endif()
 
