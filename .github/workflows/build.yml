@@ -49,7 +49,7 @@ jobs:
           cache: true
 
       - name: Install CUDA Toolkit
-        uses: Jimver/cuda-toolkit@v0.2.19
+        uses: Jimver/cuda-toolkit@v0.2.21
         with:
           log-file-suffix: '${{github.job}}-${{matrix.os}}-${{matrix.compiler}}-${{matrix.build_type}}.txt'
 
@@ -60,12 +60,12 @@ jobs:
           build_type: ${{ matrix.build_type }}
 
       - name: Project Name
-        uses: cardinalby/export-env-action@v2
+        uses: cardinalby/export-env-action@2.2.0
         with:
           envFile: '.github/constants.env'
 
       - name: Setup Cpp
-        uses: aminya/setup-cpp@v1
+        uses: aminya/setup-cpp@v1.1.1
         with:
           compiler: ${{ matrix.compiler }}
           vcvarsall: ${{ contains(matrix.os, 'windows' )}}
@@ -75,12 +75,12 @@ jobs:
 
       - name: Configure CMake
         run: >-
-            cmake -S . -B ./build -G Ninja
-            -D${{ env.PROJECT_NAME }}_ENABLE_IPO=ON
-            -DCMAKE_BUILD_TYPE=${{matrix.build_type}}
-            -D${{ env.PROJECT_NAME }}_ENABLE_CACHE=ON
-            -DGLFW_BUILD_WAYLAND=OFF
-            -DCPM_SOURCE_CACHE="~/.cache/CPM"
+          cmake -S . -B ./build -G Ninja
+          -D${{ env.PROJECT_NAME }}_ENABLE_IPO=ON
+          -DCMAKE_BUILD_TYPE=${{matrix.build_type}}
+          -D${{ env.PROJECT_NAME }}_ENABLE_CACHE=ON
+          -DGLFW_BUILD_WAYLAND=OFF
+          -DCPM_SOURCE_CACHE="~/.cache/CPM"
       - name: Build
         run: |
           cmake --build ./build --config ${{matrix.build_type}}
@@ -113,7 +113,7 @@ jobs:
           cache: true
 
       - name: Install CUDA Toolkit
-        uses: Jimver/cuda-toolkit@v0.2.19
+        uses: Jimver/cuda-toolkit@v0.2.21
         with:
           log-file-suffix: '${{github.job}}-${{matrix.os}}-${{matrix.compiler}}-${{matrix.build_type}}.txt'
 
@@ -124,12 +124,12 @@ jobs:
           build_type: ${{ matrix.build_type }}
 
       - name: Project Name
-        uses: cardinalby/export-env-action@v2
+        uses: cardinalby/export-env-action@2.2.0
         with:
           envFile: '.github/constants.env'
 
       - name: Setup Cpp
-        uses: aminya/setup-cpp@v0.45.0
+        uses: aminya/setup-cpp@v1.1.1
         with:
           compiler: ${{ matrix.compiler }}
           cmake: true

@@ -22,6 +22,7 @@ private:
     auto setDefaultScene() -> void;
     static auto showFpsOverlay() -> void;
 
+    std::vector<glm::vec3*> _particles;
     panda::gfx::vulkan::Scene _scene {};
 
     std::unique_ptr<Window> _window;

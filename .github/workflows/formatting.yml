@@ -10,7 +10,7 @@ jobs:
   clang-format-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Run clang-format check
         uses: jidicula/clang-format-action@v4.14.0
         with:
@@ -19,6 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run cmake-format check
-        uses: puneetmatharu/cmake-format-lint-action@v1.0.5
+        uses: puneetmatharu/cmake-format-lint-action@v1.0.6
         with:
           args: --check -c .cmake-format.yaml
