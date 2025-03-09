@@ -20,6 +20,7 @@
 #include <csignal>
 #include <cstdint>
 #include <cstdlib>
+#include <cuda/kernel.cuh>
 #include <glm/common.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_uint2.hpp>
@@ -147,6 +148,10 @@ auto App::run() -> int
     _api = std::make_unique<panda::gfx::vulkan::Context>(*_window, 250000, false);
 
     setDefaultScene();
+    cuda::initialize({_scene.getObjects() | std::ranges::views::transform(&panda::gfx::vulkan::Object::transform) |
+                      std::ranges::views::transform(&panda::gfx::vulkan::Transform::translation) |
+                      std::ranges::to<std::vector>()});
+
     mainLoop();
     return 0;
 }
@@ -180,7 +185,8 @@ auto App::mainLoop() -> void
             _window->processInput();
 
             currentTime.update();
-
+            cuda::update({currentTime.getDelta()});
+            cuda::getUpdatedPositions(_particles);
             _scene.getCamera().setPerspectiveProjection(
                 panda::gfx::projection::Perspective {.fovY = glm::radians(50.F),
                                                      .aspect = _api->getRenderer().getAspectRatio(),
@@ -255,6 +261,8 @@ void App::setDefaultScene()
                     (-object.transform.scale.x / 2) + sphere.transform.scale.x + (static_cast<float>(i) / 20),
                     (-object.transform.scale.y / 2) + sphere.transform.scale.y + (static_cast<float>(k) / 20),
                     (-object.transform.scale.z / 2) + sphere.transform.scale.z + (static_cast<float>(j) / 20)};
+
+                _particles.push_back(&sphere.transform.translation);
             }
         }
     }
@@ -310,5 +318,4 @@ auto App::showFpsOverlay() -> void
     }
     ImGui::End();
 }
-
 }
