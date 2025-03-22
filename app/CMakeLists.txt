@@ -12,13 +12,17 @@ target_sources(
             movement_handler/RotationHandler.cpp
             App.cpp)
 
-target_link_libraries(AdaptiveSph PRIVATE sph::sph_options sph::sph_warnings AdaptiveSphCuda)
+target_link_libraries(
+    AdaptiveSph
+    PRIVATE sph::sph_options
+            sph::sph_warnings
+            AdaptiveSphCuda
+            AdaptiveSphEngine)
 
 find_package(Vulkan REQUIRED)
 target_link_system_libraries(
     AdaptiveSph
     PRIVATE
-    PD::Engine
     Vulkan::Vulkan
     fmt::fmt
     glfw
@@ -43,7 +47,7 @@ set_target_properties(
 
 target_compile_definitions(AdaptiveSph PRIVATE GLFW_INCLUDE_VULKAN GLM_ENABLE_EXPERIMENTAL)
 
-if(PD_ENABLE_PCH)
+if(sph_ENABLE_PCH)
     target_precompile_headers(
         ${APP_TARGET_NAME}
         PRIVATE

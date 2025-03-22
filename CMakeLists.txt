@@ -26,7 +26,8 @@ add_library(sph::sph_warnings ALIAS sph_warnings)
 
 add_subdirectory(configured_files)
 
-add_subdirectory(src)
+add_subdirectory(app)
+add_subdirectory(engine)
 add_subdirectory(cuda)
 
 if(MSVC)
