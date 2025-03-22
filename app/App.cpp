@@ -3,7 +3,6 @@
 #include <GLFW/glfw3.h>
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
-#include <fmt/format.h>
 #include <imgui.h>
 #include <panda/Logger.h>
 #include <panda/gfx/Camera.h>
@@ -20,7 +19,7 @@
 #include <csignal>
 #include <cstdint>
 #include <cstdlib>
-#include <cuda/kernel.cuh>
+#include <cuda/Simulation.cuh>
 #include <glm/common.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_uint2.hpp>
@@ -31,8 +30,10 @@
 #include <memory>
 #include <mesh/InvertedCube.hpp>
 #include <mesh/UvSphere.hpp>
+#include <ranges>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "internal/config.hpp"
 #include "movement_handler/MovementHandler.hpp"
@@ -145,25 +146,39 @@ auto App::run() -> int
     static constexpr auto defaultWidth = uint32_t {1920};
     static constexpr auto defaultHeight = uint32_t {1080};
     _window = std::make_unique<Window>(glm::uvec2 {defaultWidth, defaultHeight}, config::project_name.data());
-    _api = std::make_unique<panda::gfx::vulkan::Context>(*_window, 250000, false);
+    _api = std::make_unique<panda::gfx::vulkan::Context>(*_window);
+
+    auto redTexture = panda::gfx::vulkan::Texture::getDefaultTexture(*_api, {1, 0, 0, 1});
+    auto sphereMesh = mesh::uv_sphere::create(*_api, "Sphere", {.radius = 1, .stacks = 5, .slices = 10});
+
+    _scene =
+        std::make_unique<panda::gfx::vulkan::Scene>(panda::gfx::vulkan::Surface {redTexture.get(), sphereMesh.get()});
+
+    _api->registerMesh(std::move(sphereMesh));
+    _api->registerTexture(std::move(redTexture));
 
     setDefaultScene();
-    cuda::initialize({_scene.getObjects() | std::ranges::views::transform(&panda::gfx::vulkan::Object::transform) |
-                      std::ranges::views::transform(&panda::gfx::vulkan::Transform::translation) |
-                      std::ranges::to<std::vector>()});
+
+    auto translations =
+        _scene->getParticles().objects | std::ranges::views::transform(&panda::gfx::vulkan::Object::transform) |
+        std::ranges::views::transform(&panda::gfx::vulkan::Transform::translation) | std::ranges::views::common;
+
+    const std::vector translationVec(translations.begin(), translations.end());
+    _simulation = sph::cuda::createSimulation({translationVec},
+                                              _api->initializeParticleSystem(sizeof(cuda::ParticleData), 2000000));
 
     mainLoop();
     return 0;
 }
 
-auto App::mainLoop() -> void
+auto App::mainLoop() const -> void
 {
     auto currentTime = TimeData {};
 
     auto cameraObject = panda::gfx::vulkan::Transform {};
 
     cameraObject.translation = {0, 0.5, -5};
-    _scene.getCamera().setViewYXZ(
+    _scene->getCamera().setViewYXZ(
         panda::gfx::view::YXZ {.position = cameraObject.translation, .rotation = cameraObject.rotation});
 
     const auto beginGuiReceiver = panda::utils::signals::beginGuiRender.connect([](auto data) {
@@ -185,16 +200,15 @@ auto App::mainLoop() -> void
             _window->processInput();
 
             currentTime.update();
-            cuda::update({currentTime.getDelta()});
-            cuda::getUpdatedPositions(_particles);
-            _scene.getCamera().setPerspectiveProjection(
+            _simulation->update({currentTime.getDelta()});
+            _scene->getCamera().setPerspectiveProjection(
                 panda::gfx::projection::Perspective {.fovY = glm::radians(50.F),
                                                      .aspect = _api->getRenderer().getAspectRatio(),
-                                                     .near = 0.1F,
-                                                     .far = 100});
-            processCamera(currentTime.getDelta(), *_window, cameraObject, _scene.getCamera());
+                                                     .zNear = 0.1F,
+                                                     .zFar = 100});
+            processCamera(currentTime.getDelta(), *_window, cameraObject, _scene->getCamera());
 
-            _api->makeFrame(currentTime.getDelta(), _scene);
+            _api->makeFrame(currentTime.getDelta(), *_scene);
         }
         else [[unlikely]]
         {
@@ -236,31 +250,26 @@ void App::setDefaultScene()
     auto sphereMesh = mesh::uv_sphere::create(*_api, "Sphere", {.radius = 1, .stacks = 5, .slices = 10});
     auto invertedCubeMesh = mesh::inverted_cube::create(*_api, "InvertedCube");
 
-    auto& object = _scene.addObject("Domain",
-                                    {
-                                        panda::gfx::vulkan::Surface {blueTexture.get(), invertedCubeMesh.get(), true}
+    auto& object = _scene->setDomain("Domain",
+                                     {
+                                         panda::gfx::vulkan::Surface {blueTexture.get(), invertedCubeMesh.get()}
     });
     object.transform.rotation = {0, 0, 0};
     object.transform.translation = {0, 0.F, 0};
     object.transform.scale = {5, 2, 3};
 
-    auto index = 0;
-    for (auto i = 0; i < 100; i++)
+    for (auto i = 0; i < 200; i++)
     {
-        for (auto j = 0; j < 60; j++)
+        for (auto j = 0; j < 120; j++)
         {
-            for (auto k = 0; k < 40; k++)
+            for (auto k = 0; k < 80; k++)
             {
-                auto& sphere =
-                    _scene.addObject(fmt::format("Sphere#{}", index++),
-                                     {
-                                         panda::gfx::vulkan::Surface {redTexture.get(), sphereMesh.get(), true}
-                });
+                auto& sphere = _scene->addParticle();
                 sphere.transform.scale = {0.025, 0.025, 0.025};
                 sphere.transform.translation = {
-                    (-object.transform.scale.x / 2) + sphere.transform.scale.x + (static_cast<float>(i) / 20),
-                    (-object.transform.scale.y / 2) + sphere.transform.scale.y + (static_cast<float>(k) / 20),
-                    (-object.transform.scale.z / 2) + sphere.transform.scale.z + (static_cast<float>(j) / 20)};
+                    (-object.transform.scale.x / 2) + sphere.transform.scale.x + (static_cast<float>(i) / 40),
+                    (-object.transform.scale.y / 2) + sphere.transform.scale.y + (static_cast<float>(k) / 40),
+                    (-object.transform.scale.z / 2) + sphere.transform.scale.z + (static_cast<float>(j) / 40)};
 
                 _particles.push_back(&sphere.transform.translation);
             }
@@ -272,7 +281,7 @@ void App::setDefaultScene()
     _api->registerTexture(std::move(redTexture));
     _api->registerTexture(std::move(blueTexture));
 
-    auto directionalLight = _scene.addLight<panda::gfx::DirectionalLight>("DirectionalLight");
+    auto directionalLight = _scene->addLight<panda::gfx::DirectionalLight>("DirectionalLight");
 
     if (directionalLight.has_value())
     {
@@ -280,7 +289,7 @@ void App::setDefaultScene()
         directionalLight.value().get().direction = {-6.2F, -2.F, 0};
     }
 
-    directionalLight = _scene.addLight<panda::gfx::DirectionalLight>("DirectionalLight#1");
+    directionalLight = _scene->addLight<panda::gfx::DirectionalLight>("DirectionalLight#1");
 
     if (directionalLight.has_value())
     {
@@ -318,4 +327,5 @@ auto App::showFpsOverlay() -> void
     }
     ImGui::End();
 }
+
 }

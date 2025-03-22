@@ -3,6 +3,7 @@
 #include <panda/gfx/vulkan/Context.h>
 #include <panda/gfx/vulkan/Scene.h>
 
+#include <cuda/Simulation.cuh>
 #include <memory>
 
 #include "Window.hpp"
@@ -18,15 +19,17 @@ public:
 private:
     static auto initializeLogger() -> void;
     static auto registerSignalHandlers() -> void;
-    auto mainLoop() -> void;
-    auto setDefaultScene() -> void;
     static auto showFpsOverlay() -> void;
 
+    auto mainLoop() const -> void;
+    auto setDefaultScene() -> void;
+
     std::vector<glm::vec3*> _particles;
-    panda::gfx::vulkan::Scene _scene {};
+    std::unique_ptr<panda::gfx::vulkan::Scene> _scene;
 
     std::unique_ptr<Window> _window;
     std::unique_ptr<panda::gfx::vulkan::Context> _api;
+    std::unique_ptr<sph::cuda::Simulation> _simulation;
 };
 
 }

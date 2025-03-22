@@ -43,15 +43,17 @@ jobs:
           sudo apt install xorg-dev
 
       - name: Install Vulkan SDK
-        uses: humbletim/install-vulkan-sdk@v1.1.1
+        uses: humbletim/install-vulkan-sdk@v1.2
         with:
           version: latest
           cache: true
 
       - name: Install CUDA Toolkit
-        uses: Jimver/cuda-toolkit@v0.2.21
+        uses: Jimver/cuda-toolkit@v0.2.22
         with:
           log-file-suffix: '${{github.job}}-${{matrix.os}}-${{matrix.compiler}}-${{matrix.build_type}}.txt'
+          method: network
+          sub-packages: '["nvcc", "cudart", "thrust"]'
 
       - name: Setup Cache
         uses: ./.github/actions/setup-cache
@@ -65,7 +67,7 @@ jobs:
           envFile: '.github/constants.env'
 
       - name: Setup Cpp
-        uses: aminya/setup-cpp@v1.1.1
+        uses: aminya/setup-cpp@v1.2.2
         with:
           compiler: ${{ matrix.compiler }}
           vcvarsall: ${{ contains(matrix.os, 'windows' )}}
@@ -107,15 +109,17 @@ jobs:
           sudo apt install xorg-dev
 
       - name: Install Vulkan SDK
-        uses: humbletim/install-vulkan-sdk@v1.1.1
+        uses: humbletim/install-vulkan-sdk@v1.2
         with:
           version: latest
           cache: true
 
       - name: Install CUDA Toolkit
-        uses: Jimver/cuda-toolkit@v0.2.21
+        uses: Jimver/cuda-toolkit@v0.2.22
         with:
           log-file-suffix: '${{github.job}}-${{matrix.os}}-${{matrix.compiler}}-${{matrix.build_type}}.txt'
+          method: network
+          sub-packages: '["nvcc", "cudart", "thrust"]'
 
       - name: Setup Cache
         uses: ./.github/actions/setup-cache
@@ -129,7 +133,7 @@ jobs:
           envFile: '.github/constants.env'
 
       - name: Setup Cpp
-        uses: aminya/setup-cpp@v1.1.1
+        uses: aminya/setup-cpp@v1.2.2
         with:
           compiler: ${{ matrix.compiler }}
           cmake: true
