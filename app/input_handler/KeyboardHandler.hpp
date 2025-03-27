@@ -30,6 +30,9 @@ public:
     [[nodiscard]] auto getKeyState(int key) const -> State;
 
 private:
+    void handleKeyboardState(const signals::KeyboardStateChangedData& data);
+    void handleGameLoopIteration();
+
     std::array<State, GLFW_KEY_LAST> _states {};
     signals::KeyboardStateChanged::Signal::ReceiverT _keyboardStateChangedReceiver;
     panda::utils::signals::GameLoopIterationStarted::ReceiverT _newFrameNotifReceiver;

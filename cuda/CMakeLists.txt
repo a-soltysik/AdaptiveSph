@@ -9,14 +9,14 @@ target_include_directories(AdaptiveSphCuda PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/in
 target_link_libraries(AdaptiveSphCuda PRIVATE sph_options sph_warnings)
 sph_target_link_cuda(AdaptiveSphCuda)
 
-if(WIN32)
+if (WIN32)
     target_compile_definitions(AdaptiveSphCuda PRIVATE WIN32)
-endif()
+endif ()
 
 target_link_system_libraries(AdaptiveSphCuda PRIVATE glm)
 
 set_target_properties(
-    AdaptiveSphCuda
-    PROPERTIES ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-               LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-               RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+        AdaptiveSphCuda
+        PROPERTIES ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

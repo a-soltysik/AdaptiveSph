@@ -30,7 +30,7 @@ auto Object::addSurface(const Surface& surface) -> void
     surfaces.push_back(surface);
 }
 
-auto Object::getSurfaces() const noexcept -> std::vector<Surface>
+auto Object::getSurfaces() const noexcept -> const std::vector<Surface>&
 {
     return surfaces;
 }

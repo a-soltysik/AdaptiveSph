@@ -28,14 +28,15 @@
 #include <glm/trigonometric.hpp>
 #include <input_handler/MouseHandler.hpp>
 #include <memory>
-#include <mesh/InvertedCube.hpp>
 #include <mesh/UvSphere.hpp>
 #include <ranges>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "glm/gtx/string_cast.hpp"
 #include "internal/config.hpp"
+#include "mesh/InvertedCube.hpp"
 #include "movement_handler/MovementHandler.hpp"
 #include "movement_handler/RotationHandler.hpp"
 
@@ -149,12 +150,9 @@ auto App::run() -> int
     _api = std::make_unique<panda::gfx::vulkan::Context>(*_window);
 
     auto redTexture = panda::gfx::vulkan::Texture::getDefaultTexture(*_api, {1, 0, 0, 1});
-    auto sphereMesh = mesh::uv_sphere::create(*_api, "Sphere", {.radius = 1, .stacks = 5, .slices = 10});
 
-    _scene =
-        std::make_unique<panda::gfx::vulkan::Scene>(panda::gfx::vulkan::Surface {redTexture.get(), sphereMesh.get()});
+    _scene = std::make_unique<panda::gfx::vulkan::Scene>(panda::gfx::vulkan::Surface {redTexture.get(), nullptr});
 
-    _api->registerMesh(std::move(sphereMesh));
     _api->registerTexture(std::move(redTexture));
 
     setDefaultScene();
@@ -164,8 +162,16 @@ auto App::run() -> int
         std::ranges::views::transform(&panda::gfx::vulkan::Transform::translation) | std::ranges::views::common;
 
     const std::vector translationVec(translations.begin(), translations.end());
-    _simulation = sph::cuda::createSimulation({translationVec},
-                                              _api->initializeParticleSystem(sizeof(cuda::ParticleData), 2000000));
+
+    _simulation = createSimulation(
+        {
+            .domain = {.min = _scene->getDomain().transform.translation - _scene->getDomain().transform.scale / 2.F,
+                       .max = _scene->getDomain().transform.translation + _scene->getDomain().transform.scale / 2.F},
+            .density = 1.F,
+            .restitution = 0.8F
+    },
+        translationVec,
+        _api->initializeParticleSystem(sizeof(cuda::ParticleData), 250000));
 
     mainLoop();
     return 0;
@@ -258,18 +264,18 @@ void App::setDefaultScene()
     object.transform.translation = {0, 0.F, 0};
     object.transform.scale = {5, 2, 3};
 
-    for (auto i = 0; i < 200; i++)
+    for (auto i = 0; i < 100; i++)
     {
-        for (auto j = 0; j < 120; j++)
+        for (auto j = 0; j < 60; j++)
         {
-            for (auto k = 0; k < 80; k++)
+            for (auto k = 0; k < 40; k++)
             {
                 auto& sphere = _scene->addParticle();
-                sphere.transform.scale = {0.025, 0.025, 0.025};
+                sphere.transform.scale = {0.02, 0.02, 0.02};
                 sphere.transform.translation = {
-                    (-object.transform.scale.x / 2) + sphere.transform.scale.x + (static_cast<float>(i) / 40),
-                    (-object.transform.scale.y / 2) + sphere.transform.scale.y + (static_cast<float>(k) / 40),
-                    (-object.transform.scale.z / 2) + sphere.transform.scale.z + (static_cast<float>(j) / 40)};
+                    (-object.transform.scale.x / 2) + sphere.transform.scale.x + (static_cast<float>(i) / 20),
+                    (-object.transform.scale.y / 2) + sphere.transform.scale.y + (static_cast<float>(k) / 20),
+                    (-object.transform.scale.z / 2) + sphere.transform.scale.z + (static_cast<float>(j) / 20)};
 
                 _particles.push_back(&sphere.transform.translation);
             }
@@ -286,15 +292,15 @@ void App::setDefaultScene()
     if (directionalLight.has_value())
     {
         directionalLight.value().get().makeColorLight({1.F, .8F, .8F}, 0.F, 0.8F, 1.F, 0.8F);
-        directionalLight.value().get().direction = {-6.2F, -2.F, 0};
+        directionalLight.value().get().direction = {-6.2F, -2.F, -1.F};
     }
 
     directionalLight = _scene->addLight<panda::gfx::DirectionalLight>("DirectionalLight#1");
 
     if (directionalLight.has_value())
     {
-        directionalLight.value().get().makeColorLight({1.F, .8F, .8F}, 0.F, 0.8F, 1.F, 0.8F);
-        directionalLight.value().get().direction = {6.2F, 2.F, 0};
+        directionalLight.value().get().makeColorLight({1.F, .8F, .8F}, 0.1F, 0.8F, 1.F, 0.8F);
+        directionalLight.value().get().direction = {6.2F, 2.F, 1.F};
     }
 }
 
@@ -327,5 +333,4 @@ auto App::showFpsOverlay() -> void
     }
     ImGui::End();
 }
-
 }

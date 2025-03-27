@@ -1,14 +1,18 @@
 #version 450
 
-#include "utils.glsl"
+const vec2 OFFSETS[6] = vec2[](
+vec2(-1.0, -1.0),
+vec2(-1.0, 1.0),
+vec2(1.0, -1.0),
+vec2(1.0, -1.0),
+vec2(-1.0, 1.0),
+vec2(1.0, 1.0)
+);
 
-layout (location = 0) in vec3 position;
-layout (location = 1) in vec3 normal;
-layout (location = 2) in vec2 uv;
-
-layout (location = 0) out vec3 fragWorldPosition;
-layout (location = 1) out vec3 fragNormalWorld;
-layout (location = 2) out vec2 fragTexCoord;
+layout (location = 0) out vec2 uv;
+layout (location = 1) out vec3 worldPosition;
+layout (location = 2) out vec3 sphereCenter;
+layout (location = 3) out float radius;
 
 layout (set = 0, binding = 0) uniform VertUbo
 {
@@ -20,8 +24,6 @@ struct InstanceData {
     vec3 position;
     vec3 velocity;
     vec3 force;
-    float density;
-    float pressure;
     float mass;
 };
 
@@ -32,19 +34,21 @@ layout (set = 0, binding = 3) readonly buffer InstanceBuffer {
 void main() {
     InstanceData instance = instances[gl_InstanceIndex];
 
-    float scale = instance.mass;
+    vec2 quadCoord = OFFSETS[gl_VertexIndex];
 
-    mat4 modelMatrix = mat4(
-    scale, 0.0, 0.0, 0.0,
-    0.0, scale, 0.0, 0.0,
-    0.0, 0.0, scale, 0.0,
-    instance.position.x, instance.position.y, instance.position.z, 1.0
-    );
+    vec3 viewRight = normalize(vec3(ubo.view[0][0], ubo.view[1][0], ubo.view[2][0]));
+    vec3 viewUp = normalize(vec3(ubo.view[0][1], ubo.view[1][1], ubo.view[2][1]));
 
-    vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-    gl_Position = ubo.projection * (ubo.view * worldPosition);
+    float scale = instance.mass * 2.0;
 
-    fragNormalWorld = normal;
-    fragWorldPosition = worldPosition.xyz;
-    fragTexCoord = uv;
+    vec3 vertexPosition = instance.position;
+    vertexPosition += (quadCoord.x * 0.5) * viewRight * scale;
+    vertexPosition += (quadCoord.y * 0.5) * viewUp * scale;
+
+    uv = (quadCoord + vec2(1.0)) * 0.5;
+    radius = instance.mass;
+    worldPosition = vertexPosition;
+    sphereCenter = instance.position;
+
+    gl_Position = ubo.projection * ubo.view * vec4(vertexPosition, 1.0);
 }

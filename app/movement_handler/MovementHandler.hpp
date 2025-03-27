@@ -21,6 +21,10 @@ public:
     [[nodiscard]] auto getMovement() const -> Result;
 
 private:
+    [[nodiscard]] auto getXMovement() const -> std::optional<float>;
+    [[nodiscard]] auto getYMovement() const -> std::optional<float>;
+    [[nodiscard]] auto getZMovement() const -> std::optional<float>;
+
     const Window& _window;
 };
 

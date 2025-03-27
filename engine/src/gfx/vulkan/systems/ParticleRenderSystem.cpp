@@ -19,13 +19,10 @@
 #include "panda/gfx/vulkan/FrameInfo.h"
 #include "panda/gfx/vulkan/Pipeline.h"
 #include "panda/gfx/vulkan/Scene.h"
-#include "panda/gfx/vulkan/Vertex.h"
-#include "panda/gfx/vulkan/object/Mesh.h"
 #include "panda/gfx/vulkan/object/Object.h"
 #include "panda/gfx/vulkan/object/Surface.h"
 #include "panda/gfx/vulkan/object/Texture.h"
 #include "panda/internal/config.h"
-#include "panda/utils/Utils.h"
 #include "panda/utils/format/gfx/api/vulkan/ResultFormatter.h"  // NOLINT(misc-include-cleaner, unused-includes)
 
 namespace panda::gfx::vulkan
@@ -102,21 +99,20 @@ auto ParticleRenderSystem::createPipeline(const Device& device,
     static constexpr auto depthStencilInfo =
         vk::PipelineDepthStencilStateCreateInfo {{}, vk::True, vk::True, vk::CompareOp::eLess, vk::False, vk::False};
 
-    return std::make_unique<Pipeline>(
-        device,
-        PipelineConfig {.vertexShaderPath = config::shaderPath / "particle.vert.spv",
-                        .fragmentShaderPath = config::shaderPath / "basic.frag.spv",
-                        .vertexBindingDescriptions = {Vertex::getBindingDescription()},
-                        .vertexAttributeDescriptions = utils::fromArray(Vertex::getAttributeDescriptions()),
-                        .inputAssemblyInfo = inputAssemblyInfo,
-                        .viewportInfo = viewportInfo,
-                        .rasterizationInfo = rasterizationInfo,
-                        .multisamplingInfo = multisamplingInfo,
-                        .colorBlendInfo = colorBlendInfo,
-                        .depthStencilInfo = depthStencilInfo,
-                        .pipelineLayout = pipelineLayout,
-                        .renderPass = renderPass,
-                        .subpass = 0});
+    return std::make_unique<Pipeline>(device,
+                                      PipelineConfig {.vertexShaderPath = config::shaderPath / "particle.vert.spv",
+                                                      .fragmentShaderPath = config::shaderPath / "particle.frag.spv",
+                                                      .vertexBindingDescriptions = {},
+                                                      .vertexAttributeDescriptions = {},
+                                                      .inputAssemblyInfo = inputAssemblyInfo,
+                                                      .viewportInfo = viewportInfo,
+                                                      .rasterizationInfo = rasterizationInfo,
+                                                      .multisamplingInfo = multisamplingInfo,
+                                                      .colorBlendInfo = colorBlendInfo,
+                                                      .depthStencilInfo = depthStencilInfo,
+                                                      .pipelineLayout = pipelineLayout,
+                                                      .renderPass = renderPass,
+                                                      .subpass = 0});
 }
 
 auto ParticleRenderSystem::createPipelineLayout(const Device& device, vk::DescriptorSetLayout setLayout)
@@ -139,9 +135,6 @@ auto ParticleRenderSystem::render(const FrameInfo& frameInfo) const -> void
         .writeBuffer(3, _particleBuffer.getDescriptorInfo())
         .push(frameInfo.commandBuffer, _pipelineLayout);
 
-    frameInfo.scene.getParticles().commonSurface.getMesh().bind(frameInfo.commandBuffer);
-    frameInfo.scene.getParticles().commonSurface.getMesh().drawInstanced(frameInfo.commandBuffer,
-                                                                         frameInfo.scene.getParticles().objects.size(),
-                                                                         0);
+    frameInfo.commandBuffer.draw(6, frameInfo.scene.getParticles().objects.size(), 0, 0);
 }
 }

@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <glm/ext/vector_float2.hpp>
+#include <utility>
 
 #include "Window.hpp"
 #include "utils/Formatters.hpp"  // NOLINT(misc-include-cleaner)
@@ -55,53 +56,16 @@ MouseHandler::MouseHandler(const Window& window)
     _window.setMouseButtonCallback(mouseButtonStateChangedCallback);
     _window.setCursorPositionCallback(cursorPositionChangedCallback);
 
-    _mouseButtonStateChangedReceiver = signals::mouseButtonStateChanged.connect([this](auto data) {
-        if (data.id != _window.getId())
-        {
-            return;
-        }
-        if (const auto isCorrectButton = data.button < static_cast<int>(_states.size()) && data.button >= 0;
-            !panda::shouldBe(isCorrectButton, fmt::format("Button: {} is beyond the size of array", data.button)))
-        {
-            return;
-        }
-
-        if ((_states[static_cast<size_t>(data.button)] == ButtonState::JustReleased ||
-             _states[static_cast<size_t>(data.button)] == ButtonState::Released) &&
-            data.action == GLFW_PRESS)
-        {
-            _states[static_cast<size_t>(data.button)] = ButtonState::JustPressed;
-        }
-        else if ((_states[static_cast<size_t>(data.button)] == ButtonState::JustPressed ||
-                  _states[static_cast<size_t>(data.button)] == ButtonState::Pressed) &&
-                 data.action == GLFW_RELEASE)
-        {
-            _states[static_cast<size_t>(data.button)] = ButtonState::JustReleased;
-        }
+    _mouseButtonStateChangedReceiver = signals::mouseButtonStateChanged.connect([this](const auto& data) {
+        handleMouseButtonState(data);
     });
 
-    _cursorStateChangedReceiver = signals::cursorPositionChanged.connect([this](auto data) {
-        if (data.id != _window.getId())
-        {
-            return;
-        }
-        _previousPosition = _currentPosition;
-        _currentPosition = {data.x, data.y};
+    _cursorStateChangedReceiver = signals::cursorPositionChanged.connect([this](const auto& data) {
+        handleCursorPosition(data);
     });
 
     _newFrameNotifReceiver = panda::utils::signals::gameLoopIterationStarted.connect([this] {
-        _previousPosition = _currentPosition;
-        for (auto& state : _states)
-        {
-            if (state == ButtonState::JustReleased)
-            {
-                state = ButtonState::Released;
-            }
-            if (state == ButtonState::JustPressed)
-            {
-                state = ButtonState::Pressed;
-            }
-        }
+        handleGameLoopIteration();
     });
 }
 
@@ -122,5 +86,57 @@ auto MouseHandler::getCursorPosition() const -> glm::vec2
 auto MouseHandler::getCursorDeltaPosition() const -> glm::vec2
 {
     return glm::vec2 {_currentPosition - _previousPosition};
+}
+
+void MouseHandler::handleMouseButtonState(const signals::MouseButtonStateChangedData& data)
+{
+    if (data.id != _window.getId())
+    {
+        return;
+    }
+    if (const auto isCorrectButton = data.button >= 0 && std::cmp_less(data.button, _states.size());
+        !panda::shouldBe(isCorrectButton, fmt::format("Button: {} is beyond the size of array", data.button)))
+    {
+        return;
+    }
+
+    if ((_states[static_cast<size_t>(data.button)] == ButtonState::JustReleased ||
+         _states[static_cast<size_t>(data.button)] == ButtonState::Released) &&
+        data.action == GLFW_PRESS)
+    {
+        _states[static_cast<size_t>(data.button)] = ButtonState::JustPressed;
+    }
+    else if ((_states[static_cast<size_t>(data.button)] == ButtonState::JustPressed ||
+              _states[static_cast<size_t>(data.button)] == ButtonState::Pressed) &&
+             data.action == GLFW_RELEASE)
+    {
+        _states[static_cast<size_t>(data.button)] = ButtonState::JustReleased;
+    }
+}
+
+void MouseHandler::handleCursorPosition(const signals::CursorPositionChangedData& data)
+{
+    if (data.id != _window.getId())
+    {
+        return;
+    }
+    _previousPosition = _currentPosition;
+    _currentPosition = {data.x, data.y};
+}
+
+void MouseHandler::handleGameLoopIteration()
+{
+    _previousPosition = _currentPosition;
+    for (auto& state : _states)
+    {
+        if (state == ButtonState::JustReleased)
+        {
+            state = ButtonState::Released;
+        }
+        if (state == ButtonState::JustPressed)
+        {
+            state = ButtonState::Pressed;
+        }
+    }
 }
 }

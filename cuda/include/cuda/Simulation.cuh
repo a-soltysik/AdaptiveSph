@@ -15,8 +15,6 @@ struct SPH_CUDA_API ParticleData
     alignas(16) glm::vec3 position;
     alignas(16) glm::vec3 velocity;
     alignas(16) glm::vec3 force;
-    float density;
-    float pressure;
     float mass;
 };
 
@@ -25,7 +23,15 @@ class SPH_CUDA_API Simulation
 public:
     struct SimulationData
     {
-        std::vector<glm::vec3> positions;
+        struct Domain
+        {
+            glm::vec3 min;
+            glm::vec3 max;
+        };
+
+        Domain domain;
+        float density;
+        float restitution;
     };
 
     struct FrameData
@@ -38,7 +44,8 @@ public:
     virtual void update(FrameData data) = 0;
 };
 
-SPH_CUDA_API auto createSimulation(const Simulation::SimulationData& data, const ImportedMemory& memory)
-    -> std::unique_ptr<Simulation>;
+SPH_CUDA_API auto createSimulation(const Simulation::SimulationData& data,
+                                   const std::vector<glm::vec3>& positions,
+                                   const ImportedMemory& memory) -> std::unique_ptr<Simulation>;
 
 }

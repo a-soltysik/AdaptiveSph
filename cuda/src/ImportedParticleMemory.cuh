@@ -4,7 +4,6 @@
 #include <driver_types.h>
 
 #include <cstddef>
-#include <memory>
 
 #include "cuda/ImportedMemory.cuh"
 #include "cuda/Simulation.cuh"
