@@ -33,6 +33,10 @@ public:
     [[nodiscard]] auto getCursorDeltaPosition() const -> glm::vec2;
 
 private:
+    void handleMouseButtonState(const signals::MouseButtonStateChangedData& data);
+    void handleCursorPosition(const signals::CursorPositionChangedData& data);
+    void handleGameLoopIteration();
+
     std::array<ButtonState, GLFW_MOUSE_BUTTON_LAST> _states {};
     glm::dvec2 _currentPosition {};
     glm::dvec2 _previousPosition {};

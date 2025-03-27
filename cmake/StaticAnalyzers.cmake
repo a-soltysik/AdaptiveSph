@@ -23,12 +23,9 @@ macro(sph_enable_cppcheck WARNINGS_AS_ERRORS CPPCHECK_OPTIONS)
                 --suppress=internalAstError
                 # if a file does not have an internalAstError, we get an unmatchedSuppression error
                 --suppress=unmatchedSuppression
-                # noisy and incorrect sometimes
-                --suppress=passedByValue
-                # ignores code that cppcheck thinks is invalid C++
-                --suppress=syntaxError
                 --suppress=preprocessorErrorDirective
                 --inconclusive
+                --check-level=exhaustive
                 --suppress=${SUPPRESS_DIR})
         else()
             # if the user provides a CPPCHECK_OPTIONS with a template specified, it will override this template

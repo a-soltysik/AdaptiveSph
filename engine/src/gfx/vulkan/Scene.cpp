@@ -249,6 +249,7 @@ auto Scene::setParticleCount(size_t count) -> void
 
 auto Scene::addParticle() -> Object&
 {
+    _particles.objects.reserve(20000000);
     auto newObject = std::make_unique<Object>(getUniqueName(fmt::format("{}#{}", particlePrefix, Object::getNextId())));
     newObject->addSurface(_particles.commonSurface);
 

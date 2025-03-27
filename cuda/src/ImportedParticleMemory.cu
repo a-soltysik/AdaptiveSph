@@ -1,4 +1,12 @@
+#include <cuda_runtime_api.h>
+#include <driver_types.h>
+
+#include <cstddef>
+#include <memory>
+
 #include "ImportedParticleMemory.cuh"
+#include "cuda/ImportedMemory.cuh"
+#include "cuda/Simulation.cuh"
 
 namespace sph::cuda
 {
@@ -65,7 +73,7 @@ auto importBuffer(void* handle, size_t size) -> std::unique_ptr<ImportedMemory>
     return std::make_unique<ImportedParticleMemory>(handle, size);
 }
 #else
-std::unique_ptr<ImportedMemory> importBuffer(int handle, size_t size)
+auto importBuffer(int handle, size_t size) -> std::unique_ptr<ImportedMemory>
 {
     return std::make_unique<ImportedParticleMemory>(handle, size);
 }

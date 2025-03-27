@@ -39,7 +39,7 @@ public:
     [[nodiscard]] auto getId() const noexcept -> Id;
     [[nodiscard]] auto getName() const noexcept -> const std::string&;
     auto addSurface(const Surface& surface) -> void;
-    [[nodiscard]] auto getSurfaces() const noexcept -> std::vector<Surface>;
+    [[nodiscard]] auto getSurfaces() const noexcept -> const std::vector<Surface>&;
 
     Transform transform;
 
