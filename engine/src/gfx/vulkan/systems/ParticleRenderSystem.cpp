@@ -20,8 +20,6 @@
 #include "panda/gfx/vulkan/Pipeline.h"
 #include "panda/gfx/vulkan/Scene.h"
 #include "panda/gfx/vulkan/object/Object.h"
-#include "panda/gfx/vulkan/object/Surface.h"
-#include "panda/gfx/vulkan/object/Texture.h"
 #include "panda/internal/config.h"
 #include "panda/utils/format/gfx/api/vulkan/ResultFormatter.h"  // NOLINT(misc-include-cleaner, unused-includes)
 
@@ -32,13 +30,11 @@ ParticleRenderSystem::ParticleRenderSystem(const Device& device,
                                            vk::DeviceSize particleSize,
                                            size_t particleCount)
     : _device {device},
-      _descriptorLayout {
-          DescriptorSetLayout::Builder(_device)
-              .addBinding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eVertex)
-              .addBinding(1, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eFragment)
-              .addBinding(2, vk::DescriptorType::eCombinedImageSampler, vk::ShaderStageFlagBits::eFragment)
-              .addBinding(3, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eVertex)
-              .build(vk::DescriptorSetLayoutCreateFlagBits::ePushDescriptorKHR)},
+      _descriptorLayout {DescriptorSetLayout::Builder(_device)
+                             .addBinding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eVertex)
+                             .addBinding(1, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eFragment)
+                             .addBinding(2, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eVertex)
+                             .build(vk::DescriptorSetLayoutCreateFlagBits::ePushDescriptorKHR)},
       _pipelineLayout {createPipelineLayout(_device, _descriptorLayout->getDescriptorSetLayout())},
       _pipeline {createPipeline(_device, renderPass, _pipelineLayout)},
       _particleBuffer {_device,
@@ -131,8 +127,7 @@ auto ParticleRenderSystem::render(const FrameInfo& frameInfo) const -> void
     DescriptorWriter(*_descriptorLayout)
         .writeBuffer(0, frameInfo.vertUbo.getDescriptorInfo())
         .writeBuffer(1, frameInfo.fragUbo.getDescriptorInfo())
-        .writeImage(2, frameInfo.scene.getParticles().commonSurface.getTexture().getDescriptorImageInfo())
-        .writeBuffer(3, _particleBuffer.getDescriptorInfo())
+        .writeBuffer(2, _particleBuffer.getDescriptorInfo())
         .push(frameInfo.commandBuffer, _pipelineLayout);
 
     frameInfo.commandBuffer.draw(6, frameInfo.scene.getParticles().objects.size(), 0, 0);

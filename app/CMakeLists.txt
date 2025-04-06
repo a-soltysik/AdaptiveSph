@@ -10,6 +10,7 @@ target_sources(
             input_handler/MouseHandler.cpp
             movement_handler/MovementHandler.cpp
             movement_handler/RotationHandler.cpp
+            gui/SimulationDataGui.cpp
             App.cpp)
 
 target_link_libraries(

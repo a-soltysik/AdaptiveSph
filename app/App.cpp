@@ -1,9 +1,6 @@
 #include "App.hpp"
 
 #include <GLFW/glfw3.h>
-#include <backends/imgui_impl_glfw.h>
-#include <backends/imgui_impl_vulkan.h>
-#include <imgui.h>
 #include <panda/Logger.h>
 #include <panda/gfx/Camera.h>
 #include <panda/gfx/Light.h>
@@ -12,7 +9,6 @@
 #include <panda/gfx/vulkan/object/Texture.h>
 #include <panda/utils/Assert.h>
 #include <panda/utils/Signals.h>
-#include <vulkan/vulkan_core.h>
 
 #include <array>
 #include <chrono>
@@ -23,9 +19,11 @@
 #include <glm/common.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_uint2.hpp>
+#include <glm/fwd.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
 #include <glm/trigonometric.hpp>
+#include <gui/SimulationDataGui.hpp>
 #include <input_handler/MouseHandler.hpp>
 #include <memory>
 #include <mesh/UvSphere.hpp>
@@ -34,6 +32,7 @@
 #include <utility>
 #include <vector>
 
+#include "glm/exponential.hpp"
 #include "glm/gtx/string_cast.hpp"
 #include "internal/config.hpp"
 #include "mesh/InvertedCube.hpp"
@@ -163,15 +162,9 @@ auto App::run() -> int
 
     const std::vector translationVec(translations.begin(), translations.end());
 
-    _simulation = createSimulation(
-        {
-            .domain = {.min = _scene->getDomain().transform.translation - _scene->getDomain().transform.scale / 2.F,
-                       .max = _scene->getDomain().transform.translation + _scene->getDomain().transform.scale / 2.F},
-            .density = 1.F,
-            .restitution = 0.8F
-    },
-        translationVec,
-        _api->initializeParticleSystem(sizeof(cuda::ParticleData), 250000));
+    _simulation = createSimulation(_simulationParameters,
+                                   translationVec,
+                                   _api->initializeParticleSystem(sizeof(cuda::ParticleData), 250000));
 
     mainLoop();
     return 0;
@@ -187,26 +180,19 @@ auto App::mainLoop() const -> void
     _scene->getCamera().setViewYXZ(
         panda::gfx::view::YXZ {.position = cameraObject.translation, .rotation = cameraObject.rotation});
 
-    const auto beginGuiReceiver = panda::utils::signals::beginGuiRender.connect([](auto data) {
-        ImGui_ImplVulkan_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        showFpsOverlay();
-        ImGui::Render();
-
-        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), data.commandBuffer, VK_NULL_HANDLE);
-    });
+    auto gui = SimulationDataGui {*_window, _simulationParameters};
 
     while (!_window->shouldClose()) [[likely]]
     {
-        if (!_window->isMinimized())
+        if (!_window->isMinimized()) [[likely]]
         {
             panda::utils::signals::gameLoopIterationStarted.registerSender()();
             _window->processInput();
 
             currentTime.update();
-            _simulation->update({currentTime.getDelta()});
+            const auto guiUpdate = gui.getParameters();
+            _scene->getDomain().transform.translation = (guiUpdate.domain.max + guiUpdate.domain.min) / 2.F;
+            _simulation->update(guiUpdate, currentTime.getDelta());
             _scene->getCamera().setPerspectiveProjection(
                 panda::gfx::projection::Perspective {.fovY = glm::radians(50.F),
                                                      .aspect = _api->getRenderer().getAspectRatio(),
@@ -260,22 +246,31 @@ void App::setDefaultScene()
                                      {
                                          panda::gfx::vulkan::Surface {blueTexture.get(), invertedCubeMesh.get()}
     });
-    object.transform.rotation = {0, 0, 0};
-    object.transform.translation = {0, 0.F, 0};
-    object.transform.scale = {5, 2, 3};
+    object.transform.rotation = {};
+    object.transform.translation = {};
+    object.transform.scale = {5.F, 2.F, 3.F};
 
-    for (auto i = 0; i < 100; i++)
+    _simulationParameters = getInitialSimulationParameters(
+        cuda::Simulation::Parameters::Domain {}.fromTransform(object.transform.translation, object.transform.scale),
+        20000,
+        1000.F);
+
+    const auto simulationSize = glm::uvec3 {40, 20, 25};
+    const auto maxSize = glm::vec3 {simulationSize} * _simulationParameters.particleRadius * 2.F * 1.5F;
+
+    for (auto i = uint32_t {}; i < simulationSize.x; i++)
     {
-        for (auto j = 0; j < 60; j++)
+        for (auto j = uint32_t {}; j < simulationSize.y; j++)
         {
-            for (auto k = 0; k < 40; k++)
+            for (auto k = uint32_t {}; k < simulationSize.z; k++)
             {
                 auto& sphere = _scene->addParticle();
-                sphere.transform.scale = {0.02, 0.02, 0.02};
-                sphere.transform.translation = {
-                    (-object.transform.scale.x / 2) + sphere.transform.scale.x + (static_cast<float>(i) / 20),
-                    (-object.transform.scale.y / 2) + sphere.transform.scale.y + (static_cast<float>(k) / 20),
-                    (-object.transform.scale.z / 2) + sphere.transform.scale.z + (static_cast<float>(j) / 20)};
+
+                sphere.transform.translation =
+                    -maxSize / 2.F +
+                    glm::vec3 {_simulationParameters.particleRadius * 2 * 1.5F * static_cast<float>(i),
+                               _simulationParameters.particleRadius * 2 * 1.5F * static_cast<float>(j),
+                               _simulationParameters.particleRadius * 2 * 1.5F * static_cast<float>(k)};
 
                 _particles.push_back(&sphere.transform.translation);
             }
@@ -304,33 +299,33 @@ void App::setDefaultScene()
     }
 }
 
-auto App::showFpsOverlay() -> void
+auto App::getInitialSimulationParameters(const cuda::Simulation::Parameters::Domain& domain,
+                                         uint32_t particleCount,
+                                         float totalMass) -> cuda::Simulation::Parameters
 {
-    static float lastFps = 0.0F;
-    static auto lastUpdate = std::chrono::steady_clock::now();
+    static constexpr auto restDensity = 1000.F;
 
-    const auto now = std::chrono::steady_clock::now();
-    const auto deltaTime = std::chrono::duration<float>(now - lastUpdate).count();
+    const auto mass = totalMass / static_cast<float>(particleCount);
+    const auto particleVolume = mass / restDensity;
+    const auto particleSpacing = glm::pow(particleVolume, 1.F / 3.F);
+    const auto smoothingRadius = 6.F * particleSpacing;
+    const auto particleRadius = smoothingRadius / 8.F;
 
-    if (deltaTime >= 1.0F)
-    {
-        lastFps = ImGui::GetIO().Framerate;
-        lastUpdate = now;
-    }
-
-    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
-
-    if (ImGui::Begin("FPS Overlay",
-                     nullptr,
-                     static_cast<uint32_t>(ImGuiWindowFlags_NoDecoration) |
-                         static_cast<uint32_t>(ImGuiWindowFlags_AlwaysAutoResize) |
-                         static_cast<uint32_t>(ImGuiWindowFlags_NoSavedSettings) |
-                         static_cast<uint32_t>(ImGuiWindowFlags_NoFocusOnAppearing) |
-                         static_cast<uint32_t>(ImGuiWindowFlags_NoNav)))
-    {
-        //NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
-        ImGui::Text("FPS: %.1f", static_cast<double>(lastFps));
-    }
-    ImGui::End();
+    return {
+        .domain = domain,
+        .gravity = glm::vec3 {0.F, 9.81F, 0.F},
+        .restDensity = restDensity,
+        .pressureConstant = 500.F,
+        .nearPressureConstant = 2.F,
+        .restitution = 0.8F,
+        .smoothingRadius = smoothingRadius,
+        .viscosityConstant = .005F,
+        .surfaceTensionCoefficient = 0.0F,
+        .maxVelocity = 5.F,
+        .particleRadius = particleRadius,
+        .particleMass = mass,
+        .threadsPerBlock = 256,
+    };
 }
+
 }
