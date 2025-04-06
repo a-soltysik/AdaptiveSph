@@ -19,7 +19,9 @@ public:
 private:
     static auto initializeLogger() -> void;
     static auto registerSignalHandlers() -> void;
-    static auto showFpsOverlay() -> void;
+    static auto getInitialSimulationParameters(const cuda::Simulation::Parameters::Domain& domain,
+                                               uint32_t particleCount,
+                                               float totalMass) -> cuda::Simulation::Parameters;
 
     auto mainLoop() const -> void;
     auto setDefaultScene() -> void;
@@ -30,6 +32,6 @@ private:
     std::unique_ptr<Window> _window;
     std::unique_ptr<panda::gfx::vulkan::Context> _api;
     std::unique_ptr<sph::cuda::Simulation> _simulation;
+    cuda::Simulation::Parameters _simulationParameters {};
 };
-
 }
