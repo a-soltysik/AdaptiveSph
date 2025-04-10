@@ -1,7 +1,5 @@
 // clang-format off
-#include "cuda/ImportedMemory.cuh"
-#include "panda/gfx/vulkan/UboLight.h"
-#include "panda/internal/config.h"
+#include <cuda/Simulation.cuh>
 #include "panda/utils/Assert.h"
 // clang-format on
 
@@ -38,10 +36,12 @@
 #include "panda/gfx/vulkan/FrameInfo.h"
 #include "panda/gfx/vulkan/Renderer.h"
 #include "panda/gfx/vulkan/Scene.h"
+#include "panda/gfx/vulkan/UboLight.h"
 #include "panda/gfx/vulkan/object/Mesh.h"
 #include "panda/gfx/vulkan/object/Texture.h"
 #include "panda/gfx/vulkan/systems/ParticleRenderSystem.h"
 #include "panda/gfx/vulkan/systems/RenderSystem.h"
+#include "panda/internal/config.h"
 #include "panda/utils/Signal.h"
 #include "panda/utils/Signals.h"
 #include "panda/utils/format/gfx/api/vulkan/ResultFormatter.h"  // NOLINT(misc-include-cleaner)
@@ -161,13 +161,10 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE  // cppcheck-suppress unknown
         }
     }
 
-    auto Context::initializeParticleSystem(vk::DeviceSize particleSize, size_t particleCount)
-        -> const sph::cuda::ImportedMemory&
+    auto Context::initializeParticleSystem(size_t particleCount) -> sph::cuda::ParticlesDataBuffer
     {
-        _particleRenderSystem = std::make_unique<ParticleRenderSystem>(*_device,
-                                                                       _renderer->getSwapChainRenderPass(),
-                                                                       particleSize,
-                                                                       particleCount);
+        _particleRenderSystem =
+            std::make_unique<ParticleRenderSystem>(*_device, _renderer->getSwapChainRenderPass(), particleCount);
 
         return _particleRenderSystem->getImportedMemory();
     }

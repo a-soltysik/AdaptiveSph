@@ -2,18 +2,17 @@
 #include <driver_types.h>
 
 #include <cstddef>
+#include <cuda/ImportedMemory.cuh>
 #include <memory>
 
 #include "ImportedParticleMemory.cuh"
-#include "cuda/ImportedMemory.cuh"
-#include "cuda/Simulation.cuh"
 
 namespace sph::cuda
 {
 
 ImportedParticleMemory::~ImportedParticleMemory()
 {
-    cudaFree(_particles);
+    cudaFree(_data);
     cudaDestroyExternalMemory(_externalMemory);
 }
 #if defined(WIN32)
@@ -31,7 +30,7 @@ ImportedParticleMemory::ImportedParticleMemory(void* handle, size_t size)
     bufferDesc.size = size;
     bufferDesc.offset = 0;
 
-    cudaExternalMemoryGetMappedBuffer(reinterpret_cast<void**>(&_particles), _externalMemory, &bufferDesc);
+    cudaExternalMemoryGetMappedBuffer(&_data, _externalMemory, &bufferDesc);
 }
 #else
 ImportedParticleMemory::ImportedParticleMemory(int handle, size_t size)
@@ -48,24 +47,9 @@ ImportedParticleMemory::ImportedParticleMemory(int handle, size_t size)
     bufferDesc.size = size;
     bufferDesc.offset = 0;
 
-    cudaExternalMemoryGetMappedBuffer(reinterpret_cast<void**>(&_particles), _externalMemory, &bufferDesc);
+    cudaExternalMemoryGetMappedBuffer(&_data, _externalMemory, &bufferDesc);
 }
 #endif
-
-auto ImportedParticleMemory::getParticles() const -> ParticleData*
-{
-    return _particles;
-}
-
-auto ImportedParticleMemory::getSize() const -> size_t
-{
-    return _size;
-}
-
-auto ImportedParticleMemory::getMaxParticleCount() const -> size_t
-{
-    return _size / sizeof(ParticleData);
-}
 
 #if defined(WIN32)
 auto importBuffer(void* handle, size_t size) -> std::unique_ptr<ImportedMemory>

@@ -11,33 +11,34 @@
 #include <panda/utils/Signals.h>
 
 #include <array>
-#include <chrono>
 #include <csignal>
 #include <cstdint>
 #include <cstdlib>
 #include <cuda/Simulation.cuh>
 #include <glm/common.hpp>
+#include <glm/exponential.hpp>
 #include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_float4.hpp>
 #include <glm/ext/vector_uint2.hpp>
-#include <glm/fwd.hpp>
+#include <glm/ext/vector_uint3.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
 #include <glm/trigonometric.hpp>
-#include <gui/SimulationDataGui.hpp>
-#include <input_handler/MouseHandler.hpp>
 #include <memory>
-#include <mesh/UvSphere.hpp>
 #include <ranges>
 #include <string_view>
 #include <utility>
 #include <vector>
 
-#include "glm/exponential.hpp"
 #include "glm/gtx/string_cast.hpp"
+#include "gui/SimulationDataGui.hpp"
+#include "input_handler/MouseHandler.hpp"
 #include "internal/config.hpp"
 #include "mesh/InvertedCube.hpp"
+#include "mesh/UvSphere.hpp"
 #include "movement_handler/MovementHandler.hpp"
 #include "movement_handler/RotationHandler.hpp"
+#include "utils/FrameTimeManager.hpp"
 
 namespace
 {
@@ -109,30 +110,6 @@ void processCamera(const float deltaTime,
     });
 }
 
-class TimeData
-{
-public:
-    TimeData()
-        : _time {std::chrono::steady_clock::now()}
-    {
-    }
-
-    auto update() -> void
-    {
-        const auto currentTime = std::chrono::steady_clock::now();
-        _deltaTime = std::chrono::duration<float>(currentTime - _time).count();
-        _time = currentTime;
-    }
-
-    [[nodiscard]] auto getDelta() const noexcept -> float
-    {
-        return _deltaTime;
-    }
-
-private:
-    std::chrono::steady_clock::time_point _time;
-    float _deltaTime {};
-};
 }
 
 namespace sph
@@ -156,15 +133,17 @@ auto App::run() -> int
 
     setDefaultScene();
 
-    auto translations =
-        _scene->getParticles().objects | std::ranges::views::transform(&panda::gfx::vulkan::Object::transform) |
-        std::ranges::views::transform(&panda::gfx::vulkan::Transform::translation) | std::ranges::views::common;
+    auto translations = _scene->getParticles().objects |
+                        std::ranges::views::transform(&panda::gfx::vulkan::Object::transform) |
+                        std::ranges::views::transform(&panda::gfx::vulkan::Transform::translation) |
+                        std::ranges::views::transform([](const auto& position) {
+                            return glm::vec4 {position, 0.F};
+                        }) |
+                        std::ranges::views::common;
 
     const std::vector translationVec(translations.begin(), translations.end());
 
-    _simulation = createSimulation(_simulationParameters,
-                                   translationVec,
-                                   _api->initializeParticleSystem(sizeof(cuda::ParticleData), 250000));
+    _simulation = createSimulation(_simulationParameters, translationVec, _api->initializeParticleSystem(250000));
 
     mainLoop();
     return 0;
@@ -172,8 +151,6 @@ auto App::run() -> int
 
 auto App::mainLoop() const -> void
 {
-    auto currentTime = TimeData {};
-
     auto cameraObject = panda::gfx::vulkan::Transform {};
 
     cameraObject.translation = {0, 0.5, -5};
@@ -182,6 +159,7 @@ auto App::mainLoop() const -> void
 
     auto gui = SimulationDataGui {*_window, _simulationParameters};
 
+    auto timeManager = FrameTimeManager {};
     while (!_window->shouldClose()) [[likely]]
     {
         if (!_window->isMinimized()) [[likely]]
@@ -189,24 +167,26 @@ auto App::mainLoop() const -> void
             panda::utils::signals::gameLoopIterationStarted.registerSender()();
             _window->processInput();
 
-            currentTime.update();
+            timeManager.update();
             const auto guiUpdate = gui.getParameters();
             _scene->getDomain().transform.translation = (guiUpdate.domain.max + guiUpdate.domain.min) / 2.F;
-            _simulation->update(guiUpdate, currentTime.getDelta());
+            _simulation->update(guiUpdate, timeManager.getDelta());
             _scene->getCamera().setPerspectiveProjection(
                 panda::gfx::projection::Perspective {.fovY = glm::radians(50.F),
                                                      .aspect = _api->getRenderer().getAspectRatio(),
                                                      .zNear = 0.1F,
                                                      .zFar = 100});
-            processCamera(currentTime.getDelta(), *_window, cameraObject, _scene->getCamera());
+            processCamera(timeManager.getDelta(), *_window, cameraObject, _scene->getCamera());
 
-            _api->makeFrame(currentTime.getDelta(), *_scene);
+            _api->makeFrame(timeManager.getDelta(), *_scene);
         }
         else [[unlikely]]
         {
             _window->waitForInput();
         }
     }
+
+    panda::log::Info("Main loop ended. Average frame rate: {} FPS", timeManager.getMeanFrameRate());
 }
 
 auto App::initializeLogger() -> void
@@ -255,7 +235,7 @@ void App::setDefaultScene()
         20000,
         1000.F);
 
-    const auto simulationSize = glm::uvec3 {40, 20, 25};
+    static constexpr auto simulationSize = glm::uvec3 {40, 20, 25};
     const auto maxSize = glm::vec3 {simulationSize} * _simulationParameters.particleRadius * 2.F * 1.5F;
 
     for (auto i = uint32_t {}; i < simulationSize.x; i++)
@@ -308,8 +288,8 @@ auto App::getInitialSimulationParameters(const cuda::Simulation::Parameters::Dom
     const auto mass = totalMass / static_cast<float>(particleCount);
     const auto particleVolume = mass / restDensity;
     const auto particleSpacing = glm::pow(particleVolume, 1.F / 3.F);
-    const auto smoothingRadius = 6.F * particleSpacing;
-    const auto particleRadius = smoothingRadius / 8.F;
+    const auto smoothingRadius = 8.F * particleSpacing;
+    const auto particleRadius = smoothingRadius / 10.F;
 
     return {
         .domain = domain,
@@ -323,7 +303,6 @@ auto App::getInitialSimulationParameters(const cuda::Simulation::Parameters::Dom
         .surfaceTensionCoefficient = 0.0F,
         .maxVelocity = 5.F,
         .particleRadius = particleRadius,
-        .particleMass = mass,
         .threadsPerBlock = 256,
     };
 }

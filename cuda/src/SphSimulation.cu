@@ -1,49 +1,62 @@
 #include <cuda_runtime_api.h>
 #include <driver_types.h>
-#include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
 #include <vector_types.h>
 
 #include <cstddef>
 #include <cstdint>
+#include <cuda/Simulation.cuh>
 #include <glm/common.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_uint3.hpp>
 #include <memory>
 #include <thrust/detail/device_ptr.inl>
 #include <thrust/detail/sort.inl>
+#include <type_traits>
 #include <vector>
 
 #include "Algorithm.cuh"
 #include "ImportedParticleMemory.cuh"
 #include "Span.cuh"
 #include "SphSimulation.cuh"
-#include "cuda/ImportedMemory.cuh"
-#include "cuda/Simulation.cuh"
 
 namespace sph::cuda
 {
 
 SphSimulation::SphSimulation(const Parameters& initialParameters,
-                             const std::vector<glm::vec3>& positions,
-                             const ImportedMemory& memory)
-    : _particleBuffer {dynamic_cast<const ImportedParticleMemory&>(memory)},
+                             const std::vector<glm::vec4>& positions,
+                             const ParticlesDataBuffer& memory)
+    : _particleBuffer {toInternalBuffer(memory)},
       _simulationData {initialParameters},
       _state {.grid = createGrid(initialParameters, positions.size())},
-      _particleCount {positions.size()}
+      _particleCount {static_cast<uint32_t>(positions.size())}
 {
-    std::vector<ParticleData> particles(positions.size());
+    std::vector<glm::vec4> positionsVec(positions.size());
+    std::vector<glm::vec4> velocitiesVec(positions.size(), glm::vec4(0.0f));
+    std::vector<float> radiusesVec(positions.size(), initialParameters.particleRadius);
     for (size_t i = 0; i < positions.size(); i++)
     {
-        particles[i] = ParticleData {};
-        particles[i].position = positions[i];
-        particles[i].mass = initialParameters.particleMass;
-        particles[i].radius = initialParameters.particleRadius;
+        positionsVec[i] = positions[i];
     }
 
-    cudaMemcpy(_particleBuffer.getParticles(),
-               particles.data(),
-               particles.size() * sizeof(ParticleData),
+    cudaMemcpy(_particleBuffer.positions.getData<glm::vec4>(),
+               positionsVec.data(),
+               positionsVec.size() * sizeof(glm::vec4),
+               cudaMemcpyHostToDevice);
+
+    cudaMemcpy(_particleBuffer.velocities.getData<glm::vec4>(),
+               velocitiesVec.data(),
+               velocitiesVec.size() * sizeof(glm::vec4),
+               cudaMemcpyHostToDevice);
+
+    cudaMemcpy(_particleBuffer.predictedPositions.getData<glm::vec4>(),
+               positionsVec.data(),
+               positionsVec.size() * sizeof(glm::vec4),
+               cudaMemcpyHostToDevice);
+
+    cudaMemcpy(_particleBuffer.radiuses.getData<float>(),
+               radiusesVec.data(),
+               radiusesVec.size() * sizeof(float),
                cudaMemcpyHostToDevice);
 }
 
@@ -53,6 +66,18 @@ SphSimulation::~SphSimulation()
     cudaFree(_state.grid.particleArrayIndices.data);
     cudaFree(_state.grid.cellStartIndices.data);
     cudaFree(_state.grid.cellEndIndices.data);
+}
+
+auto SphSimulation::toInternalBuffer(const ParticlesDataBuffer& memory) -> ParticlesInternalDataBuffer
+{
+    return {.positions = dynamic_cast<const ImportedParticleMemory&>(memory.positions),
+            .predictedPositions = dynamic_cast<const ImportedParticleMemory&>(memory.predictedPositions),
+            .velocities = dynamic_cast<const ImportedParticleMemory&>(memory.velocities),
+            .forces = dynamic_cast<const ImportedParticleMemory&>(memory.forces),
+            .densities = dynamic_cast<const ImportedParticleMemory&>(memory.densities),
+            .nearDensities = dynamic_cast<const ImportedParticleMemory&>(memory.nearDensities),
+            .pressures = dynamic_cast<const ImportedParticleMemory&>(memory.pressures),
+            .radiuses = dynamic_cast<const ImportedParticleMemory&>(memory.radiuses)};
 }
 
 void SphSimulation::update(const Parameters& parameters, float deltaTime)
@@ -74,8 +99,8 @@ void SphSimulation::update(const Parameters& parameters, float deltaTime)
 }
 
 auto createSimulation(const Simulation::Parameters& data,
-                      const std::vector<glm::vec3>& positions,
-                      const ImportedMemory& memory) -> std::unique_ptr<Simulation>
+                      const std::vector<glm::vec4>& positions,
+                      const ParticlesDataBuffer& memory) -> std::unique_ptr<Simulation>
 {
     return std::make_unique<SphSimulation>(data, positions, memory);
 }
@@ -110,8 +135,7 @@ auto SphSimulation::createGrid(const Parameters& data, size_t particleCount) -> 
 
 auto SphSimulation::getBlocksPerGridForParticles() const -> dim3
 {
-    return {static_cast<unsigned int>((_particleCount + _simulationData.threadsPerBlock - 1) /
-                                      _simulationData.threadsPerBlock)};
+    return {(_particleCount + _simulationData.threadsPerBlock - 1) / _simulationData.threadsPerBlock};
 }
 
 auto SphSimulation::getBlocksPerGridForGrid() const -> dim3
@@ -121,9 +145,20 @@ auto SphSimulation::getBlocksPerGridForGrid() const -> dim3
             _simulationData.threadsPerBlock};
 }
 
-auto SphSimulation::getParticles() const -> Span<ParticleData>
+auto SphSimulation::getParticles() const -> ParticlesData
 {
-    return {.data = _particleBuffer.getParticles(), .size = _particleCount};
+    return {
+        .positions = _particleBuffer.positions.getData<std::remove_pointer_t<decltype(ParticlesData::positions)>>(),
+        .predictedPositions = _particleBuffer.predictedPositions
+                                  .getData<std::remove_pointer_t<decltype(ParticlesData::predictedPositions)>>(),
+        .velocities = _particleBuffer.velocities.getData<std::remove_pointer_t<decltype(ParticlesData::velocities)>>(),
+        .forces = _particleBuffer.forces.getData<std::remove_pointer_t<decltype(ParticlesData::forces)>>(),
+        .densities = _particleBuffer.densities.getData<std::remove_pointer_t<decltype(ParticlesData::densities)>>(),
+        .nearDensities =
+            _particleBuffer.nearDensities.getData<std::remove_pointer_t<decltype(ParticlesData::nearDensities)>>(),
+        .pressures = _particleBuffer.pressures.getData<std::remove_pointer_t<decltype(ParticlesData::pressures)>>(),
+        .radiuses = _particleBuffer.radiuses.getData<std::remove_pointer_t<decltype(ParticlesData::radiuses)>>(),
+        .particleCount = _particleCount};
 }
 
 void SphSimulation::computeExternalForces(float deltaTime) const

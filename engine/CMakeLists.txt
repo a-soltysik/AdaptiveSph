@@ -38,6 +38,10 @@ else()
     target_compile_definitions(AdaptiveSphEngine PUBLIC VK_USE_PLATFORM_XLIB_KHR)
 endif()
 
+if(MSVC)
+    target_compile_definitions(AdaptiveSphEngine PRIVATE NOMINMAX)
+endif()
+
 if(sph_ENABLE_PCH)
     target_precompile_headers(
         AdaptiveSphEngine

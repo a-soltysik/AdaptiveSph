@@ -1,7 +1,6 @@
 #pragma once
 
 // clang-format off
-#include "panda/gfx/vulkan/SharedBuffer.hpp"
 #include "panda/utils/Assert.h"
 // clang-format on
 

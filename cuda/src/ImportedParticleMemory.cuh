@@ -3,9 +3,7 @@
 #include <cuda_runtime.h>
 
 #include <cstddef>
-
-#include "cuda/ImportedMemory.cuh"
-#include "cuda/Simulation.cuh"
+#include <cuda/ImportedMemory.cuh>
 
 namespace sph::cuda
 {
@@ -20,15 +18,26 @@ public:
     ImportedParticleMemory(int handle, size_t size);
 #endif
 
-    [[nodiscard]] auto getParticles() const -> ParticleData*;
+    template <typename T>
+    [[nodiscard]] auto getData() const -> T*
+    {
+        return static_cast<T*>(_data);
+    }
 
-    [[nodiscard]] auto getSize() const -> size_t;
+    [[nodiscard]] auto getSize() const -> size_t
+    {
+        return _size;
+    }
 
-    [[nodiscard]] auto getMaxParticleCount() const -> size_t;
+    template <typename T>
+    [[nodiscard]] auto getMaxDataCount() const -> size_t
+    {
+        return _size / sizeof(T);
+    }
 
 private:
     cudaExternalMemory_t _externalMemory {};
-    ParticleData* _particles {};
+    void* _data {};
     size_t _size = 0;
 };
 }

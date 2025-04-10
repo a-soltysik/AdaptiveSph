@@ -11,6 +11,7 @@ target_sources(
             movement_handler/MovementHandler.cpp
             movement_handler/RotationHandler.cpp
             gui/SimulationDataGui.cpp
+            utils/FrameTimeManager.cpp
             App.cpp)
 
 target_link_libraries(
@@ -39,6 +40,10 @@ endif(WIN32)
 
 target_include_directories(AdaptiveSph PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 target_include_directories(AdaptiveSph PRIVATE "${CMAKE_BINARY_DIR}/configured_files/include")
+
+if(MSVC)
+    target_compile_definitions(AdaptiveSph PRIVATE NOMINMAX)
+endif()
 
 set_target_properties(
     AdaptiveSph

@@ -1,5 +1,5 @@
 // clang-format off
-#include "cuda/ImportedMemory.cuh"
+#include <cuda/Simulation.cuh>
 #include "panda/utils/Assert.h"
 // clang-format on
 
@@ -25,23 +25,36 @@
 
 namespace panda::gfx::vulkan
 {
-ParticleRenderSystem::ParticleRenderSystem(const Device& device,
-                                           vk::RenderPass renderPass,
-                                           vk::DeviceSize particleSize,
-                                           size_t particleCount)
+ParticleRenderSystem::ParticleRenderSystem(const Device& device, vk::RenderPass renderPass, size_t particleCount)
     : _device {device},
       _descriptorLayout {DescriptorSetLayout::Builder(_device)
                              .addBinding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eVertex)
                              .addBinding(1, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eFragment)
                              .addBinding(2, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eVertex)
+                             .addBinding(3, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eVertex)
+                             .addBinding(4, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eVertex)
                              .build(vk::DescriptorSetLayoutCreateFlagBits::ePushDescriptorKHR)},
       _pipelineLayout {createPipelineLayout(_device, _descriptorLayout->getDescriptorSetLayout())},
       _pipeline {createPipeline(_device, renderPass, _pipelineLayout)},
-      _particleBuffer {_device,
-                       particleSize,
-                       particleCount,
-                       vk::MemoryPropertyFlagBits::eDeviceLocal,
-                       _device.physicalDevice.getProperties().limits.minUniformBufferOffsetAlignment}
+      _particleBuffer {
+          .positions =
+              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::positions)>(_device, particleCount),
+          .predictedPositions =
+              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::predictedPositions)>(_device,
+                                                                                                        particleCount),
+          .velocities =
+              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::velocities)>(_device, particleCount),
+          .forces =
+              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::forces)>(_device, particleCount),
+          .densities =
+              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::densities)>(_device, particleCount),
+          .nearDensities = createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::nearDensities)>(
+              _device, particleCount),
+          .pressures =
+              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::pressures)>(_device, particleCount),
+          .radiuses =
+              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::radiuses)>(_device, particleCount),
+      }
 {
 }
 
@@ -50,9 +63,18 @@ ParticleRenderSystem::~ParticleRenderSystem() noexcept
     _device.logicalDevice.destroyPipelineLayout(_pipelineLayout);
 }
 
-auto ParticleRenderSystem::getImportedMemory() const -> const sph::cuda::ImportedMemory&
+auto ParticleRenderSystem::getImportedMemory() const -> sph::cuda::ParticlesDataBuffer
 {
-    return _particleBuffer.getImportedMemory();
+    return {
+        .positions = _particleBuffer.positions.getImportedMemory(),
+        .predictedPositions = _particleBuffer.predictedPositions.getImportedMemory(),
+        .velocities = _particleBuffer.velocities.getImportedMemory(),
+        .forces = _particleBuffer.forces.getImportedMemory(),
+        .densities = _particleBuffer.densities.getImportedMemory(),
+        .nearDensities = _particleBuffer.nearDensities.getImportedMemory(),
+        .pressures = _particleBuffer.pressures.getImportedMemory(),
+        .radiuses = _particleBuffer.radiuses.getImportedMemory(),
+    };
 }
 
 auto ParticleRenderSystem::createPipeline(const Device& device,
@@ -127,7 +149,9 @@ auto ParticleRenderSystem::render(const FrameInfo& frameInfo) const -> void
     DescriptorWriter(*_descriptorLayout)
         .writeBuffer(0, frameInfo.vertUbo.getDescriptorInfo())
         .writeBuffer(1, frameInfo.fragUbo.getDescriptorInfo())
-        .writeBuffer(2, _particleBuffer.getDescriptorInfo())
+        .writeBuffer(2, _particleBuffer.positions.getDescriptorInfo())
+        .writeBuffer(3, _particleBuffer.velocities.getDescriptorInfo())
+        .writeBuffer(4, _particleBuffer.radiuses.getDescriptorInfo())
         .push(frameInfo.commandBuffer, _pipelineLayout);
 
     frameInfo.commandBuffer.draw(6, frameInfo.scene.getParticles().objects.size(), 0, 0);

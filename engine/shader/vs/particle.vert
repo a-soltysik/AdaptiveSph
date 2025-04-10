@@ -21,41 +21,35 @@ layout (set = 0, binding = 0) uniform VertUbo
     mat4 view;
 } ubo;
 
-struct InstanceData {
-    vec3 position;
-    vec3 predictedPosition;
-    vec3 velocity;
-    vec3 force;
-    float mass;
-    float density;
-    float nearDensity;
-    float pressure;
-    float radius;
+layout (set = 0, binding = 2) readonly buffer PositionBuffer {
+    vec4 positions[];
 };
 
-layout (set = 0, binding = 2) readonly buffer InstanceBuffer {
-    InstanceData instances[];
+layout (set = 0, binding = 3) readonly buffer VelocityBuffer {
+    vec4 velocities[];
+};
+
+layout (set = 0, binding = 4) readonly buffer RadiusBuffer {
+    float radiuses[];
 };
 
 void main() {
-    InstanceData instance = instances[gl_InstanceIndex];
-
     vec2 quadCoord = OFFSETS[gl_VertexIndex];
 
     vec3 viewRight = normalize(vec3(ubo.view[0][0], ubo.view[1][0], ubo.view[2][0]));
     vec3 viewUp = normalize(vec3(ubo.view[0][1], ubo.view[1][1], ubo.view[2][1]));
 
-    float scale = 2 * instance.radius;
+    float scale = 2 * radiuses[gl_InstanceIndex];
 
-    vec3 vertexPosition = instance.position;
+    vec3 vertexPosition = positions[gl_InstanceIndex].xyz;
     vertexPosition += (quadCoord.x * 0.5) * viewRight * scale;
     vertexPosition += (quadCoord.y * 0.5) * viewUp * scale;
 
     uv = (quadCoord + vec2(1.0)) * 0.5;
-    radius = instance.radius;
+    radius = radiuses[gl_InstanceIndex];
     worldPosition = vertexPosition;
-    sphereCenter = instance.position;
-    velocity = instance.velocity;
+    sphereCenter = positions[gl_InstanceIndex].xyz;
+    velocity = velocities[gl_InstanceIndex].xyz;
 
     gl_Position = ubo.projection * ubo.view * vec4(vertexPosition, 1.0);
 }
