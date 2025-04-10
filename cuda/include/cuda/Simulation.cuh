@@ -1,7 +1,9 @@
 #pragma once
 
+#include <cstdint>
 #include <glm/common.hpp>
 #include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_float4.hpp>
 #include <memory>
 #include <vector>
 
@@ -11,17 +13,30 @@
 namespace sph::cuda
 {
 
-struct ParticleData
+struct ParticlesData
 {
-    alignas(16) glm::vec3 position;
-    alignas(16) glm::vec3 predictedPosition;
-    alignas(16) glm::vec3 velocity;
-    alignas(16) glm::vec3 force;
-    alignas(4) float mass;
-    alignas(4) float density;
-    alignas(4) float nearDensity;
-    alignas(4) float pressure;
-    alignas(4) float radius;
+    glm::vec4* positions;
+    glm::vec4* predictedPositions;
+    glm::vec4* velocities;
+    glm::vec4* forces;
+    float* densities;
+    float* nearDensities;
+    float* pressures;
+    float* radiuses;
+
+    uint32_t particleCount;
+};
+
+struct ParticlesDataBuffer
+{
+    const ImportedMemory& positions;
+    const ImportedMemory& predictedPositions;
+    const ImportedMemory& velocities;
+    const ImportedMemory& forces;
+    const ImportedMemory& densities;
+    const ImportedMemory& nearDensities;
+    const ImportedMemory& pressures;
+    const ImportedMemory& radiuses;
 };
 
 class SPH_CUDA_API Simulation
@@ -61,7 +76,6 @@ public:
         float surfaceTensionCoefficient;
         float maxVelocity;
         float particleRadius;
-        float particleMass;
 
         uint32_t threadsPerBlock;
     };
@@ -72,7 +86,7 @@ public:
 };
 
 SPH_CUDA_API auto createSimulation(const Simulation::Parameters& data,
-                                   const std::vector<glm::vec3>& positions,
-                                   const ImportedMemory& memory) -> std::unique_ptr<Simulation>;
+                                   const std::vector<glm::vec4>& positions,
+                                   const ParticlesDataBuffer& memory) -> std::unique_ptr<Simulation>;
 
 }

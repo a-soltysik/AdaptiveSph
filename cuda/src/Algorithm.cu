@@ -1,6 +1,8 @@
 #include <cuda/std/__iterator/distance.h>
 
 #include <cstdint>
+#include <cuda/Simulation.cuh>
+#include <cuda/std/array>
 #include <glm/common.hpp>
 #include <glm/ext/vector_uint3.hpp>
 #include <thrust/system/detail/generic/distance.inl>
@@ -8,7 +10,6 @@
 #include "Algorithm.cuh"
 #include "Span.cuh"
 #include "SphSimulation.cuh"
-#include "cuda/Simulation.cuh"
 #include "device/Kernel.cuh"
 #include "glm/ext/vector_float3.hpp"
 #include "glm/geometric.hpp"
@@ -16,25 +17,48 @@
 namespace sph::cuda::kernel
 {
 
-__device__ void handleCollision(ParticleData& particle, const Simulation::Parameters& simulationData);
-__device__ auto calculateCellIndex(glm::vec3 position,
+__constant__ int3 offsets[27] = {
+    {0,  0,  0 },
+    {0,  0,  -1},
+    {0,  0,  1 },
+    {0,  -1, 0 },
+    {0,  -1, -1},
+    {0,  -1, 1 },
+    {0,  1,  0 },
+    {0,  1,  -1},
+    {0,  1,  1 },
+    {-1, 0,  0 },
+    {-1, 0,  -1},
+    {-1, 0,  1 },
+    {-1, -1, 0 },
+    {-1, -1, -1},
+    {-1, -1, 1 },
+    {-1, 1,  0 },
+    {-1, 1,  -1},
+    {-1, 1,  1 },
+    {1,  0,  0 },
+    {1,  0,  -1},
+    {1,  0,  1 },
+    {1,  -1, 0 },
+    {1,  -1, -1},
+    {1,  -1, 1 },
+    {1,  1,  0 },
+    {1,  1,  -1},
+    {1,  1,  1 }
+};
+
+__device__ void handleCollision(ParticlesData particles, uint32_t id, const Simulation::Parameters& simulationData);
+__device__ auto calculateCellIndex(glm::vec4 position,
                                    const Simulation::Parameters& simulationData,
                                    const SphSimulation::Grid& grid) -> glm::uvec3;
 __device__ auto flattenCellIndex(glm::uvec3 cellIndex, glm::uvec3 gridSize) -> uint32_t;
 
-__device__ void computeSurfaceTension(glm::vec3& surfaceTensionForce,
-                                      ParticleData& particle,
-                                      Span<ParticleData> particles,
-                                      const SphSimulation::State& state,
-                                      const Simulation::Parameters& simulationData,
-                                      const glm::uvec3& cellPosition);
-
-__global__ void handleCollisions(Span<ParticleData> particles, Simulation::Parameters simulationData)
+__global__ void handleCollisions(ParticlesData particles, Simulation::Parameters simulationData)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx < particles.size)
+    if (idx < particles.particleCount)
     {
-        handleCollision(particles.data[idx], simulationData);
+        handleCollision(particles, idx, simulationData);
     }
 }
 
@@ -48,15 +72,15 @@ __global__ void resetGrid(SphSimulation::Grid grid)
     }
 }
 
-__global__ void assignParticlesToCells(Span<ParticleData> particles,
+__global__ void assignParticlesToCells(ParticlesData particles,
                                        SphSimulation::State state,
                                        Simulation::Parameters simulationData)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx < particles.size)
+    if (idx < particles.particleCount)
     {
         state.grid.particleArrayIndices.data[idx] = idx;
-        const auto cellPosition = calculateCellIndex(particles.data[idx].position, simulationData, state.grid);
+        const auto cellPosition = calculateCellIndex(particles.positions[idx], simulationData, state.grid);
         const auto cellIndex = flattenCellIndex(cellPosition, state.grid.gridSize);
         state.grid.particleGridIndices.data[idx] = cellIndex;
     }
@@ -82,261 +106,241 @@ __global__ void calculateCellStartAndEndIndices(SphSimulation::Grid grid)
     }
 }
 
-__global__ void computeDensities(Span<ParticleData> particles,
+__global__ void computeDensities(ParticlesData particles,
                                  SphSimulation::State state,
                                  Simulation::Parameters simulationData)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx >= particles.size)
+    if (idx >= particles.particleCount)
     {
         return;
     }
 
-    const auto position = particles.data[idx].predictedPosition;
+    const auto position = particles.predictedPositions[idx];
     const auto originCell = calculateCellIndex(position, simulationData, state.grid);
     const auto radiusSquared = simulationData.smoothingRadius * simulationData.smoothingRadius;
 
     auto density = 0.F;
     auto nearDensity = 0.F;
 
-    for (int dx = -1; dx <= 1; dx++)
+    for (const auto offset : offsets)
     {
-        for (int dy = -1; dy <= 1; dy++)
+        const auto neighborCell = originCell + glm::uvec3 {offset.x, offset.y, offset.z};
+        if (neighborCell.x >= state.grid.gridSize.x || neighborCell.y >= state.grid.gridSize.y ||
+            neighborCell.z >= state.grid.gridSize.z)
         {
-            for (int dz = -1; dz <= 1; dz++)
+            continue;
+        }
+        const auto neighbourCellId = flattenCellIndex(neighborCell, state.grid.gridSize);
+        const auto startIdx = state.grid.cellStartIndices.data[neighbourCellId];
+        const auto endIdx = state.grid.cellEndIndices.data[neighbourCellId];
+
+        if (startIdx == -1 || startIdx > endIdx)
+        {
+            continue;
+        }
+
+        for (auto i = startIdx; i <= endIdx; i++)
+        {
+            const auto neighbourIdx = state.grid.particleArrayIndices.data[i];
+            const auto neighbourPosition = particles.predictedPositions[neighbourIdx];
+            const auto offsetToNeighbour = neighbourPosition - position;
+            const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
+
+            if (distanceSquared > radiusSquared)
             {
-                const auto neighborCell = originCell + glm::uvec3(dx, dy, dz);
-                if (neighborCell.x >= state.grid.gridSize.x || neighborCell.y >= state.grid.gridSize.y ||
-                    neighborCell.z >= state.grid.gridSize.z)
-                {
-                    continue;
-                }
-                const auto neighbourCellId = flattenCellIndex(neighborCell, state.grid.gridSize);
-                const auto startIdx = state.grid.cellStartIndices.data[neighbourCellId];
-                const auto endIdx = state.grid.cellEndIndices.data[neighbourCellId];
-
-                if (startIdx == -1 || startIdx > endIdx)
-                {
-                    continue;
-                }
-
-                for (auto i = startIdx; i <= endIdx; i++)
-                {
-                    const auto neighbourIdx = state.grid.particleArrayIndices.data[i];
-                    const auto neighbourPosition = particles.data[neighbourIdx].predictedPosition;
-                    const auto offsetToNeighbour = neighbourPosition - position;
-                    const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
-
-                    if (distanceSquared > radiusSquared)
-                    {
-                        continue;
-                    }
-                    const auto distance = glm::sqrt(distanceSquared);
-                    density += device::densityKernel(distance, simulationData.smoothingRadius);
-                    nearDensity += device::nearDensityKernel(distance, simulationData.smoothingRadius);
-                }
+                continue;
             }
+            const auto distance = glm::sqrt(distanceSquared);
+            density += device::densityKernel(distance, simulationData.smoothingRadius);
+            nearDensity += device::nearDensityKernel(distance, simulationData.smoothingRadius);
         }
     }
-    particles.data[idx].density = density;
-    particles.data[idx].nearDensity = nearDensity;
+    particles.densities[idx] = density;
+    particles.nearDensities[idx] = nearDensity;
 }
 
-__global__ void computePressureForce(Span<ParticleData> particles,
+__global__ void computePressureForce(ParticlesData particles,
                                      SphSimulation::State state,
                                      Simulation::Parameters simulationData,
                                      float dt)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx >= particles.size)
+    if (idx >= particles.particleCount)
     {
         return;
     }
-    const auto position = particles.data[idx].predictedPosition;
-    const auto density = particles.data[idx].density;
-    const auto nearDensity = particles.data[idx].nearDensity;
+    const auto position = particles.predictedPositions[idx];
+    const auto density = particles.densities[idx];
+    const auto nearDensity = particles.nearDensities[idx];
     const auto pressure = (density - simulationData.restDensity) * simulationData.pressureConstant;
     const auto nearPressure = nearDensity * simulationData.nearPressureConstant;
 
-    auto pressureForce = glm::vec3 {};
+    auto pressureForce = glm::vec4 {};
 
     const auto originCell = calculateCellIndex(position, simulationData, state.grid);
     const auto radiusSquared = simulationData.smoothingRadius * simulationData.smoothingRadius;
 
-    for (int dx = -1; dx <= 1; dx++)
+    for (const auto offset : offsets)
     {
-        for (int dy = -1; dy <= 1; dy++)
+        const auto neighborCell = originCell + glm::uvec3 {offset.x, offset.y, offset.z};
+        if (neighborCell.x >= state.grid.gridSize.x || neighborCell.y >= state.grid.gridSize.y ||
+            neighborCell.z >= state.grid.gridSize.z)
         {
-            for (int dz = -1; dz <= 1; dz++)
+            continue;
+        }
+        const auto neighbourCellId = flattenCellIndex(neighborCell, state.grid.gridSize);
+        const auto startIdx = state.grid.cellStartIndices.data[neighbourCellId];
+        const auto endIdx = state.grid.cellEndIndices.data[neighbourCellId];
+
+        if (startIdx == -1)
+        {
+            continue;
+        }
+
+        for (auto i = startIdx; i <= endIdx; i++)
+        {
+            const auto neighbourIdx = state.grid.particleArrayIndices.data[i];
+            if (neighbourIdx == idx)
             {
-                const auto neighborCell = originCell + glm::uvec3(dx, dy, dz);
-                if (neighborCell.x >= state.grid.gridSize.x || neighborCell.y >= state.grid.gridSize.y ||
-                    neighborCell.z >= state.grid.gridSize.z)
-                {
-                    continue;
-                }
-                const auto neighbourCellId = flattenCellIndex(neighborCell, state.grid.gridSize);
-                const auto startIdx = state.grid.cellStartIndices.data[neighbourCellId];
-                const auto endIdx = state.grid.cellEndIndices.data[neighbourCellId];
-
-                if (startIdx == -1)
-                {
-                    continue;
-                }
-
-                for (auto i = startIdx; i <= endIdx; i++)
-                {
-                    const auto neighbourIdx = state.grid.particleArrayIndices.data[i];
-                    if (neighbourIdx == idx)
-                    {
-                        continue;
-                    }
-
-                    const auto neighbourPosition = particles.data[neighbourIdx].predictedPosition;
-                    const auto offsetToNeighbour = neighbourPosition - position;
-                    const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
-
-                    if (distanceSquared > radiusSquared)
-                    {
-                        continue;
-                    }
-                    const auto densityNeighbour = particles.data[neighbourIdx].density;
-                    const auto nearDensityNeighbour = particles.data[neighbourIdx].nearDensity;
-                    const auto pressureNeighbour =
-                        (densityNeighbour - simulationData.restDensity) * simulationData.pressureConstant;
-                    const auto nearPressureNeighbour = nearDensityNeighbour * simulationData.nearPressureConstant;
-
-                    const auto sharedPressure = (pressure + pressureNeighbour) / 2.F;
-                    const auto sharedNearPressure = (nearPressure + nearPressureNeighbour) / 2.F;
-
-                    const auto distance = glm::sqrt(distanceSquared);
-                    const auto direction = distance > 0.F ? offsetToNeighbour / distance : glm::vec3(0.F, 1.F, 0.F);
-
-                    pressureForce += direction *
-                                     device::densityDerivativeKernel(distance, simulationData.smoothingRadius) *
-                                     sharedPressure / densityNeighbour;
-                    pressureForce += direction *
-                                     device::nearDensityDerivativeKernel(distance, simulationData.smoothingRadius) *
-                                     sharedNearPressure / nearPressureNeighbour;
-                }
+                continue;
             }
+
+            const auto neighbourPosition = particles.predictedPositions[neighbourIdx];
+            const auto offsetToNeighbour = neighbourPosition - position;
+            const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
+
+            if (distanceSquared > radiusSquared)
+            {
+                continue;
+            }
+            const auto densityNeighbour = particles.densities[neighbourIdx];
+            const auto nearDensityNeighbour = particles.nearDensities[neighbourIdx];
+            const auto pressureNeighbour =
+                (densityNeighbour - simulationData.restDensity) * simulationData.pressureConstant;
+            const auto nearPressureNeighbour = nearDensityNeighbour * simulationData.nearPressureConstant;
+
+            const auto sharedPressure = (pressure + pressureNeighbour) / 2.F;
+            const auto sharedNearPressure = (nearPressure + nearPressureNeighbour) / 2.F;
+
+            const auto distance = glm::sqrt(distanceSquared);
+            const auto direction = distance > 0.F ? offsetToNeighbour / distance : glm::vec4(0.F, 1.F, 0.F, 0.F);
+
+            pressureForce += direction * device::densityDerivativeKernel(distance, simulationData.smoothingRadius) *
+                             sharedPressure / densityNeighbour;
+            pressureForce += direction * device::nearDensityDerivativeKernel(distance, simulationData.smoothingRadius) *
+                             sharedNearPressure / nearPressureNeighbour;
         }
     }
 
     const auto acceleration = pressureForce / density;
-    particles.data[idx].velocity += acceleration * dt;
+    particles.velocities[idx] += acceleration * dt;
 }
 
-__global__ void computeViscosityForce(Span<ParticleData> particles,
+__global__ void computeViscosityForce(ParticlesData particles,
                                       SphSimulation::State state,
                                       Simulation::Parameters simulationData,
                                       float dt)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx >= particles.size)
+    if (idx >= particles.particleCount)
     {
         return;
     }
-    const auto position = particles.data[idx].predictedPosition;
-    const auto velocity = particles.data[idx].velocity;
+    const auto position = particles.predictedPositions[idx];
+    const auto velocity = particles.velocities[idx];
 
-    auto viscosityForce = glm::vec3 {};
+    auto viscosityForce = glm::vec4 {};
 
     const auto originCell = calculateCellIndex(position, simulationData, state.grid);
     const auto radiusSquared = simulationData.smoothingRadius * simulationData.smoothingRadius;
 
-    for (int dx = -1; dx <= 1; dx++)
+    for (const auto offset : offsets)
     {
-        for (int dy = -1; dy <= 1; dy++)
+        const auto neighborCell = originCell + glm::uvec3 {offset.x, offset.y, offset.z};
+        if (neighborCell.x >= state.grid.gridSize.x || neighborCell.y >= state.grid.gridSize.y ||
+            neighborCell.z >= state.grid.gridSize.z)
         {
-            for (int dz = -1; dz <= 1; dz++)
+            continue;
+        }
+        const auto neighbourCellId = flattenCellIndex(neighborCell, state.grid.gridSize);
+        const auto startIdx = state.grid.cellStartIndices.data[neighbourCellId];
+        const auto endIdx = state.grid.cellEndIndices.data[neighbourCellId];
+
+        if (startIdx == -1)
+        {
+            continue;
+        }
+
+        for (auto i = startIdx; i <= endIdx; i++)
+        {
+            const auto neighbourIdx = state.grid.particleArrayIndices.data[i];
+            if (neighbourIdx == idx)
             {
-                const auto neighborCell = originCell + glm::uvec3(dx, dy, dz);
-                if (neighborCell.x >= state.grid.gridSize.x || neighborCell.y >= state.grid.gridSize.y ||
-                    neighborCell.z >= state.grid.gridSize.z)
-                {
-                    continue;
-                }
-                const auto neighbourCellId = flattenCellIndex(neighborCell, state.grid.gridSize);
-                const auto startIdx = state.grid.cellStartIndices.data[neighbourCellId];
-                const auto endIdx = state.grid.cellEndIndices.data[neighbourCellId];
-
-                if (startIdx == -1)
-                {
-                    continue;
-                }
-
-                for (auto i = startIdx; i <= endIdx; i++)
-                {
-                    const auto neighbourIdx = state.grid.particleArrayIndices.data[i];
-                    if (neighbourIdx == idx)
-                    {
-                        continue;
-                    }
-
-                    const auto neighbourPosition = particles.data[neighbourIdx].predictedPosition;
-                    const auto offsetToNeighbour = neighbourPosition - position;
-                    const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
-
-                    if (distanceSquared > radiusSquared)
-                    {
-                        continue;
-                    }
-
-                    const auto distance = glm::sqrt(distanceSquared);
-                    const auto neighbourVelocity = particles.data[neighbourIdx].velocity;
-                    viscosityForce += (neighbourVelocity - velocity) *
-                                      device::smoothingKernelPoly6(distance, simulationData.smoothingRadius);
-                }
+                continue;
             }
+
+            const auto neighbourPosition = particles.predictedPositions[neighbourIdx];
+            const auto offsetToNeighbour = neighbourPosition - position;
+            const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
+
+            if (distanceSquared > radiusSquared)
+            {
+                continue;
+            }
+
+            const auto distance = glm::sqrt(distanceSquared);
+            const auto neighbourVelocity = particles.velocities[neighbourIdx];
+            viscosityForce +=
+                (neighbourVelocity - velocity) * device::smoothingKernelPoly6(distance, simulationData.smoothingRadius);
         }
     }
 
-    particles.data[idx].velocity += viscosityForce * simulationData.viscosityConstant * dt;
+    particles.velocities[idx] += viscosityForce * simulationData.viscosityConstant * dt;
 }
 
-__global__ void integrateMotion(Span<ParticleData> particles, Simulation::Parameters simulationData, float dt)
+__global__ void integrateMotion(ParticlesData particles, Simulation::Parameters simulationData, float dt)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx >= particles.size)
+    if (idx >= particles.particleCount)
     {
         return;
     }
 
-    const auto velocityMagnitude = glm::length(particles.data[idx].velocity);
+    const auto velocityMagnitude = glm::length(particles.velocities[idx]);
     if (velocityMagnitude > simulationData.maxVelocity)
     {
-        particles.data[idx].velocity *= simulationData.maxVelocity / velocityMagnitude;
+        particles.velocities[idx] *= simulationData.maxVelocity / velocityMagnitude;
     }
-    particles.data[idx].position += particles.data[idx].velocity * dt;
+    particles.positions[idx] += particles.velocities[idx] * dt;
 }
 
-__device__ void handleCollision(ParticleData& particle, const Simulation::Parameters& simulationData)
+__device__ void handleCollision(ParticlesData particles, uint32_t id, const Simulation::Parameters& simulationData)
 {
     for (int i = 0; i < 3; i++)
     {
         const auto minBoundary = simulationData.domain.min[i] + simulationData.particleRadius;
         const auto maxBoundary = simulationData.domain.max[i] - simulationData.particleRadius;
 
-        if (particle.position[i] < minBoundary)
+        if (particles.positions[id][i] < minBoundary)
         {
-            particle.position[i] = minBoundary;
-            particle.velocity[i] = -particle.velocity[i] * simulationData.restitution;
+            particles.positions[id][i] = minBoundary;
+            particles.velocities[id][i] = -particles.velocities[id][i] * simulationData.restitution;
         }
 
-        if (particle.position[i] > maxBoundary)
+        if (particles.positions[id][i] > maxBoundary)
         {
-            particle.position[i] = maxBoundary;
-            particle.velocity[i] = -particle.velocity[i] * simulationData.restitution;
+            particles.positions[id][i] = maxBoundary;
+            particles.velocities[id][i] = -particles.velocities[id][i] * simulationData.restitution;
         }
     }
 }
 
-__device__ auto calculateCellIndex(glm::vec3 position,
+__device__ auto calculateCellIndex(glm::vec4 position,
                                    const Simulation::Parameters& simulationData,
                                    const SphSimulation::Grid& grid) -> glm::uvec3
 {
-    const auto relativePosition = position - simulationData.domain.min;
+    const auto relativePosition = glm::vec3 {position} - simulationData.domain.min;
     const auto clampedPosition =
         glm::clamp(relativePosition, glm::vec3(0.F), simulationData.domain.max - simulationData.domain.min);
 
@@ -350,18 +354,15 @@ __device__ auto flattenCellIndex(glm::uvec3 cellIndex, glm::uvec3 gridSize) -> u
     return cellIndex.x + (cellIndex.y * gridSize.x) + (cellIndex.z * gridSize.x * gridSize.y);
 }
 
-__global__ void computeExternalForces(Span<ParticleData> particles,
-                                      Simulation::Parameters simulationData,
-                                      float deltaTime)
+__global__ void computeExternalForces(ParticlesData particles, Simulation::Parameters simulationData, float deltaTime)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx >= particles.size)
+    if (idx >= particles.particleCount)
     {
         return;
     }
 
-    particles.data[idx].velocity += simulationData.gravity * deltaTime;
-    particles.data[idx].predictedPosition = particles.data[idx].position + particles.data[idx].velocity * 1.F / 120.F;
+    particles.velocities[idx] += glm::vec4 {simulationData.gravity, 0.F} * deltaTime;
+    particles.predictedPositions[idx] = particles.positions[idx] + particles.velocities[idx] * 1.F / 120.F;
 }
-
 }

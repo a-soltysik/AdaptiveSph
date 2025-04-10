@@ -3,20 +3,34 @@
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
 #include <imgui.h>
+#include <panda/Logger.h>
+#include <panda/utils/Signals.h>
 #include <vulkan/vulkan_core.h>
 
-#include <Window.hpp>
+#include <array>
 #include <chrono>
 #include <cstdint>
+#include <cuda/Simulation.cuh>
+#include <glm/common.hpp>
+#include <glm/exponential.hpp>
 
-#include "cuda/Simulation.cuh"
-#include "panda/utils/Signals.h"
+#include "Window.hpp"
 
 namespace sph
 {
+
 SimulationDataGui::SimulationDataGui(const Window& window, const cuda::Simulation::Parameters& simulationData)
     : _simulationData {simulationData},
-      _window {window}
+      _window {window},
+      _threadsPerBlockSlider {[rawThreads = static_cast<int>(
+                                   glm::round(glm::log2(static_cast<float>(_simulationData.threadsPerBlock) / 32.F)))](
+                                  uint32_t threadsPerBlock) mutable {
+          static constexpr auto powers = std::array {"32", "64", "128", "256", "512", "1024"};
+
+          rawThreads = static_cast<int>(glm::round(glm::log2(static_cast<float>(threadsPerBlock) / 32.F)));
+          ImGui::SliderInt("Threads per block", &rawThreads, 0, 5, powers[static_cast<uint32_t>(rawThreads)]);
+          return 32U << static_cast<uint32_t>(rawThreads);
+      }}
 {
     _beginGuiReceiver = panda::utils::signals::beginGuiRender.connect([this](auto data) {
         ImGui_ImplVulkan_NewFrame();
@@ -50,6 +64,15 @@ auto SimulationDataGui::render() -> void
     ImGui::DragFloat("Viscosity constant", &_simulationData.viscosityConstant, 0.001F, 0.001F, 1.F);
     ImGui::DragFloat("Max speed", &_simulationData.maxVelocity, 0.1F, 0.1F, 10.F);
     ImGui::DragFloat3("Translation", &translation[0], 0.1F, -5.F, 5.F);
+    const auto newThreadsPerBlock = _threadsPerBlockSlider(_simulationData.threadsPerBlock);
+
+    if (newThreadsPerBlock != _simulationData.threadsPerBlock)
+    {
+        panda::log::Info("Number of threads per blocked has changed from {} to {}",
+                         _simulationData.threadsPerBlock,
+                         newThreadsPerBlock);
+    }
+    _simulationData.threadsPerBlock = newThreadsPerBlock;
 
     _simulationData.domain = cuda::Simulation::Parameters::Domain {}.fromTransform(translation, scale);
     ImGui::End();

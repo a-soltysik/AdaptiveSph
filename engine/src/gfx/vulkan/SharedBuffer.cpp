@@ -1,5 +1,4 @@
 // clang-format off
-#include "cuda/ImportedMemory.cuh"
 #include "panda/utils/Assert.h"
 // clang-format on
 
@@ -8,6 +7,7 @@
 #include <vulkan/vulkan.h>  // NOLINT(misc-include-cleaner)
 
 #include <cstddef>
+#include <cuda/ImportedMemory.cuh>
 #include <memory>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_enums.hpp>

@@ -20,5 +20,6 @@ private:
     panda::utils::signals::BeginGuiRender::ReceiverT _beginGuiReceiver;
     cuda::Simulation::Parameters _simulationData;
     const Window& _window;
+    std::function<uint32_t(uint32_t)> _threadsPerBlockSlider;
 };
 }

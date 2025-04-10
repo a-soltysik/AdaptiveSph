@@ -44,6 +44,7 @@ macro(sph_setup_options)
         option(sph_ENABLE_PCH "Enable precompiled headers" OFF)
         option(sph_ENABLE_CACHE "Enable ccache" OFF)
         option(sph_ENABLE_COMPILE_COMMANDS "Enable support for compile_commnads.json" OFF)
+        option(sph_ENABLE_FAST_MATH "Enable fast math compilation flags" OFF)
     else()
         option(sph_ENABLE_IPO "Enable IPO/LTO" OFF)
         option(sph_ENABLE_WARNINGS "Enable warnings" ON)
@@ -61,6 +62,7 @@ macro(sph_setup_options)
         option(sph_ENABLE_PCH "Enable precompiled headers" OFF)
         option(sph_ENABLE_CACHE "Enable ccache" OFF)
         option(sph_ENABLE_COMPILE_COMMANDS "Enable support for compile_commnads.json" ON)
+        option(sph_ENABLE_FAST_MATH "Enable fast math compilation flags" OFF)
     endif()
 
     if(NOT PROJECT_IS_TOP_LEVEL)
@@ -80,7 +82,8 @@ macro(sph_setup_options)
             sph_ENABLE_IWYU
             sph_ENABLE_PCH
             sph_ENABLE_CACHE
-            sph_ENABLE_COMPILE_COMMANDS)
+            sph_ENABLE_COMPILE_COMMANDS
+            sph_ENABLE_FAST_MATH)
     endif()
 
 endmacro()
@@ -174,6 +177,11 @@ macro(sph_local_options)
 
     if(sph_ENABLE_IWYU)
         sph_enable_include_what_you_use()
+    endif()
+
+    if(sph_ENABLE_FAST_MATH)
+        include(cmake/Optimizations.cmake)
+        sph_enable_fast_math(sph_options)
     endif()
 
     if(sph_ENABLE_HARDENING AND NOT sph_ENABLE_GLOBAL_HARDENING)
