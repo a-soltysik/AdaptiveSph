@@ -23,6 +23,7 @@ struct ParticlesData
     float* nearDensities;
     float* pressures;
     float* radiuses;
+    float* masses;
 
     uint32_t particleCount;
 };
@@ -37,6 +38,7 @@ struct ParticlesDataBuffer
     const ImportedMemory& nearDensities;
     const ImportedMemory& pressures;
     const ImportedMemory& radiuses;
+    const ImportedMemory& masses;
 };
 
 class SPH_CUDA_API Simulation
@@ -57,6 +59,12 @@ public:
             [[nodiscard]] auto getScale() const noexcept -> glm::vec3
             {
                 return glm::abs(max - min);
+            }
+
+            [[nodiscard]] auto getVolume() const noexcept -> float
+            {
+                const auto scale = getScale();
+                return scale.x * scale.y * scale.z;
             }
 
             auto fromTransform(glm::vec3 translation, glm::vec3 scale) -> Domain

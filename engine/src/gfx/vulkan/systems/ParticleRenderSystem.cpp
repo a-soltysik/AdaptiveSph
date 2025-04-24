@@ -19,7 +19,6 @@
 #include "panda/gfx/vulkan/FrameInfo.h"
 #include "panda/gfx/vulkan/Pipeline.h"
 #include "panda/gfx/vulkan/Scene.h"
-#include "panda/gfx/vulkan/object/Object.h"
 #include "panda/internal/config.h"
 #include "panda/utils/format/gfx/api/vulkan/ResultFormatter.h"  // NOLINT(misc-include-cleaner, unused-includes)
 
@@ -54,7 +53,8 @@ ParticleRenderSystem::ParticleRenderSystem(const Device& device, vk::RenderPass 
               createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::pressures)>(_device, particleCount),
           .radiuses =
               createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::radiuses)>(_device, particleCount),
-      }
+          .masses =
+              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::masses)>(_device, particleCount)}
 {
 }
 
@@ -74,6 +74,7 @@ auto ParticleRenderSystem::getImportedMemory() const -> sph::cuda::ParticlesData
         .nearDensities = _particleBuffer.nearDensities.getImportedMemory(),
         .pressures = _particleBuffer.pressures.getImportedMemory(),
         .radiuses = _particleBuffer.radiuses.getImportedMemory(),
+        .masses = _particleBuffer.masses.getImportedMemory(),
     };
 }
 
