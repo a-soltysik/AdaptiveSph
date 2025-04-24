@@ -152,8 +152,10 @@ __global__ void computeDensities(ParticlesData particles,
                 continue;
             }
             const auto distance = glm::sqrt(distanceSquared);
-            density += device::densityKernel(distance, simulationData.smoothingRadius);
-            nearDensity += device::nearDensityKernel(distance, simulationData.smoothingRadius);
+            const auto neighbourMass = particles.masses[neighbourIdx];
+
+            density += neighbourMass * device::densityKernel(distance, simulationData.smoothingRadius);
+            nearDensity += neighbourMass * device::nearDensityKernel(distance, simulationData.smoothingRadius);
         }
     }
     particles.densities[idx] = density;
@@ -226,14 +228,20 @@ __global__ void computePressureForce(ParticlesData particles,
             const auto distance = glm::sqrt(distanceSquared);
             const auto direction = distance > 0.F ? offsetToNeighbour / distance : glm::vec4(0.F, 1.F, 0.F, 0.F);
 
-            pressureForce += direction * device::densityDerivativeKernel(distance, simulationData.smoothingRadius) *
+            const auto neighbourMass = particles.masses[neighbourIdx];
+
+            pressureForce += neighbourMass * direction *
+                             device::densityDerivativeKernel(distance, simulationData.smoothingRadius) *
                              sharedPressure / densityNeighbour;
-            pressureForce += direction * device::nearDensityDerivativeKernel(distance, simulationData.smoothingRadius) *
+            pressureForce += neighbourMass * direction *
+                             device::nearDensityDerivativeKernel(distance, simulationData.smoothingRadius) *
                              sharedNearPressure / nearPressureNeighbour;
         }
     }
 
-    const auto acceleration = pressureForce / density;
+    const auto particleMass = particles.masses[idx];
+    const auto acceleration = pressureForce / (density * particleMass);
+
     particles.velocities[idx] += acceleration * dt;
 }
 
@@ -291,12 +299,15 @@ __global__ void computeViscosityForce(ParticlesData particles,
 
             const auto distance = glm::sqrt(distanceSquared);
             const auto neighbourVelocity = particles.velocities[neighbourIdx];
-            viscosityForce +=
-                (neighbourVelocity - velocity) * device::smoothingKernelPoly6(distance, simulationData.smoothingRadius);
+            const auto neighbourMass = particles.masses[neighbourIdx];
+
+            viscosityForce += neighbourMass * (neighbourVelocity - velocity) *
+                              device::smoothingKernelPoly6(distance, simulationData.smoothingRadius);
         }
     }
 
-    particles.velocities[idx] += viscosityForce * simulationData.viscosityConstant * dt;
+    const auto particleMass = particles.masses[idx];
+    particles.velocities[idx] += viscosityForce * simulationData.viscosityConstant * dt / particleMass;
 }
 
 __global__ void integrateMotion(ParticlesData particles, Simulation::Parameters simulationData, float dt)

@@ -58,6 +58,7 @@ private:
         SharedBuffer nearDensities;
         SharedBuffer pressures;
         SharedBuffer radiuses;
+        SharedBuffer masses;
     };
 
     const Device& _device;

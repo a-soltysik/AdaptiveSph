@@ -19,6 +19,7 @@
 #include "ImportedParticleMemory.cuh"
 #include "Span.cuh"
 #include "SphSimulation.cuh"
+#include "glm/ext/scalar_constants.hpp"
 
 namespace sph::cuda
 {
@@ -31,17 +32,15 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
       _state {.grid = createGrid(initialParameters, positions.size())},
       _particleCount {static_cast<uint32_t>(positions.size())}
 {
-    std::vector<glm::vec4> positionsVec(positions.size());
-    std::vector<glm::vec4> velocitiesVec(positions.size(), glm::vec4(0.0f));
-    std::vector<float> radiusesVec(positions.size(), initialParameters.particleRadius);
-    for (size_t i = 0; i < positions.size(); i++)
-    {
-        positionsVec[i] = positions[i];
-    }
+    const auto velocitiesVec = std::vector(positions.size(), glm::vec4(0.0f));
+    const auto radiusesVec = std::vector(positions.size(), initialParameters.particleRadius);
+    auto massesVec = std::vector(
+        positions.size(),
+        getParticleMass(initialParameters.domain.getVolume(), initialParameters.restDensity, _particleCount));
 
     cudaMemcpy(_particleBuffer.positions.getData<glm::vec4>(),
-               positionsVec.data(),
-               positionsVec.size() * sizeof(glm::vec4),
+               positions.data(),
+               positions.size() * sizeof(glm::vec4),
                cudaMemcpyHostToDevice);
 
     cudaMemcpy(_particleBuffer.velocities.getData<glm::vec4>(),
@@ -50,13 +49,18 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
                cudaMemcpyHostToDevice);
 
     cudaMemcpy(_particleBuffer.predictedPositions.getData<glm::vec4>(),
-               positionsVec.data(),
-               positionsVec.size() * sizeof(glm::vec4),
+               positions.data(),
+               positions.size() * sizeof(glm::vec4),
                cudaMemcpyHostToDevice);
 
     cudaMemcpy(_particleBuffer.radiuses.getData<float>(),
                radiusesVec.data(),
                radiusesVec.size() * sizeof(float),
+               cudaMemcpyHostToDevice);
+
+    cudaMemcpy(_particleBuffer.masses.getData<float>(),
+               massesVec.data(),
+               massesVec.size() * sizeof(float),
                cudaMemcpyHostToDevice);
 }
 
@@ -77,7 +81,8 @@ auto SphSimulation::toInternalBuffer(const ParticlesDataBuffer& memory) -> Parti
             .densities = dynamic_cast<const ImportedParticleMemory&>(memory.densities),
             .nearDensities = dynamic_cast<const ImportedParticleMemory&>(memory.nearDensities),
             .pressures = dynamic_cast<const ImportedParticleMemory&>(memory.pressures),
-            .radiuses = dynamic_cast<const ImportedParticleMemory&>(memory.radiuses)};
+            .radiuses = dynamic_cast<const ImportedParticleMemory&>(memory.radiuses),
+            .masses = dynamic_cast<const ImportedParticleMemory&>(memory.masses)};
 }
 
 void SphSimulation::update(const Parameters& parameters, float deltaTime)
@@ -158,6 +163,7 @@ auto SphSimulation::getParticles() const -> ParticlesData
             _particleBuffer.nearDensities.getData<std::remove_pointer_t<decltype(ParticlesData::nearDensities)>>(),
         .pressures = _particleBuffer.pressures.getData<std::remove_pointer_t<decltype(ParticlesData::pressures)>>(),
         .radiuses = _particleBuffer.radiuses.getData<std::remove_pointer_t<decltype(ParticlesData::radiuses)>>(),
+        .masses = _particleBuffer.masses.getData<std::remove_pointer_t<decltype(ParticlesData::masses)>>(),
         .particleCount = _particleCount};
 }
 
@@ -230,6 +236,11 @@ void SphSimulation::handleCollisions() const
 {
     kernel::handleCollisions<<<getBlocksPerGridForParticles(), _simulationData.threadsPerBlock>>>(getParticles(),
                                                                                                   _simulationData);
+}
+
+auto SphSimulation::getParticleMass(float domainVolume, float restDensity, uint32_t particlesCount) -> float
+{
+    return domainVolume * restDensity / particlesCount;
 }
 
 }

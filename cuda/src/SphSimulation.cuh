@@ -54,10 +54,13 @@ private:
         const ImportedParticleMemory& nearDensities;
         const ImportedParticleMemory& pressures;
         const ImportedParticleMemory& radiuses;
+        const ImportedParticleMemory& masses;
     };
 
     static auto createGrid(const Parameters& data, size_t particleCount) -> Grid;
     static auto toInternalBuffer(const ParticlesDataBuffer& memory) -> ParticlesInternalDataBuffer;
+    static auto getParticleMass(float domainVolume, float restDensity, uint32_t particlesCount) -> float;
+
     [[nodiscard]] auto getBlocksPerGridForParticles() const -> dim3;
     [[nodiscard]] auto getBlocksPerGridForGrid() const -> dim3;
     [[nodiscard]] auto getParticles() const -> ParticlesData;

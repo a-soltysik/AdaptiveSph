@@ -58,6 +58,7 @@ auto SimulationDataGui::render() -> void
     auto translation = _simulationData.domain.getTranslation();
     auto scale = _simulationData.domain.getScale();
 
+    ImGui::DragFloat("Smoothing radius", &_simulationData.smoothingRadius, 0.001F, 0.001F, 1.F);
     ImGui::DragFloat("Rest density", &_simulationData.restDensity, 1.F, 1.F, 1000.F);
     ImGui::DragFloat("Pressure constant", &_simulationData.pressureConstant, 1.F, 1.F, 1000.F);
     ImGui::DragFloat("Near Pressure constant", &_simulationData.nearPressureConstant, 1.F, 1.F, 1000.F);
