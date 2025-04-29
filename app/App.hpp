@@ -22,16 +22,18 @@ private:
     static auto getInitialSimulationParameters(const cuda::Simulation::Parameters::Domain& domain,
                                                uint32_t particleCount,
                                                float totalMass) -> cuda::Simulation::Parameters;
+    static auto getInitialRefinementParameters() -> cuda::refinement::RefinementParameters;
 
     auto mainLoop() const -> void;
     auto setDefaultScene() -> void;
 
-    std::vector<glm::vec3*> _particles;
+    std::vector<glm::vec4> _particles;
     std::unique_ptr<panda::gfx::vulkan::Scene> _scene;
 
     std::unique_ptr<Window> _window;
     std::unique_ptr<panda::gfx::vulkan::Context> _api;
-    std::unique_ptr<sph::cuda::Simulation> _simulation;
+    std::unique_ptr<cuda::Simulation> _simulation;
     cuda::Simulation::Parameters _simulationParameters {};
+    cuda::refinement::RefinementParameters _refinementParameters {};
 };
 }

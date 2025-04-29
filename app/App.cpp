@@ -115,6 +115,26 @@ void processCamera(const float deltaTime,
 namespace sph
 {
 
+auto App::getInitialRefinementParameters() -> cuda::refinement::RefinementParameters
+{
+    cuda::refinement::RefinementParameters params;
+    // Enable adaptive refinement
+    params.enabled = true;
+    // Base velocity thresholds
+    // Mass ratio constraints
+    params.minMassRatio = 0.9F;  // Minimum allowed mass ratio (allows at least double splitting)
+    params.maxMassRatio = 0.9F;  // Maximum allowed mass ratio
+                                 // Threshold scaling parameters
+
+    // Capacity limits
+    params.maxParticleCount = 500000;
+    params.maxBatchRatio = 0.9F;
+    params.initialCooldown = 1000;
+    params.cooldown = 1000;
+
+    return params;
+}
+
 auto App::run() -> int
 {
     initializeLogger();
@@ -127,23 +147,17 @@ auto App::run() -> int
 
     auto redTexture = panda::gfx::vulkan::Texture::getDefaultTexture(*_api, {1, 0, 0, 1});
 
-    _scene = std::make_unique<panda::gfx::vulkan::Scene>(panda::gfx::vulkan::Surface {redTexture.get(), nullptr});
+    _scene = std::make_unique<panda::gfx::vulkan::Scene>();
 
     _api->registerTexture(std::move(redTexture));
 
     setDefaultScene();
 
-    auto translations = _scene->getParticles().objects |
-                        std::ranges::views::transform(&panda::gfx::vulkan::Object::transform) |
-                        std::ranges::views::transform(&panda::gfx::vulkan::Transform::translation) |
-                        std::ranges::views::transform([](const auto& position) {
-                            return glm::vec4 {position, 0.F};
-                        }) |
-                        std::ranges::views::common;
-
-    const std::vector translationVec(translations.begin(), translations.end());
-
-    _simulation = createSimulation(_simulationParameters, translationVec, _api->initializeParticleSystem(250000));
+    _refinementParameters = getInitialRefinementParameters();
+    _simulation = createSimulation(_simulationParameters,
+                                   _particles,
+                                   _api->initializeParticleSystem(250000),
+                                   _refinementParameters);
 
     mainLoop();
     return 0;
@@ -171,6 +185,7 @@ auto App::mainLoop() const -> void
             const auto guiUpdate = gui.getParameters();
             _scene->getDomain().transform.translation = (guiUpdate.domain.max + guiUpdate.domain.min) / 2.F;
             _simulation->update(guiUpdate, timeManager.getDelta());
+            _scene->setParticleCount(_simulation->getParticlesCount());
             _scene->getCamera().setPerspectiveProjection(
                 panda::gfx::projection::Perspective {.fovY = glm::radians(50.F),
                                                      .aspect = _api->getRenderer().getAspectRatio(),
@@ -244,15 +259,13 @@ void App::setDefaultScene()
         {
             for (auto k = uint32_t {}; k < simulationSize.z; k++)
             {
-                auto& sphere = _scene->addParticle();
-
-                sphere.transform.translation =
+                const auto translation =
                     -maxSize / 2.F +
-                    glm::vec3 {_simulationParameters.particleRadius * 2 * 1.5F * static_cast<float>(i),
-                               _simulationParameters.particleRadius * 2 * 1.5F * static_cast<float>(j),
-                               _simulationParameters.particleRadius * 2 * 1.5F * static_cast<float>(k)};
+                    glm::vec3 {_simulationParameters.particleRadius * 2 * 1.4F * static_cast<float>(i),
+                               _simulationParameters.particleRadius * 2 * 1.4F * static_cast<float>(j),
+                               _simulationParameters.particleRadius * 2 * 1.4F * static_cast<float>(k)};
 
-                _particles.push_back(&sphere.transform.translation);
+                _particles.emplace_back(translation, 0.F);
             }
         }
     }

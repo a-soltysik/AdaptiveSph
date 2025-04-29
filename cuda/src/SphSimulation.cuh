@@ -2,9 +2,7 @@
 
 #include <vector_types.h>
 
-#include <cstddef>
 #include <cstdint>
-#include <cuda/ImportedMemory.cuh>
 #include <cuda/Simulation.cuh>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_uint3.hpp>
@@ -37,13 +35,19 @@ public:
 
     SphSimulation(const Parameters& initialParameters,
                   const std::vector<glm::vec4>& positions,
-                  const ParticlesDataBuffer& memory);
+                  const ParticlesDataBuffer& memory,
+                  uint32_t maxParticleCapacity);
 
     ~SphSimulation() override;
 
     void update(const Parameters& parameters, float deltaTime) override;
 
-private:
+    [[nodiscard]] auto getParticlesCount() const -> uint32_t override
+    {
+        return _particleCount;
+    }
+
+protected:
     struct ParticlesInternalDataBuffer
     {
         const ImportedParticleMemory& positions;
@@ -54,16 +58,54 @@ private:
         const ImportedParticleMemory& nearDensities;
         const ImportedParticleMemory& pressures;
         const ImportedParticleMemory& radiuses;
+        const ImportedParticleMemory& smoothingRadiuses;
         const ImportedParticleMemory& masses;
+        const ImportedParticleMemory& refinementLevels;
     };
 
-    static auto createGrid(const Parameters& data, size_t particleCount) -> Grid;
+    static auto createGrid(const Parameters& data, size_t particleCapacity) -> Grid;
     static auto toInternalBuffer(const ParticlesDataBuffer& memory) -> ParticlesInternalDataBuffer;
     static auto getParticleMass(float domainVolume, float restDensity, uint32_t particlesCount) -> float;
 
+    [[nodiscard]] auto getParticles() const -> ParticlesData;
+
+    [[nodiscard]] auto getState() const -> const State&
+    {
+        return _state;
+    }
+
+    [[nodiscard]] auto getParameters() const -> const Parameters&
+    {
+        return _simulationData;
+    }
+
+    [[nodiscard]] auto getThreadsPerBlock() const -> uint32_t
+    {
+        return _simulationData.threadsPerBlock;
+    }
+
+    void updateParameters(const Parameters& parameters)
+    {
+        _simulationData = parameters;
+    }
+
+    void setParticleCount(uint32_t count)
+    {
+        _particleCount = count;
+    }
+
+    [[nodiscard]] auto getParticlesCapacity() const -> uint32_t
+    {
+        return _particleCapacity;
+    }
+
+    [[nodiscard]] auto getInitialMass() const -> float
+    {
+        return _initialMass;
+    }
+
     [[nodiscard]] auto getBlocksPerGridForParticles() const -> dim3;
     [[nodiscard]] auto getBlocksPerGridForGrid() const -> dim3;
-    [[nodiscard]] auto getParticles() const -> ParticlesData;
 
     void computeExternalForces(float deltaTime) const;
     void resetGrid() const;
@@ -76,9 +118,12 @@ private:
     void integrateMotion(float deltaTime) const;
     void handleCollisions() const;
 
+private:
     ParticlesInternalDataBuffer _particleBuffer;
     Parameters _simulationData;
     State _state;
+    float _initialMass = 0.F;
     uint32_t _particleCount = 0;
+    uint32_t _particleCapacity = 0;
 };
 }

@@ -1,8 +1,6 @@
 #include "panda/gfx/vulkan/Scene.h"
 
 #include <algorithm>
-#include <cstddef>
-#include <cstdint>
 #include <ctre.hpp>  // NOLINT(misc-include-cleaner)
 #include <ctre/wrapper.hpp>
 #include <functional>
@@ -17,7 +15,6 @@
 #include <variant>
 #include <vector>
 
-#include "fmt/format.h"
 #include "panda/Logger.h"
 #include "panda/gfx/Camera.h"
 #include "panda/gfx/Light.h"
@@ -27,11 +24,6 @@
 
 namespace panda::gfx::vulkan
 {
-
-Scene::Scene(const Surface& particleSurface)
-    : _particles {.objects = {}, .commonSurface = particleSurface}
-{
-}
 
 auto Scene::getSize() const noexcept -> size_t
 {
@@ -242,50 +234,14 @@ auto Scene::getDomain() const -> Object&
     return *_domain;
 }
 
-auto Scene::setParticleCount(size_t count) -> void
+auto Scene::setParticleCount(uint32_t count) -> void
 {
-    _particles.objects.reserve(count);
+    _particleCount = count;
 }
 
-auto Scene::addParticle() -> Object&
+auto Scene::getParticleCount() const -> uint32_t
 {
-    _particles.objects.reserve(20000000);
-    auto newObject = std::make_unique<Object>(getUniqueName(fmt::format("{}#{}", particlePrefix, Object::getNextId())));
-    newObject->addSurface(_particles.commonSurface);
-
-    auto* objectPtr = newObject.get();
-    _particles.objects.emplace_back(std::move(newObject));
-
-    _names.insert(objectPtr->getName());
-
-    return *objectPtr;
-}
-
-auto Scene::removeParticle(Object::Id objectId) -> bool
-{
-    const auto objectIt = std::ranges::find(_objects, objectId, &Object::getId);
-    if (objectIt != std::ranges::end(_objects))
-    {
-        removeName((*objectIt)->getName());
-        _objects.erase(objectIt);
-        return true;
-    }
-    return false;
-}
-
-auto Scene::getParticle(Object::Id objectId) const -> std::optional<Object*>
-{
-    const auto objectIt = std::ranges::find(_objects, objectId, &Object::getId);
-    if (objectIt != std::ranges::end(_objects))
-    {
-        return objectIt->get();
-    }
-    return {};
-}
-
-auto Scene::getParticles() const -> const Particles&
-{
-    return _particles;
+    return _particleCount;
 }
 
 }

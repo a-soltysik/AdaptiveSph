@@ -27,14 +27,6 @@ namespace panda::gfx::vulkan
 class Scene
 {
 public:
-    struct Particles
-    {
-        std::vector<std::unique_ptr<Object>> objects;
-        Surface commonSurface;
-    };
-
-    explicit Scene(const Surface& particleSurface);
-
     [[nodiscard]] auto getSize() const noexcept -> size_t;
 
     [[nodiscard]] auto getLights() const noexcept -> const Lights&;
@@ -45,11 +37,8 @@ public:
     auto setDomain(std::string name, const std::vector<Surface>& surfaces) -> Object&;
     [[nodiscard]] auto getDomain() const -> Object&;
 
-    auto setParticleCount(size_t count) -> void;
-    auto addParticle() -> Object&;
-    auto removeParticle(Object::Id objectId) -> bool;
-    [[nodiscard]] auto getParticle(Object::Id objectId) const -> std::optional<Object*>;
-    [[nodiscard]] auto getParticles() const -> const Particles&;
+    auto setParticleCount(uint32_t count) -> void;
+    auto getParticleCount() const -> uint32_t;
 
     auto addObject(std::string name, const std::vector<Surface>& surfaces) -> Object&;
     auto removeObjectByName(std::string_view name) -> bool;
@@ -127,15 +116,13 @@ private:
     auto getUniqueName(std::string name) -> std::string;
     auto removeName(std::string_view name) -> void;
 
-    static constexpr auto particlePrefix = std::string_view {"Particle"};
-
     std::unique_ptr<Object> _domain;
     std::vector<std::unique_ptr<Object>> _objects;
-    Particles _particles;
 
     std::unordered_set<std::string_view> _names;
     Lights _lights;
     Camera _camera;
+    uint32_t _particleCount = 0;
 };
 
 }

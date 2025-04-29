@@ -12,7 +12,7 @@ __global__ void resetGrid(SphSimulation::Grid grid);
 __global__ void assignParticlesToCells(ParticlesData particles,
                                        SphSimulation::State state,
                                        Simulation::Parameters simulationData);
-__global__ void calculateCellStartAndEndIndices(SphSimulation::Grid grid);
+__global__ void calculateCellStartAndEndIndices(SphSimulation::Grid grid, uint32_t particleCount);
 __global__ void computeDensities(ParticlesData particles,
                                  SphSimulation::State state,
                                  Simulation::Parameters simulationData);

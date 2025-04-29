@@ -9,6 +9,7 @@
 
 #include "Api.cuh"
 #include "ImportedMemory.cuh"
+#include "refinement/RefinementParameters.cuh"
 
 namespace sph::cuda
 {
@@ -23,7 +24,9 @@ struct ParticlesData
     float* nearDensities;
     float* pressures;
     float* radiuses;
+    float* smoothingRadiuses;
     float* masses;
+    uint32_t* refinementLevels;
 
     uint32_t particleCount;
 };
@@ -38,7 +41,9 @@ struct ParticlesDataBuffer
     const ImportedMemory& nearDensities;
     const ImportedMemory& pressures;
     const ImportedMemory& radiuses;
+    const ImportedMemory& smoothingRadiuses;
     const ImportedMemory& masses;
+    const ImportedMemory& refinementLevels;
 };
 
 class SPH_CUDA_API Simulation
@@ -91,10 +96,12 @@ public:
     virtual ~Simulation() = default;
 
     virtual void update(const Parameters& parameters, float deltaTime) = 0;
+    virtual uint32_t getParticlesCount() const = 0;
 };
 
-SPH_CUDA_API auto createSimulation(const Simulation::Parameters& data,
-                                   const std::vector<glm::vec4>& positions,
-                                   const ParticlesDataBuffer& memory) -> std::unique_ptr<Simulation>;
+SPH_CUDA_API std::unique_ptr<Simulation> createSimulation(const Simulation::Parameters& parameters,
+                                                          const std::vector<glm::vec4>& positions,
+                                                          const ParticlesDataBuffer& memory,
+                                                          const refinement::RefinementParameters& refinementParams);
 
 }
