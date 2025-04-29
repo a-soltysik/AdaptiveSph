@@ -7,7 +7,11 @@ add_library(
         src/Algorithm.cu
         src/SphSimulation.cu
         src/ImportedParticleMemory.cu
-        src/device/Kernel.cu)
+        src/device/Kernel.cu
+        src/refinement/ParticleOperations.cu
+        src/AdaptiveSphSimulation.cu
+        src/SimulationFactory.cu
+        src/common/Utils.cu)
 target_compile_features(AdaptiveSphCuda PRIVATE cxx_std_20)
 target_compile_definitions(AdaptiveSphCuda PRIVATE EXPORTING_CUDA_LIB)
 target_include_directories(AdaptiveSphCuda PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -18,19 +22,20 @@ if (WIN32)
     target_compile_definitions(AdaptiveSphCuda PRIVATE WIN32)
 endif ()
 
-target_link_system_libraries(AdaptiveSphCuda PRIVATE glm)
+target_link_system_libraries(AdaptiveSphCuda PRIVATE glm fmt)
 set_property(TARGET AdaptiveSphCuda PROPERTY CUDA_ARCHITECTURES 89)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
     target_compile_options(
             AdaptiveSphCuda
             PRIVATE
-            $<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-O3,--allow-expensive-optimizations=true>
-            $<$<COMPILE_LANGUAGE:CUDA>:--unroll-loops>)
+            $<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-O3,--allow-expensive-optimizations=true>)
 else ()
     target_compile_options(AdaptiveSphCuda PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-G> $<$<COMPILE_LANGUAGE:CUDA>:-g>)
 endif ()
-
+target_compile_definitions(AdaptiveSphCuda PRIVATE GLM_ENABLE_EXPERIMENTAL)
+target_compile_options(AdaptiveSphCuda PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr> $<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>)
+target_compile_options(AdaptiveSphCuda PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler="/utf-8">)
 set_target_properties(
         AdaptiveSphCuda
         PROPERTIES ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib

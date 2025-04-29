@@ -53,8 +53,12 @@ ParticleRenderSystem::ParticleRenderSystem(const Device& device, vk::RenderPass 
               createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::pressures)>(_device, particleCount),
           .radiuses =
               createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::radiuses)>(_device, particleCount),
+          .smoothingRadiuses = createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::smoothingRadiuses)>(
+              _device, particleCount),
           .masses =
-              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::masses)>(_device, particleCount)}
+              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::masses)>(_device, particleCount),
+          .refinementLevels = createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::refinementLevels)>(
+              _device, particleCount)}
 {
 }
 
@@ -74,7 +78,9 @@ auto ParticleRenderSystem::getImportedMemory() const -> sph::cuda::ParticlesData
         .nearDensities = _particleBuffer.nearDensities.getImportedMemory(),
         .pressures = _particleBuffer.pressures.getImportedMemory(),
         .radiuses = _particleBuffer.radiuses.getImportedMemory(),
+        .smoothingRadiuses = _particleBuffer.smoothingRadiuses.getImportedMemory(),
         .masses = _particleBuffer.masses.getImportedMemory(),
+        .refinementLevels = _particleBuffer.refinementLevels.getImportedMemory(),
     };
 }
 
@@ -155,6 +161,6 @@ auto ParticleRenderSystem::render(const FrameInfo& frameInfo) const -> void
         .writeBuffer(4, _particleBuffer.radiuses.getDescriptorInfo())
         .push(frameInfo.commandBuffer, _pipelineLayout);
 
-    frameInfo.commandBuffer.draw(6, frameInfo.scene.getParticles().objects.size(), 0, 0);
+    frameInfo.commandBuffer.draw(6, frameInfo.scene.getParticleCount(), 0, 0);
 }
 }
