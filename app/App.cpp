@@ -25,11 +25,11 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/trigonometric.hpp>
 #include <memory>
-#include <ranges>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "cuda/refinement/RefinementParameters.cuh"
 #include "glm/gtx/string_cast.hpp"
 #include "gui/SimulationDataGui.hpp"
 #include "input_handler/MouseHandler.hpp"
@@ -117,22 +117,14 @@ namespace sph
 
 auto App::getInitialRefinementParameters() -> cuda::refinement::RefinementParameters
 {
-    cuda::refinement::RefinementParameters params;
-    // Enable adaptive refinement
-    params.enabled = true;
-    // Base velocity thresholds
-    // Mass ratio constraints
-    params.minMassRatio = 0.9F;  // Minimum allowed mass ratio (allows at least double splitting)
-    params.maxMassRatio = 0.9F;  // Maximum allowed mass ratio
-                                 // Threshold scaling parameters
-
-    // Capacity limits
-    params.maxParticleCount = 500000;
-    params.maxBatchRatio = 0.9F;
-    params.initialCooldown = 1000;
-    params.cooldown = 1000;
-
-    return params;
+    return cuda::refinement::RefinementParameters {.enabled = true,
+                                                   .minMassRatio = 1.1F,
+                                                   .maxMassRatio = 1.1F,
+                                                   .maxParticleCount = 500000,
+                                                   .maxBatchRatio = 0.9F,
+                                                   .initialCooldown = 1000,
+                                                   .cooldown = 1000,
+                                                   .splitting {}};
 }
 
 auto App::run() -> int
@@ -308,8 +300,8 @@ auto App::getInitialSimulationParameters(const cuda::Simulation::Parameters::Dom
         .domain = domain,
         .gravity = glm::vec3 {0.F, 9.81F, 0.F},
         .restDensity = restDensity,
-        .pressureConstant = 500.F,
-        .nearPressureConstant = 2.F,
+        .pressureConstant = 0.5F,
+        .nearPressureConstant = .05F,
         .restitution = 0.8F,
         .smoothingRadius = smoothingRadius,
         .viscosityConstant = .005F,

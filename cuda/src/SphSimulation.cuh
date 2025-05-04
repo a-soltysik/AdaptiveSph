@@ -2,6 +2,7 @@
 
 #include <vector_types.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <cuda/Simulation.cuh>
 #include <glm/ext/vector_float3.hpp>
@@ -38,6 +39,11 @@ public:
                   const ParticlesDataBuffer& memory,
                   uint32_t maxParticleCapacity);
 
+    SphSimulation(const SphSimulation&) = delete;
+    SphSimulation(SphSimulation&&) = delete;
+
+    auto operator=(const SphSimulation&) -> SphSimulation& = delete;
+    auto operator=(SphSimulation&&) -> SphSimulation& = delete;
     ~SphSimulation() override;
 
     void update(const Parameters& parameters, float deltaTime) override;

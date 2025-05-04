@@ -1,6 +1,8 @@
 #include "panda/gfx/vulkan/Scene.h"
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <ctre.hpp>  // NOLINT(misc-include-cleaner)
 #include <ctre/wrapper.hpp>
 #include <functional>

@@ -11,7 +11,12 @@ namespace sph::cuda
 class ImportedParticleMemory : public ImportedMemory
 {
 public:
+    ImportedParticleMemory(const ImportedParticleMemory&) = delete;
+    auto operator=(const ImportedParticleMemory&) -> ImportedParticleMemory& = delete;
+    ImportedParticleMemory(ImportedParticleMemory&&) = delete;
+    ImportedParticleMemory& operator=(ImportedParticleMemory&&) = delete;
     ~ImportedParticleMemory() override;
+
 #if defined(WIN32)
     ImportedParticleMemory(void* handle, size_t size);
 #else

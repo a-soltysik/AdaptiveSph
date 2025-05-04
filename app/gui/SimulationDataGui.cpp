@@ -60,8 +60,8 @@ auto SimulationDataGui::render() -> void
 
     ImGui::DragFloat("Smoothing radius", &_simulationData.smoothingRadius, 0.001F, 0.001F, 1.F);
     ImGui::DragFloat("Rest density", &_simulationData.restDensity, 1.F, 1.F, 1000.F);
-    ImGui::DragFloat("Pressure constant", &_simulationData.pressureConstant, 1.F, 1.F, 1000.F);
-    ImGui::DragFloat("Near Pressure constant", &_simulationData.nearPressureConstant, 1.F, 1.F, 1000.F);
+    ImGui::DragFloat("Pressure constant", &_simulationData.pressureConstant, .001F, .001F, 10.F);
+    ImGui::DragFloat("Near Pressure constant", &_simulationData.nearPressureConstant, .001F, .001F, 10.F);
     ImGui::DragFloat("Viscosity constant", &_simulationData.viscosityConstant, 0.001F, 0.001F, 1.F);
     ImGui::DragFloat("Max speed", &_simulationData.maxVelocity, 0.1F, 0.1F, 10.F);
     ImGui::DragFloat3("Translation", &translation[0], 0.1F, -5.F, 5.F);

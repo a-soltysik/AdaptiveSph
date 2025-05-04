@@ -32,4 +32,4 @@ struct RefinementParameters
     SplittingParameters splitting;
 };
 
-}  // namespace sph::cuda
+}
