@@ -1,16 +1,19 @@
 #pragma once
 
+#include <vector_types.h>
+
+#include <cstdint>
+#include <glm/ext/vector_float4.hpp>
+#include <vector>
+
 #include "SphSimulation.cuh"
+#include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
 #include "refinement/Common.cuh"
 
 namespace sph::cuda
 {
 
-/**
- * Extended SPH simulation that adds adaptive particle refinement capabilities
- * allowing dynamic resolution adjustment based on physical criteria
- */
 class AdaptiveSphSimulation : public SphSimulation
 {
 public:
@@ -19,6 +22,11 @@ public:
                           const ParticlesDataBuffer& memory,
                           const refinement::RefinementParameters& refinementParams);
 
+    AdaptiveSphSimulation(const AdaptiveSphSimulation&) = delete;
+    AdaptiveSphSimulation(AdaptiveSphSimulation&&) = delete;
+
+    auto operator=(const AdaptiveSphSimulation&) -> AdaptiveSphSimulation& = delete;
+    auto operator=(AdaptiveSphSimulation&&) -> AdaptiveSphSimulation& = delete;
     ~AdaptiveSphSimulation() override;
 
     void update(const Parameters& parameters, float deltaTime) override;
@@ -27,31 +35,17 @@ public:
     void computePrefixSum() const;
 
 private:
-    /**
-     * Perform adaptive refinement based on configured criteria
-     */
-    void performAdaptiveRefinement(float deltaTime);
-
-    /**
-     * Update particle count from device to host
-     */
+    void performAdaptiveRefinement();
     void updateParticleCount();
-
-    /**
-     * Get block count for a specific number of particles
-     */
     [[nodiscard]] auto getBlocksPerGridForParticles(uint32_t count) const -> dim3;
 
-    /**
-     * Reset counters for refinement operations
-     */
     void resetRefinementCounters() const;
 
-    static refinement::RefinementData initializeRefinementData(uint32_t maxParticleCount, float maxBatchSize);
+    static auto initializeRefinementData(uint32_t maxParticleCount, float maxBatchSize) -> refinement::RefinementData;
 
     refinement::RefinementParameters _refinementParams;
     refinement::RefinementData _refinementData;
     uint32_t _frameCounter = 0;
 };
 
-}  // namespace sph::cuda
+}

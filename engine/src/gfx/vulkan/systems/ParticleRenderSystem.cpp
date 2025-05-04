@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <filesystem>
 #include <memory>
-#include <vector>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_enums.hpp>
 #include <vulkan/vulkan_handles.hpp>

@@ -163,4 +163,4 @@ void findTopParticlesToMerge(ParticlesData particles,
                    refinementData.merge.particlesIdsToMerge.first.data);
 }
 
-}  // namespace sph::cuda::refinement
+}

@@ -1,14 +1,17 @@
+#include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
 #include <driver_types.h>
 #include <thrust/execution_policy.h>
 #include <thrust/sort.h>
 #include <vector_types.h>
 
+#include <cstddef>
+#include <cstdint>
 #include <cuda/Simulation.cuh>
 #include <glm/common.hpp>
 #include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_float4.hpp>
 #include <glm/ext/vector_uint3.hpp>
-#include <memory>
 #include <type_traits>
 #include <vector>
 
@@ -33,7 +36,7 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
       _particleCount {static_cast<uint32_t>(positions.size())},
       _particleCapacity {maxParticleCapacity}
 {
-    const auto velocitiesVec = std::vector(positions.size(), glm::vec4(0.0f));
+    const auto velocitiesVec = std::vector(positions.size(), glm::vec4 {});
     const auto radiusesVec = std::vector(positions.size(), initialParameters.particleRadius);
     const auto smoothingRadiusesVec = std::vector(positions.size(), initialParameters.smoothingRadius);
     const auto massesVec = std::vector(positions.size(), _initialMass);
@@ -120,19 +123,20 @@ auto SphSimulation::createGrid(const Parameters& data, size_t particleCapacity) 
     const auto gridCellWidth = 2 * data.smoothingRadius;
     const auto gridCellCount = glm::uvec3 {glm::ceil((data.domain.max - data.domain.min) / gridCellWidth)};
 
-    cudaMalloc(reinterpret_cast<void**>(&particleIndices), particleCapacity * sizeof(int32_t));
-    cudaMalloc(reinterpret_cast<void**>(&particleArrayIndices), particleCapacity * sizeof(int32_t));
-    cudaMalloc(reinterpret_cast<void**>(&cellStartIndices),
-               gridCellCount.x * gridCellCount.y * gridCellCount.z * sizeof(int32_t));
-    cudaMalloc(reinterpret_cast<void**>(&cellEndIndices),
-               gridCellCount.x * gridCellCount.y * gridCellCount.z * sizeof(int32_t));
+    cudaMalloc(&particleIndices, particleCapacity * sizeof(int32_t));
+    cudaMalloc(&particleArrayIndices, particleCapacity * sizeof(int32_t));
+    cudaMalloc(&cellStartIndices,
+               static_cast<size_t>(gridCellCount.x * gridCellCount.y * gridCellCount.z) * sizeof(int32_t));
+    cudaMalloc(&cellEndIndices,
+               static_cast<size_t>(gridCellCount.x * gridCellCount.y * gridCellCount.z) * sizeof(int32_t));
 
     return Grid {
         .gridSize = gridCellCount,
         .cellSize = glm::vec3 {gridCellWidth},
-        .cellStartIndices =
-            Span {.data = cellStartIndices, .size = gridCellCount.x * gridCellCount.y * gridCellCount.z},
-        .cellEndIndices = Span {.data = cellEndIndices, .size = gridCellCount.x * gridCellCount.y * gridCellCount.z},
+        .cellStartIndices = Span {.data = cellStartIndices,
+                               .size = static_cast<size_t>(gridCellCount.x * gridCellCount.y * gridCellCount.z)},
+        .cellEndIndices = Span {.data = cellEndIndices,
+                               .size = static_cast<size_t>(gridCellCount.x * gridCellCount.y * gridCellCount.z)},
         .particleGridIndices = Span {.data = particleIndices, .size = particleCapacity},
         .particleArrayIndices = Span {.data = particleArrayIndices, .size = particleCapacity}
     };
@@ -244,7 +248,7 @@ void SphSimulation::handleCollisions() const
 
 auto SphSimulation::getParticleMass(float domainVolume, float restDensity, uint32_t particlesCount) -> float
 {
-    return domainVolume * restDensity / particlesCount;
+    return domainVolume * restDensity / static_cast<float>(particlesCount);
 }
 
 }

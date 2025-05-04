@@ -49,15 +49,23 @@ __device__ auto nearDensityDerivativeKernel(float distance, float smoothingRadiu
     return 0.F;
 }
 
-__device__ auto smoothingKernelPoly6(float distance, float smoothingRadius) -> float
+__device__ auto viscosityKernel(float distance, float smoothingRadius) -> float
 {
     if (distance < smoothingRadius)
     {
-        const auto scale = 315.F / (64.F * glm::pi<float>() * glm::pow(smoothingRadius, 9.F));
-        const auto v = smoothingRadius * smoothingRadius - distance * distance;
-        return v * v * v * scale;
+        const auto scale = 15.F / (2.F * glm::pi<float>() * glm::pow(smoothingRadius, 3.F));
+        const auto cubic =
+            -distance * distance * distance / (2.F * smoothingRadius * smoothingRadius * smoothingRadius);
+        const auto quadratic = distance * distance / (smoothingRadius * smoothingRadius);
+        const auto linear = (smoothingRadius / (2.F * distance)) - 1;
+        return scale * (cubic + quadratic + linear);
     }
     return 0.F;
+}
+
+__device__ auto viscosityLaplacianKernel(float distance, float smoothingRadius) -> float
+{
+    return 45.F / (glm::pi<float>() * glm::pow(smoothingRadius, 6.F)) * (smoothingRadius - distance);
 }
 
 }

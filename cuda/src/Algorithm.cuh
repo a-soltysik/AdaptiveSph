@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <cuda/Simulation.cuh>
 
 #include "SphSimulation.cuh"
