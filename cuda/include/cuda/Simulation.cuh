@@ -84,11 +84,11 @@ public:
         float pressureConstant;
         float nearPressureConstant;
         float restitution;
-        float smoothingRadius;
         float viscosityConstant;
-        float surfaceTensionCoefficient;
         float maxVelocity;
-        float particleRadius;
+        float baseSmoothingRadius;
+        float baseParticleRadius;
+        float baseParticleMass;
 
         uint32_t threadsPerBlock;
     };
@@ -96,7 +96,9 @@ public:
     virtual ~Simulation() = default;
 
     virtual void update(const Parameters& parameters, float deltaTime) = 0;
-    virtual uint32_t getParticlesCount() const = 0;
+    [[nodiscard]] virtual uint32_t getParticlesCount() const = 0;
+    virtual auto calculateAverageNeighborCount() const -> float = 0;
+    virtual std::vector<glm::vec4> updateDensityDeviations() const = 0;
 };
 
 SPH_CUDA_API std::unique_ptr<Simulation> createSimulation(const Simulation::Parameters& parameters,

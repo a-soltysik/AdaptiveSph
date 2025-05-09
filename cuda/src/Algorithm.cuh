@@ -27,4 +27,10 @@ __global__ void computeViscosityForce(ParticlesData particles,
                                       float dt);
 __global__ void integrateMotion(ParticlesData particles, Simulation::Parameters simulationData, float dt);
 __global__ void computeExternalForces(ParticlesData particles, Simulation::Parameters simulationData, float deltaTime);
+__global__ void countNeighbors(ParticlesData particles,
+                               SphSimulation::State state,
+                               Simulation::Parameters simulationData,
+                               uint32_t* neighborCounts);
+
+__global__ void calculateDensityDeviations(ParticlesData particles, float restDensity);
 }

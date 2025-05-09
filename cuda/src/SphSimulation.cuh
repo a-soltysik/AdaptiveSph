@@ -53,13 +53,16 @@ public:
         return _particleCount;
     }
 
+    [[nodiscard]] auto calculateAverageNeighborCount() const -> float override;
+    std::vector<glm::vec4> updateDensityDeviations() const override;
+
 protected:
     struct ParticlesInternalDataBuffer
     {
         const ImportedParticleMemory& positions;
         const ImportedParticleMemory& predictedPositions;
         const ImportedParticleMemory& velocities;
-        const ImportedParticleMemory& forces;
+        const ImportedParticleMemory& densityDeviation;
         const ImportedParticleMemory& densities;
         const ImportedParticleMemory& nearDensities;
         const ImportedParticleMemory& pressures;
@@ -71,7 +74,6 @@ protected:
 
     static auto createGrid(const Parameters& data, size_t particleCapacity) -> Grid;
     static auto toInternalBuffer(const ParticlesDataBuffer& memory) -> ParticlesInternalDataBuffer;
-    static auto getParticleMass(float domainVolume, float restDensity, uint32_t particlesCount) -> float;
 
     [[nodiscard]] auto getParticles() const -> ParticlesData;
 
@@ -105,11 +107,6 @@ protected:
         return _particleCapacity;
     }
 
-    [[nodiscard]] auto getInitialMass() const -> float
-    {
-        return _initialMass;
-    }
-
     [[nodiscard]] auto getBlocksPerGridForParticles() const -> dim3;
     [[nodiscard]] auto getBlocksPerGridForGrid() const -> dim3;
 
@@ -128,7 +125,6 @@ private:
     ParticlesInternalDataBuffer _particleBuffer;
     Parameters _simulationData;
     State _state;
-    float _initialMass = 0.F;
     uint32_t _particleCount = 0;
     uint32_t _particleCapacity = 0;
 };

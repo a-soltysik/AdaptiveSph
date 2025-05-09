@@ -2,12 +2,11 @@
 
 #include <cstdint>
 
+#include "VelocityParameters.cuh"
+
 namespace sph::cuda::refinement
 {
 
-/**
- * Parameters for daughter particle creation during splitting
- */
 struct SplittingParameters
 {
     float epsilon = 0.65f;           // Spacing parameter for daughter particles (from Vacondio 2016)
@@ -16,9 +15,6 @@ struct SplittingParameters
     float vertexMassRatio = 0.077F;  // Mass ratio for each vertex particle (12 vertices)
 };
 
-/**
- * Controls the adaptive refinement behavior
- */
 struct RefinementParameters
 {
     bool enabled = false;
@@ -30,6 +26,7 @@ struct RefinementParameters
     uint32_t cooldown = 10;
 
     SplittingParameters splitting;
+    VelocityParameters velocity;
 };
 
 }

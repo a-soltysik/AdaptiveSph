@@ -79,7 +79,6 @@ __global__ void computeDensities(ParticlesData particles,
     }
 
     const auto position = particles.predictedPositions[idx];
-    const auto radiusSquared = particles.smoothingRadiuses[idx] * particles.smoothingRadiuses[idx];
 
     auto density = 0.F;
     auto nearDensity = 0.F;
@@ -89,6 +88,9 @@ __global__ void computeDensities(ParticlesData particles,
         const auto offsetToNeighbour = neighbourPosition - position;
         const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
 
+        const auto neighbourSmoothingRadius = particles.smoothingRadiuses[neighbourIdx];
+        const auto radiusSquared = neighbourSmoothingRadius * neighbourSmoothingRadius;
+
         if (distanceSquared > radiusSquared)
         {
             return;
@@ -96,8 +98,8 @@ __global__ void computeDensities(ParticlesData particles,
         const auto distance = glm::sqrt(distanceSquared);
         const auto neighbourMass = particles.masses[neighbourIdx];
 
-        density += neighbourMass * device::densityKernel(distance, particles.smoothingRadiuses[idx]);
-        nearDensity += neighbourMass * device::nearDensityKernel(distance, particles.smoothingRadiuses[idx]);
+        density += neighbourMass * device::densityKernel(distance, neighbourSmoothingRadius);
+        nearDensity += neighbourMass * device::nearDensityKernel(distance, neighbourSmoothingRadius);
     });
 
     particles.densities[idx] = density;
@@ -121,7 +123,6 @@ __global__ void computePressureForce(ParticlesData particles,
     const auto nearPressure = nearDensity * simulationData.nearPressureConstant;
 
     auto pressureForce = glm::vec4 {};
-    const auto radiusSquared = particles.smoothingRadiuses[idx] * particles.smoothingRadiuses[idx];
 
     forEachNeighbour(position, simulationData, state.grid, [&](const auto neighbourIdx) {
         if (neighbourIdx == idx)
@@ -132,6 +133,8 @@ __global__ void computePressureForce(ParticlesData particles,
         const auto neighbourPosition = particles.predictedPositions[neighbourIdx];
         const auto offsetToNeighbour = neighbourPosition - position;
         const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
+        const auto neighbourSmoothingRadius = particles.smoothingRadiuses[neighbourIdx];
+        const auto radiusSquared = neighbourSmoothingRadius * neighbourSmoothingRadius;
 
         if (distanceSquared > radiusSquared)
         {
@@ -152,11 +155,11 @@ __global__ void computePressureForce(ParticlesData particles,
         const auto neighbourMass = particles.masses[neighbourIdx];
 
         pressureForce += neighbourMass * direction *
-                         device::densityDerivativeKernel(distance, particles.smoothingRadiuses[idx]) * sharedPressure /
+                         device::densityDerivativeKernel(distance, neighbourSmoothingRadius) * sharedPressure /
                          densityNeighbour;
         pressureForce += neighbourMass * direction *
-                         device::nearDensityDerivativeKernel(distance, particles.smoothingRadiuses[idx]) *
-                         sharedNearPressure / nearDensityNeighbour;
+                         device::nearDensityDerivativeKernel(distance, neighbourSmoothingRadius) * sharedNearPressure /
+                         nearDensityNeighbour;
     });
 
     const auto particleMass = particles.masses[idx];
@@ -257,6 +260,50 @@ __global__ void computeExternalForces(ParticlesData particles, Simulation::Param
     }
 
     particles.velocities[idx] += glm::vec4 {simulationData.gravity, 0.F} * deltaTime;
-    particles.predictedPositions[idx] = particles.positions[idx] + particles.velocities[idx] * 1.F / 120.F;
+    particles.predictedPositions[idx] = particles.positions[idx] + particles.velocities[idx] * 1.F / 200.F;
+}
+
+__global__ void kernel::countNeighbors(ParticlesData particles,
+                                       SphSimulation::State state,
+                                       Simulation::Parameters simulationData,
+                                       uint32_t* neighborCounts)
+{
+    const auto idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= particles.particleCount)
+    {
+        return;
+    }
+    const auto position = particles.positions[idx];
+    const auto radiusSquared = particles.smoothingRadiuses[idx] * particles.smoothingRadiuses[idx];
+    uint32_t count = 0;
+    forEachNeighbour(position, simulationData, state.grid, [&](const auto neighbourIdx) {
+        if (idx == neighbourIdx)
+        {
+            return;  // Don't count self as neighbor
+        }
+        const auto neighbourPosition = particles.positions[neighbourIdx];
+        const auto offsetToNeighbour = neighbourPosition - position;
+        const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
+
+        if (distanceSquared <= radiusSquared)
+        {
+            count++;
+        }
+    });
+
+    neighborCounts[idx] = count;
+}
+
+__global__ void kernel::calculateDensityDeviations(ParticlesData particles, float restDensity)
+{
+    const auto idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= particles.particleCount)
+    {
+        return;
+    }
+
+    // Calculate deviation as percentage from rest density
+    const float deviation = (particles.densities[idx] - restDensity) / restDensity;
+    particles.forces[idx] = glm::vec4 {deviation};
 }
 }

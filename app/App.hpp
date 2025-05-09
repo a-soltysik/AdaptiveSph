@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "Window.hpp"
+#include "utils/ConfigurationManager.hpp"
 
 namespace sph
 {
@@ -14,15 +15,14 @@ namespace sph
 class App
 {
 public:
+    explicit App(const std::string& configPath = "config.json");
     auto run() -> int;
 
 private:
     static auto initializeLogger() -> void;
     static auto registerSignalHandlers() -> void;
-    static auto getInitialSimulationParameters(const cuda::Simulation::Parameters::Domain& domain,
-                                               uint32_t particleCount,
-                                               float totalMass) -> cuda::Simulation::Parameters;
-    static auto getInitialRefinementParameters() -> cuda::refinement::RefinementParameters;
+
+    auto loadConfigurationFromFile(const std::string& configPath) -> bool;
 
     auto mainLoop() const -> void;
     auto setDefaultScene() -> void;
@@ -35,5 +35,9 @@ private:
     std::unique_ptr<cuda::Simulation> _simulation;
     cuda::Simulation::Parameters _simulationParameters {};
     cuda::refinement::RefinementParameters _refinementParameters {};
+    InitialParameters _initialParameters {};
+
+    ConfigurationManager _configManager;
+    std::string _configPath;
 };
 }
