@@ -40,6 +40,7 @@ layout (location = 1) in vec3 worldPosition;
 layout (location = 2) in vec3 sphereCenter;
 layout (location = 3) in float radius;
 layout (location = 4) in vec3 velocity;
+layout (location = 5) in float densityDeviation;
 
 layout (location = 0) out vec4 outColor;
 
@@ -100,6 +101,29 @@ vec4 getSpeedColor(float speed, float minSpeed, float maxSpeed)
     return vec4(finalColor, 1.0);
 }
 
+vec4 getDensityDeviationColor(float deviation)
+{
+    // Visualize density deviation with different colors
+    vec3 color;
+
+    if (deviation < -0.2) {
+        color = vec3(0.0, 0.0, 1.0);// Blue for very low density (<-20%)
+    } else if (deviation < -0.1) {
+        float t = (deviation + 0.2) / 0.1;// Normalize to [0,1]
+        color = mix(vec3(0.0, 0.0, 1.0), vec3(0.0, 1.0, 1.0), t);// Blue to Cyan
+    } else if (deviation < 0.1) {
+        float t = (deviation + 0.1) / 0.2;// Normalize to [0,1]
+        color = mix(vec3(0.0, 1.0, 1.0), vec3(0.0, 1.0, 0.0), t);// Cyan to Green
+    } else if (deviation < 0.2) {
+        float t = (deviation - 0.1) / 0.1;// Normalize to [0,1]
+        color = mix(vec3(0.0, 1.0, 0.0), vec3(1.0, 0.5, 0.0), t);// Green to Orange
+    } else {
+        color = vec3(1.0, 0.0, 0.0);// Red for very high density (>20%)
+    }
+
+    return vec4(color, 1.0);
+}
+
 void main() {
     vec2 _uv = uv * 2.0 - 1.0;
 
@@ -132,7 +156,8 @@ void main() {
         totalLight += calculateSpotLight(ubo.spotLights[i], normal, intersectionPoint);
     }
 
-    outColor = vec4(getSpeedColor(length(velocity), 0.F, 5.F)) * vec4(totalLight, 1.0);
+    //outColor = vec4(getSpeedColor(length(velocity), 0.F, 5.F)) * vec4(totalLight, 1.0);
+    outColor = getDensityDeviationColor(densityDeviation) * vec4(totalLight, 1.0);
 }
 
 bool raySphereIntersection(vec3 rayOrigin, vec3 rayDir, vec3 sphereCenter, float radius, out vec3 intersectionPoint, out vec3 normal) {

@@ -2,7 +2,6 @@
 
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
-#include <thrust/generate.h>
 #include <thrust/sort.h>
 
 #include <cfloat>
@@ -15,23 +14,11 @@
 namespace sph::cuda::refinement
 {
 
-/**
- * Splits particles to create higher resolution
- *
- * Creates multiple daughter particles from a single parent particle
- * using an icosahedron pattern as described in Vacondio et al. 2016
- */
 __global__ void splitParticles(ParticlesData particles,
                                RefinementData refinementData,
                                SplittingParameters params,
                                uint32_t maxParticleCount);
 
-/**
- * Marks and merges particle pairs to reduce resolution
- *
- * Creates a single particle from a pair of particles by conserving
- * mass and momentum
- */
 __global__ void mergeParticles(ParticlesData particles, RefinementData refinementData);
 
 __global__ void getMergeCandidates(ParticlesData particles,
@@ -39,32 +26,7 @@ __global__ void getMergeCandidates(ParticlesData particles,
                                    SphSimulation::Grid grid,
                                    Simulation::Parameters simulationData);
 
-/**
- * Get the vertices of an icosahedron for particle splitting
- * Returns the 12 vertices of a regular icosahedron for creating daughter particles
- */
 __device__ auto getIcosahedronVertices() -> std::array<glm::vec3, 12>;
-
-/**
- * Compute density with variable smoothing lengths
- *
- * Handles particles with different smoothing lengths using a scatter approach
- * as described in Vacondio et al. 2016
- */
-__global__ void computeDensitiesWithVariableSmoothingLengths(ParticlesData particles,
-                                                             SphSimulation::State state,
-                                                             Simulation::Parameters simulationData);
-
-/**
- * Compute pressure forces with variable smoothing lengths
- *
- * Uses variationally consistent SPH formulation to conserve momentum
- * with variable smoothing lengths
- */
-__global__ void computePressureForceWithVariableSmoothingLengths(ParticlesData particles,
-                                                                 SphSimulation::State state,
-                                                                 Simulation::Parameters simulationData,
-                                                                 float dt);
 
 __device__ std::pair<uint32_t, float> findClosestParticle(const ParticlesData& particles,
                                                           uint32_t particleIdx,

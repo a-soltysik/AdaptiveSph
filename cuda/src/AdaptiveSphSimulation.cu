@@ -118,13 +118,14 @@ void AdaptiveSphSimulation::update(const Parameters& parameters, float deltaTime
     computePressureForce(deltaTime);
     computeViscosityForce(deltaTime);
     integrateMotion(deltaTime);
-    handleCollisions();
 
     if (_frameCounter == _refinementParams.initialCooldown ||
         (_frameCounter > _refinementParams.initialCooldown && _frameCounter % _refinementParams.cooldown == 0))
     {
         performAdaptiveRefinement();
     }
+
+    handleCollisions();
 
     cudaDeviceSynchronize();
     _frameCounter++;
@@ -160,7 +161,9 @@ void AdaptiveSphSimulation::identifyAndSplitParticles() const
     refinement::getCriterionValues<<<SphSimulation::getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(
         getParticles(),
         _refinementData.split.criterionValues,
-        refinement::velocity::SplitCriterionGenerator {_refinementParams.minMassRatio * getInitialMass(), 2.5F});
+        refinement::velocity::SplitCriterionGenerator {
+            _refinementParams.minMassRatio * getParameters().baseParticleMass,
+            _refinementParams.velocity.split});
 
     refinement::findTopParticlesToSplit(getParticles(), _refinementData, _refinementParams, thrust::greater<float> {});
 
@@ -193,7 +196,9 @@ void AdaptiveSphSimulation::identifyAndMergeParticles() const
     refinement::getCriterionValues<<<SphSimulation::getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(
         getParticles(),
         _refinementData.merge.criterionValues,
-        refinement::velocity::MergeCriterionGenerator {_refinementParams.maxMassRatio * getInitialMass(), 0.5F});
+        refinement::velocity::MergeCriterionGenerator {
+            _refinementParams.maxMassRatio * getParameters().baseParticleMass,
+            _refinementParams.velocity.merge});
 
     refinement::findTopParticlesToMerge(getParticles(), _refinementData, _refinementParams, thrust::less<float> {});
 

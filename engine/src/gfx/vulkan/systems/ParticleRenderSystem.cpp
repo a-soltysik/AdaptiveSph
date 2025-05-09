@@ -31,6 +31,7 @@ ParticleRenderSystem::ParticleRenderSystem(const Device& device, vk::RenderPass 
                              .addBinding(2, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eVertex)
                              .addBinding(3, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eVertex)
                              .addBinding(4, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eVertex)
+                             .addBinding(5, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eVertex)
                              .build(vk::DescriptorSetLayoutCreateFlagBits::ePushDescriptorKHR)},
       _pipelineLayout {createPipelineLayout(_device, _descriptorLayout->getDescriptorSetLayout())},
       _pipeline {createPipeline(_device, renderPass, _pipelineLayout)},
@@ -158,6 +159,7 @@ auto ParticleRenderSystem::render(const FrameInfo& frameInfo) const -> void
         .writeBuffer(2, _particleBuffer.positions.getDescriptorInfo())
         .writeBuffer(3, _particleBuffer.velocities.getDescriptorInfo())
         .writeBuffer(4, _particleBuffer.radiuses.getDescriptorInfo())
+        .writeBuffer(5, _particleBuffer.forces.getDescriptorInfo())
         .push(frameInfo.commandBuffer, _pipelineLayout);
 
     frameInfo.commandBuffer.draw(6, frameInfo.scene.getParticleCount(), 0, 0);
