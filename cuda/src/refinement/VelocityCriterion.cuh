@@ -1,6 +1,6 @@
+// VelocityCriterion.cuh
 #pragma once
 #include "cuda/Simulation.cuh"
-#include "cuda/refinement/VelocityParameters.cuh"
 
 namespace sph::cuda::refinement::velocity
 {
@@ -8,7 +8,12 @@ namespace sph::cuda::refinement::velocity
 class SplitCriterionGenerator
 {
 public:
-    SplitCriterionGenerator(float minimalMass, VelocityParameters::Split split);
+    __host__ __device__ SplitCriterionGenerator(float minimalMass, VelocityParameters::Split split)
+        : _minimalMass(minimalMass),
+          _split(split)
+    {
+    }
+
     __device__ auto operator()(ParticlesData particles, uint32_t id) const -> float;
 
 private:
@@ -19,7 +24,12 @@ private:
 class MergeCriterionGenerator
 {
 public:
-    MergeCriterionGenerator(float maximalMass, VelocityParameters::Merge merge);
+    __host__ __device__ MergeCriterionGenerator(float maximalMass, VelocityParameters::Merge merge)
+        : _maximalMass(maximalMass),
+          _merge(merge)
+    {
+    }
+
     __device__ auto operator()(ParticlesData particles, uint32_t id) const -> float;
 
 private:

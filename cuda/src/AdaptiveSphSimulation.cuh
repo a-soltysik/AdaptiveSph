@@ -10,6 +10,7 @@
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
 #include "refinement/Common.cuh"
+#include "refinement/ParticleOperations.cuh"
 
 namespace sph::cuda
 {
@@ -38,6 +39,10 @@ private:
     void performAdaptiveRefinement();
     void updateParticleCount();
     [[nodiscard]] auto getBlocksPerGridForParticles(uint32_t count) const -> dim3;
+    void performMerging();
+    refinement::EnhancedMergeData allocateEnhancedMergeData(uint32_t maxParticleCount) const;
+    void calculateMergeCriteria(Span<float> criterionValues) const;
+    void freeEnhancedMergeData(const refinement::EnhancedMergeData& data) const;
 
     void resetRefinementCounters() const;
 

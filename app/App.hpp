@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "Window.hpp"
+#include "benchmark/BenchmarkCase.hpp"
 #include "utils/ConfigurationManager.hpp"
 
 namespace sph
@@ -17,6 +18,7 @@ class App
 public:
     explicit App(const std::string& configPath = "config.json");
     auto run() -> int;
+    auto runBenchmarks() -> void;
 
 private:
     static auto initializeLogger() -> void;
@@ -36,6 +38,7 @@ private:
     cuda::Simulation::Parameters _simulationParameters {};
     cuda::refinement::RefinementParameters _refinementParameters {};
     InitialParameters _initialParameters {};
+    std::optional<BenchmarkParameters> _benchmarkParams;
 
     ConfigurationManager _configManager;
     std::string _configPath;
