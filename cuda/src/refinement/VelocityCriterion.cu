@@ -1,3 +1,4 @@
+// VelocityCriterion.cu
 #include <cfloat>
 #include <glm/ext/quaternion_geometric.hpp>
 #include <glm/ext/vector_float3.hpp>
@@ -6,12 +7,6 @@
 
 namespace sph::cuda::refinement::velocity
 {
-
-SplitCriterionGenerator::SplitCriterionGenerator(float minimalMass, VelocityParameters::Split split)
-    : _minimalMass {minimalMass},
-      _split {split}
-{
-}
 
 __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles, uint32_t id) const -> float
 {
@@ -26,12 +21,6 @@ __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles, uin
         return FLT_MAX;
     }
     return velocityMagnitude;
-}
-
-MergeCriterionGenerator::MergeCriterionGenerator(float maximalMass, VelocityParameters::Merge merge)
-    : _maximalMass {maximalMass},
-      _merge {merge}
-{
 }
 
 __device__ auto MergeCriterionGenerator::operator()(ParticlesData particles, uint32_t id) const -> float

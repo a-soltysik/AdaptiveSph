@@ -1,3 +1,4 @@
+// ParticleOperations.cuh
 #pragma once
 
 #include <thrust/count.h>
@@ -14,12 +15,66 @@
 namespace sph::cuda::refinement
 {
 
+struct MergeConfiguration
+{
+    float maxMassRatio;      // From refinement parameters
+    float baseParticleMass;  // From simulation parameters
+    float maxMassThreshold;  // Precomputed: maxMassRatio * baseParticleMass
+};
+
+struct MergePair
+{
+    uint32_t first;
+    uint32_t second;
+    float distance;
+    bool valid;
+};
+
+struct MergeState
+{
+    enum class Status : uint32_t
+    {
+        Available = 0,
+        Proposing = 1,
+        Accepted = 2,
+        Paired = 3
+    };
+    Status status;
+    uint32_t partner;
+    float distance;
+};
+
+struct EnhancedMergeData
+{
+    Span<float> criterionValues;
+    Span<uint32_t> eligibleParticles;
+    uint32_t* eligibleCount;
+
+    Span<MergeState> states;
+    Span<MergePair> pairs;
+    uint32_t* pairCount;
+
+    Span<uint32_t> compactionMap;
+    uint32_t* newParticleCount;
+};
+
+__global__ void resolveProposals(ParticlesData particles, EnhancedMergeData mergeData);
+__global__ void proposePartners(ParticlesData particles,
+                                EnhancedMergeData mergeData,
+                                SphSimulation::Grid grid,
+                                Simulation::Parameters simulationData,
+                                MergeConfiguration mergeConfig);
+
+__global__ void markPotentialMerges(ParticlesData particles, RefinementData refinementData);
+
 __global__ void splitParticles(ParticlesData particles,
                                RefinementData refinementData,
                                SplittingParameters params,
                                uint32_t maxParticleCount);
 
-__global__ void mergeParticles(ParticlesData particles, RefinementData refinementData);
+__global__ void mergeParticles(ParticlesData particles,
+                               RefinementData refinementData,
+                               Simulation::Parameters simulationData);
 
 __global__ void getMergeCandidates(ParticlesData particles,
                                    RefinementData refinementData,
@@ -35,6 +90,9 @@ __device__ std::pair<uint32_t, float> findClosestParticle(const ParticlesData& p
 
 __global__ void removeParticles(ParticlesData particles, RefinementData refinementData);
 
+__global__ void validateMergePairs(RefinementData refinementData, uint32_t particleCount);
+
+// Template-based getCriterionValues (no more function pointers)
 template <typename CriterionGenerator>
 __global__ void getCriterionValues(ParticlesData particles,
                                    Span<float> splitCriterionValues,
@@ -50,6 +108,12 @@ __global__ void getCriterionValues(ParticlesData particles,
 }
 
 __global__ void updateParticleCount(RefinementData refinementData, uint32_t particleCount);
+__global__ void identifyEligibleParticles(ParticlesData particles, EnhancedMergeData mergeData, float maxMass);
+__global__ void executeMerges(ParticlesData particles,
+                              EnhancedMergeData mergeData,
+                              Simulation::Parameters simulationData);
+
+__global__ void createMergePairs(EnhancedMergeData mergeData);
 
 template <typename CriterionSorter>
 void findTopParticlesToSplit(ParticlesData particles,
@@ -74,7 +138,7 @@ void findTopParticlesToSplit(ParticlesData particles,
                                                     refinementData.split.criterionValues.data,
                                                     refinementData.split.criterionValues.data + particles.particleCount,
                                                     [] __device__(float value) {
-                                                        return value != FLT_MAX;
+                                                        return value > 0.0f;
                                                     });
 
     const auto maxParticlesCount =
@@ -112,7 +176,7 @@ void findTopParticlesToMerge(ParticlesData particles,
                                                     refinementData.merge.criterionValues.data,
                                                     refinementData.merge.criterionValues.data + particles.particleCount,
                                                     [] __device__(float value) {
-                                                        return value != FLT_MAX;
+                                                        return value > 0.0f;
                                                     });
 
     const auto maxParticlesCount =
@@ -124,5 +188,8 @@ void findTopParticlesToMerge(ParticlesData particles,
                    maxParticlesCount,
                    refinementData.merge.particlesIdsToMerge.first.data);
 }
+
+__global__ void buildCompactionMap(EnhancedMergeData mergeData, uint32_t particleCount);
+__global__ void compactParticles(ParticlesData particles, EnhancedMergeData mergeData, uint32_t oldCount);
 
 }

@@ -138,11 +138,13 @@ auto App::run() -> int
 
     _api->registerTexture(std::move(redTexture));
 
-    _simulationParameters = _configManager.getSimulationParameters().value();
-    _initialParameters = _configManager.getInitialParameters().value();
-    _refinementParameters = _configManager.getRefinementParameters().value();
-
     setDefaultScene();
+
+    if (_benchmarkParams.has_value() && _benchmarkParams.value().enabled)
+    {
+        runBenchmarks();
+        return 0;
+    }
 
     _simulation = createSimulation(_simulationParameters,
                                    _particles,
@@ -169,7 +171,22 @@ auto App::loadConfigurationFromFile(const std::string& configPath) -> bool
 
     panda::log::Info("Successfully loaded configuration from file: {}", configPath);
 
+    _simulationParameters = _configManager.getSimulationParameters().value();
+    _initialParameters = _configManager.getInitialParameters().value();
+    _refinementParameters = _configManager.getRefinementParameters().value();
+    _benchmarkParams = _configManager.getBenchmarkParameters();
+
     return true;
+}
+
+auto App::runBenchmarks() -> void
+{
+    panda::log::Info("Running benchmarks...");
+
+    //BenchmarkFramework benchmarkFramework(_benchmarkParams.value());
+    //benchmarkFramework.runBenchmarks();
+
+    panda::log::Info("Benchmarks completed.");
 }
 
 auto App::mainLoop() const -> void
@@ -268,24 +285,23 @@ void App::setDefaultScene()
                      simulationSize.y,
                      simulationSize.z);
 
-    // Calculate particle spacing to fit within domain
+    // Calculate particle spacing for symmetric distribution
     const glm::vec3 domainMin = _simulationParameters.domain.min;
     const glm::vec3 domainMax = _simulationParameters.domain.max;
     const glm::vec3 domainSize = domainMax - domainMin;
-    const auto gridSize = _initialParameters.particleCount;
+    const glm::uvec3 gridSize = _initialParameters.particleCount;
 
+    // For N particles, we want N+1 gaps (including boundaries)
+    // This ensures equal distance from particles to boundaries
     glm::vec3 particleSpacing;
-    particleSpacing.x = (gridSize.x > 1) ? (domainSize.x / static_cast<float>(gridSize.x)) : domainSize.x;
-    particleSpacing.y = (gridSize.y > 1) ? (domainSize.y / static_cast<float>(gridSize.y)) : domainSize.y;
-    particleSpacing.z = (gridSize.z > 1) ? (domainSize.z / static_cast<float>(gridSize.z)) : domainSize.z;
+    particleSpacing.x = gridSize.x > 1 ? domainSize.x / static_cast<float>(gridSize.x + 1) : domainSize.x / 2.0f;
+    particleSpacing.y = gridSize.y > 1 ? domainSize.y / static_cast<float>(gridSize.y + 1) : domainSize.y / 2.0f;
+    particleSpacing.z = gridSize.z > 1 ? domainSize.z / static_cast<float>(gridSize.z + 1) : domainSize.z / 2.0f;
 
     panda::log::Info("Particle spacing: {}", glm::to_string(particleSpacing));
 
-    // Calculate offset to center the grid in the domain
-    // Half spacing on each side for proper edge distance
-    const glm::vec3 startPos = domainMin + particleSpacing * 0.5f;
-
-    particleSpacing *= 0.8f;
+    // Start position ensures equal distance from boundaries
+    const glm::vec3 startPos = domainMin + particleSpacing;
 
     // Generate particles on a uniform grid
     for (uint32_t i = 0; i < gridSize.x; i++)
@@ -303,6 +319,21 @@ void App::setDefaultScene()
                 _particles.emplace_back(position, 0.0f);
             }
         }
+    }
+
+    // Debug: Print boundary distances for corner particles
+    if (!_particles.empty())
+    {
+        const auto& firstParticle = _particles.front();
+        const auto& lastParticle = _particles.back();
+
+        panda::log::Info("First particle position: {}, distance to min boundary: {}",
+                         glm::to_string(glm::vec3(firstParticle)),
+                         glm::to_string(glm::vec3(firstParticle) - domainMin));
+
+        panda::log::Info("Last particle position: {}, distance to max boundary: {}",
+                         glm::to_string(glm::vec3(lastParticle)),
+                         glm::to_string(domainMax - glm::vec3(lastParticle)));
     }
 
     _api->registerMesh(std::move(sphereMesh));

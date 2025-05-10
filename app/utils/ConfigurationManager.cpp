@@ -1,8 +1,9 @@
+// ConfigurationManager.cpp
 #include "ConfigurationManager.hpp"
 
 #include <panda/Logger.h>
 
-#include <cuda/refinement/VelocityParameters.cuh>
+#include <cuda/refinement/RefinementParameters.cuh>
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
@@ -40,6 +41,10 @@ bool ConfigurationManager::loadFromFile(const std::string& filePath)
         {
             parseInitialParameters(j["initial"]);
         }
+        if (j.contains("benchmark"))
+        {
+            parseBenchmarkParameters(j["benchmark"]);
+        }
 
         return true;
     }
@@ -74,6 +79,10 @@ bool ConfigurationManager::loadFromString(const std::string& jsonString)
         if (j.contains("initial"))
         {
             parseInitialParameters(j["initial"]);
+        }
+        if (j.contains("benchmark"))
+        {
+            parseBenchmarkParameters(j["benchmark"]);
         }
 
         return true;
@@ -178,6 +187,11 @@ void ConfigurationManager::parseRefinementParameters(const json& j)
         params.enabled = j["enabled"].get<bool>();
     }
 
+    if (j.contains("criterionType"))
+    {
+        params.criterionType = j["criterionType"].get<std::string>();
+    }
+
     if (j.contains("minMassRatio"))
     {
         params.minMassRatio = j["minMassRatio"].get<float>();
@@ -248,6 +262,51 @@ void ConfigurationManager::parseRefinementParameters(const json& j)
         }
     }
 
+    if (j.contains("interface"))
+    {
+        auto& interface = j["interface"];
+
+        if (interface.contains("splittingThresholdRatio"))
+        {
+            params.interfaceParameters.splittingThresholdRatio = interface["splittingThresholdRatio"].get<float>();
+        }
+
+        if (interface.contains("mergingThresholdRatio"))
+        {
+            params.interfaceParameters.mergingThresholdRatio = interface["mergingThresholdRatio"].get<float>();
+        }
+    }
+
+    if (j.contains("vorticity"))
+    {
+        auto& vorticity = j["vorticity"];
+
+        if (vorticity.contains("threshold"))
+        {
+            params.vorticity.threshold = vorticity["threshold"].get<float>();
+        }
+
+        if (vorticity.contains("scaleFactor"))
+        {
+            params.vorticity.scaleFactor = vorticity["scaleFactor"].get<float>();
+        }
+    }
+
+    if (j.contains("curvature"))
+    {
+        auto& curvature = j["curvature"];
+
+        if (curvature.contains("threshold"))
+        {
+            params.curvature.threshold = curvature["threshold"].get<float>();
+        }
+
+        if (curvature.contains("scaleFactor"))
+        {
+            params.curvature.scaleFactor = curvature["scaleFactor"].get<float>();
+        }
+    }
+
     _refinementParams = params;
 }
 
@@ -283,6 +342,131 @@ void ConfigurationManager::parseInitialParameters(const json& j)
     _initialParams = params;
 }
 
+void ConfigurationManager::parseBenchmarkParameters(const json& j)
+{
+    BenchmarkParameters params;
+
+    if (j.contains("enabled"))
+    {
+        params.enabled = j["enabled"].get<bool>();
+    }
+
+    if (j.contains("testCase"))
+    {
+        params.testCase = j["testCase"].get<std::string>();
+    }
+
+    if (j.contains("outputPath"))
+    {
+        params.outputPath = j["outputPath"].get<std::string>();
+    }
+
+    if (j.contains("reynoldsNumber"))
+    {
+        params.reynoldsNumber = j["reynoldsNumber"].get<float>();
+    }
+
+    if (j.contains("simulations"))
+    {
+        auto& simulations = j["simulations"];
+        if (simulations.contains("coarse") && simulations["coarse"].contains("particleSize"))
+        {
+            params.coarse.particleSize = simulations["coarse"]["particleSize"].get<float>();
+        }
+        if (simulations.contains("fine") && simulations["fine"].contains("particleSize"))
+        {
+            params.fine.particleSize = simulations["fine"]["particleSize"].get<float>();
+        }
+        if (simulations.contains("adaptive"))
+        {
+            auto& adaptive = simulations["adaptive"];
+
+            if (adaptive.contains("minParticleSize"))
+            {
+                params.adaptive.minParticleSize = adaptive["minParticleSize"].get<float>();
+            }
+
+            if (adaptive.contains("maxParticleSize"))
+            {
+                params.adaptive.maxParticleSize = adaptive["maxParticleSize"].get<float>();
+            }
+        }
+    }
+
+    if (j.contains("measurementInterval"))
+    {
+        params.measurementInterval = j["measurementInterval"].get<uint32_t>();
+    }
+
+    if (j.contains("totalSimulationFrames"))
+    {
+        params.totalSimulationFrames = j["totalSimulationFrames"].get<uint32_t>();
+    }
+
+    // Test case specific parameters
+    if (j.contains("poiseuille"))
+    {
+        auto& poiseuille = j["poiseuille"];
+        if (poiseuille.contains("channelHeight"))
+        {
+            params.channelHeight = poiseuille["channelHeight"].get<float>();
+        }
+        if (poiseuille.contains("channelLength"))
+        {
+            params.channelLength = poiseuille["channelLength"].get<float>();
+        }
+        if (poiseuille.contains("channelWidth"))
+        {
+            params.channelWidth = poiseuille["channelWidth"].get<float>();
+        }
+    }
+
+    if (j.contains("taylorGreen"))
+    {
+        auto& taylorGreen = j["taylorGreen"];
+        if (taylorGreen.contains("domainSize"))
+        {
+            params.domainSize = taylorGreen["domainSize"].get<float>();
+        }
+    }
+
+    if (j.contains("damBreak"))
+    {
+        auto& damBreak = j["damBreak"];
+        if (damBreak.contains("tankLength"))
+        {
+            params.tankLength = damBreak["tankLength"].get<float>();
+        }
+        if (damBreak.contains("tankHeight"))
+        {
+            params.tankHeight = damBreak["tankHeight"].get<float>();
+        }
+        if (damBreak.contains("tankWidth"))
+        {
+            params.tankWidth = damBreak["tankWidth"].get<float>();
+        }
+        if (damBreak.contains("waterColumnWidth"))
+        {
+            params.waterColumnWidth = damBreak["waterColumnWidth"].get<float>();
+        }
+        if (damBreak.contains("waterColumnHeight"))
+        {
+            params.waterColumnHeight = damBreak["waterColumnHeight"].get<float>();
+        }
+    }
+
+    if (j.contains("lidDrivenCavity"))
+    {
+        auto& lidDrivenCavity = j["lidDrivenCavity"];
+        if (lidDrivenCavity.contains("cavitySize"))
+        {
+            params.cavitySize = lidDrivenCavity["cavitySize"].get<float>();
+        }
+    }
+
+    _benchmarkParams = params;
+}
+
 std::optional<cuda::Simulation::Parameters> ConfigurationManager::getSimulationParameters() const
 {
     return _simulationParams;
@@ -298,4 +482,9 @@ std::optional<InitialParameters> ConfigurationManager::getInitialParameters() co
     return _initialParams;
 }
 
-}  // namespace sph
+std::optional<BenchmarkParameters> ConfigurationManager::getBenchmarkParameters() const
+{
+    return _benchmarkParams;
+}
+
+}
