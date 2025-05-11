@@ -1,4 +1,3 @@
-// CurvatureCriterion.cu
 #include <cfloat>
 #include <glm/geometric.hpp>
 
@@ -17,15 +16,16 @@ __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles,
 {
     if (particles.masses[id] < _minimalMass)
     {
-        return FLT_MAX;
+        return -1;
     }
     const glm::vec4 position = particles.positions[id];
     const float h = particles.smoothingRadiuses[id];
     const float density = particles.densities[id];
-    // Calculate density Laplacian (measure of curvature)
+
     float densityLaplacian = 0.0f;
+    float totalWeight = 0.0f;
     int validNeighbors = 0;
-    // Use spatial hash grid for efficient neighbor search
+
     forEachNeighbour(position, simulationData, grid, [&](const auto neighbourIdx) {
         if (neighbourIdx == id)
         {
@@ -39,24 +39,31 @@ __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles,
         {
             const float neighborDensity = particles.densities[neighbourIdx];
             const float densityDiff = neighborDensity - density;
-            // Use viscosity Laplacian kernel
-            const float lapW = device::viscosityLaplacianKernel(dist, h);
+            // Use proper Laplacian kernel
+            const float lapW = device::wendlandLaplacianKernel(dist, h);
             const float weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
             densityLaplacian += weight * densityDiff * lapW;
+            totalWeight += weight * lapW;
             validNeighbors++;
         }
     });
     if (validNeighbors < 3)
     {
-        return FLT_MAX;  // Not enough neighbors
-    }
-    float curvatureMagnitude = fabsf(densityLaplacian);
-    if (curvatureMagnitude > _curvature.threshold)
-    {
-        return curvatureMagnitude * _curvature.scaleFactor;
+        return -1;
     }
 
-    return FLT_MAX;
+    if (totalWeight > 0.0f)
+    {
+        densityLaplacian /= totalWeight;
+    }
+
+    float curvatureMagnitude = fabsf(densityLaplacian);
+    if (curvatureMagnitude > _curvature.split.minimalCurvatureThreshold)
+    {
+        return curvatureMagnitude;
+    }
+
+    return -1;
 }
 
 __device__ auto MergeCriterionGenerator::operator()(ParticlesData particles,
@@ -66,20 +73,56 @@ __device__ auto MergeCriterionGenerator::operator()(ParticlesData particles,
 {
     if (particles.masses[id] > _maximalMass)
     {
-        return FLT_MAX;
+        return -1;
     }
 
-    // Calculate curvature to check if it's low enough for merging
-    SplitCriterionGenerator splitGen(0.0f, _curvature);
-    float splitValue = splitGen(particles, id, grid, simulationData);
+    const glm::vec4 position = particles.positions[id];
+    const float h = particles.smoothingRadiuses[id];
+    const float density = particles.densities[id];
 
-    // Use lower threshold for merging
-    if (splitValue != FLT_MAX && splitValue > _curvature.threshold * 0.5f)
+    float densityLaplacian = 0.0f;
+    float totalWeight = 0.0f;
+    int validNeighbors = 0;
+    forEachNeighbour(position, simulationData, grid, [&](const auto neighbourIdx) {
+        if (neighbourIdx == id)
+        {
+            return;
+        }
+
+        const glm::vec4 neighborPos = particles.positions[neighbourIdx];
+        const glm::vec3 r = glm::vec3(neighborPos - position);
+        const float dist = glm::length(r);
+        if (dist < h && dist > 1e-5f)
+        {
+            const float neighborDensity = particles.densities[neighbourIdx];
+            const float densityDiff = neighborDensity - density;
+
+            const float lapW = device::wendlandLaplacianKernel(dist, h);
+            const float weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
+            densityLaplacian += weight * densityDiff * lapW;
+            totalWeight += weight * fabsf(lapW);
+            validNeighbors++;
+        }
+    });
+
+    if (validNeighbors < 3)
     {
-        return FLT_MAX;  // High curvature, don't merge
+        return -1;
     }
 
-    return splitValue == FLT_MAX ? 0.0f : splitValue;
+    if (totalWeight > 0.0f)
+    {
+        densityLaplacian /= totalWeight;
+    }
+
+    float curvatureMagnitude = fabsf(densityLaplacian);
+
+    if (curvatureMagnitude < _curvature.merge.maximalCurvatureThreshold)
+    {
+        return curvatureMagnitude / _curvature.merge.maximalCurvatureThreshold;
+    }
+
+    return -1;
 }
 
 }

@@ -15,8 +15,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cuda/Simulation.cuh>
+#include <filesystem>
 #include <glm/common.hpp>
-#include <glm/exponential.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
 #include <glm/ext/vector_uint2.hpp>
@@ -25,11 +25,11 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/trigonometric.hpp>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
-#include "cuda/refinement/RefinementParameters.cuh"
 #include "glm/gtx/string_cast.hpp"
 #include "gui/SimulationDataGui.hpp"
 #include "input_handler/MouseHandler.hpp"
@@ -115,8 +115,8 @@ void processCamera(const float deltaTime,
 namespace sph
 {
 
-App::App(const std::string& configPath)
-    : _configPath(configPath)
+App::App(std::string configPath)
+    : _configPath(std::move(configPath))
 {
 }
 
@@ -171,20 +171,25 @@ auto App::loadConfigurationFromFile(const std::string& configPath) -> bool
 
     panda::log::Info("Successfully loaded configuration from file: {}", configPath);
 
+    //NOLINTBEGIN(bugprone-unchecked-optional-access)
     _simulationParameters = _configManager.getSimulationParameters().value();
     _initialParameters = _configManager.getInitialParameters().value();
     _refinementParameters = _configManager.getRefinementParameters().value();
     _benchmarkParams = _configManager.getBenchmarkParameters();
+    //NOLINTEND(bugprone-unchecked-optional-access)
 
     return true;
 }
 
 auto App::runBenchmarks() -> void
 {
-    panda::log::Info("Running benchmarks...");
+    if (!_benchmarkParams.has_value() || !_benchmarkParams.value().enabled)
+    {
+        panda::log::Info("Benchmarks are disabled.");
+        return;
+    }
 
-    //BenchmarkFramework benchmarkFramework(_benchmarkParams.value());
-    //benchmarkFramework.runBenchmarks();
+    panda::log::Info("Running benchmarks...");
 
     panda::log::Info("Benchmarks completed.");
 }
@@ -200,7 +205,7 @@ auto App::mainLoop() const -> void
     auto gui = SimulationDataGui {*_window, _simulationParameters};
 
     auto timeManager = FrameTimeManager {};
-    std::vector densityDeviations(_simulation->getParticlesCount(), 0.0f);
+    const std::vector densityDeviations(_simulation->getParticlesCount(), 0.F);
     while (!_window->shouldClose()) [[likely]]
     {
         if (!_window->isMinimized()) [[likely]]
@@ -213,9 +218,9 @@ auto App::mainLoop() const -> void
             _scene->getDomain().transform.translation = (guiUpdate.domain.max + guiUpdate.domain.min) / 2.F;
             _simulation->update(guiUpdate, 0.001F);
             gui.setAverageNeighbourCount(_simulation->calculateAverageNeighborCount());
-            gui.setDensityDeviation({_simulation->updateDensityDeviations(),
-                                     _simulation->getParticlesCount(),
-                                     _simulationParameters.restDensity});
+            gui.setDensityDeviation({.densityDeviations = _simulation->updateDensityDeviations(),
+                                     .particleCount = _simulation->getParticlesCount(),
+                                     .restDensity = _simulationParameters.restDensity});
 
             _scene->setParticleCount(_simulation->getParticlesCount());
             _scene->getCamera().setPerspectiveProjection(
@@ -262,6 +267,7 @@ auto App::registerSignalHandlers() -> void
     panda::shouldNotBe(std::signal(SIGTERM, signalHandler), SIG_ERR, "Failed to register signal handler");
 }
 
+//NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void App::setDefaultScene()
 {
     auto redTexture = panda::gfx::vulkan::Texture::getDefaultTexture(*_api, {1, 0, 0, 1});
@@ -285,55 +291,32 @@ void App::setDefaultScene()
                      simulationSize.y,
                      simulationSize.z);
 
-    // Calculate particle spacing for symmetric distribution
     const glm::vec3 domainMin = _simulationParameters.domain.min;
     const glm::vec3 domainMax = _simulationParameters.domain.max;
     const glm::vec3 domainSize = domainMax - domainMin;
     const glm::uvec3 gridSize = _initialParameters.particleCount;
 
-    // For N particles, we want N+1 gaps (including boundaries)
-    // This ensures equal distance from particles to boundaries
     glm::vec3 particleSpacing;
-    particleSpacing.x = gridSize.x > 1 ? domainSize.x / static_cast<float>(gridSize.x + 1) : domainSize.x / 2.0f;
-    particleSpacing.y = gridSize.y > 1 ? domainSize.y / static_cast<float>(gridSize.y + 1) : domainSize.y / 2.0f;
-    particleSpacing.z = gridSize.z > 1 ? domainSize.z / static_cast<float>(gridSize.z + 1) : domainSize.z / 2.0f;
+    particleSpacing.x = gridSize.x > 1 ? domainSize.x / static_cast<float>(gridSize.x + 1) : domainSize.x / 2.0F;
+    particleSpacing.y = gridSize.y > 1 ? domainSize.y / static_cast<float>(gridSize.y + 1) : domainSize.y / 2.0F;
+    particleSpacing.z = gridSize.z > 1 ? domainSize.z / static_cast<float>(gridSize.z + 1) : domainSize.z / 2.0F;
 
     panda::log::Info("Particle spacing: {}", glm::to_string(particleSpacing));
 
-    // Start position ensures equal distance from boundaries
     const glm::vec3 startPos = domainMin + particleSpacing;
-
-    // Generate particles on a uniform grid
     for (uint32_t i = 0; i < gridSize.x; i++)
     {
         for (uint32_t j = 0; j < gridSize.y; j++)
         {
             for (uint32_t k = 0; k < gridSize.z; k++)
             {
-                // Calculate position with constant spacing
-                const glm::vec3 position = startPos + glm::vec3(particleSpacing.x * static_cast<float>(i),
-                                                                particleSpacing.y * static_cast<float>(j),
-                                                                particleSpacing.z * static_cast<float>(k));
+                const auto position = startPos + glm::vec3(particleSpacing.x * static_cast<float>(i),
+                                                           particleSpacing.y * static_cast<float>(j),
+                                                           particleSpacing.z * static_cast<float>(k));
 
-                // Add particle
-                _particles.emplace_back(position, 0.0f);
+                _particles.emplace_back(position, 0.F);
             }
         }
-    }
-
-    // Debug: Print boundary distances for corner particles
-    if (!_particles.empty())
-    {
-        const auto& firstParticle = _particles.front();
-        const auto& lastParticle = _particles.back();
-
-        panda::log::Info("First particle position: {}, distance to min boundary: {}",
-                         glm::to_string(glm::vec3(firstParticle)),
-                         glm::to_string(glm::vec3(firstParticle) - domainMin));
-
-        panda::log::Info("Last particle position: {}, distance to max boundary: {}",
-                         glm::to_string(glm::vec3(lastParticle)),
-                         glm::to_string(domainMax - glm::vec3(lastParticle)));
     }
 
     _api->registerMesh(std::move(sphereMesh));

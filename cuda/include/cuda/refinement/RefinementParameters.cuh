@@ -10,17 +10,64 @@ struct VelocityParameters
 {
     struct Split
     {
-        float minimalSpeedThreshold;
+        float minimalSpeedThreshold = 2.0f;
     };
 
     struct Merge
     {
-        float maximalSpeedThreshold;
+        float maximalSpeedThreshold = 0.1f;
     };
 
     Split split;
     Merge merge;
-    uint64_t dummy {};
+};
+
+struct VorticityParameters
+{
+    struct Split
+    {
+        float minimalVorticityThreshold = 1.0f;
+    };
+
+    struct Merge
+    {
+        float maximalVorticityThreshold = 0.3f;
+    };
+
+    Split split;
+    Merge merge;
+};
+
+struct CurvatureParameters
+{
+    struct Split
+    {
+        float minimalCurvatureThreshold = 2.0f;
+    };
+
+    struct Merge
+    {
+        float maximalCurvatureThreshold = 0.6f;
+    };
+
+    Split split;
+    Merge merge;
+};
+
+struct InterfaceParameters
+{
+    struct Split
+    {
+        float distanceRatioThreshold = 0.05f;  // Fraction of domain size
+    };
+
+    struct Merge
+    {
+        float distanceRatioThreshold = 0.15f;  // Fraction of domain size
+    };
+
+    Split split;
+    Merge merge;
 };
 
 struct SplittingParameters
@@ -29,27 +76,6 @@ struct SplittingParameters
     float alpha = 0.70f;             // Smoothing length ratio for daughter particles
     float centerMassRatio = 0.077f;  // Mass ratio for center particle
     float vertexMassRatio = 0.077F;  // Mass ratio for each vertex particle (12 vertices)
-};
-
-struct InterfaceParameters
-{
-    float splittingThresholdRatio = 0.05f;  // Fraction of domain size for splitting zone
-    float mergingThresholdRatio = 0.15f;    // Fraction of domain size for merging zone
-    uint64_t dummy {};
-};
-
-struct VorticityParameters
-{
-    float threshold = 1.0f;    // Minimum vorticity magnitude for refinement
-    float scaleFactor = 1.0f;  // Scaling factor for vorticity-based refinement
-    uint64_t dummy {};
-};
-
-struct CurvatureParameters
-{
-    float threshold = 2.0f;    // Minimum curvature magnitude for refinement
-    float scaleFactor = 1.0f;  // Scaling factor for curvature-based refinement
-    uint64_t dummy {};
 };
 
 struct RefinementParameters

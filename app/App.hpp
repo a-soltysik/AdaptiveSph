@@ -4,10 +4,14 @@
 #include <panda/gfx/vulkan/Scene.h>
 
 #include <cuda/Simulation.cuh>
+#include <glm/ext/vector_float4.hpp>
 #include <memory>
+#include <optional>
+#include <string>
+#include <vector>
 
 #include "Window.hpp"
-#include "benchmark/BenchmarkCase.hpp"
+#include "cuda/refinement/RefinementParameters.cuh"
 #include "utils/ConfigurationManager.hpp"
 
 namespace sph
@@ -16,7 +20,7 @@ namespace sph
 class App
 {
 public:
-    explicit App(const std::string& configPath = "config.json");
+    explicit App(std::string configPath = "config.json");
     auto run() -> int;
     auto runBenchmarks() -> void;
 

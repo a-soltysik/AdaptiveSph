@@ -1,4 +1,3 @@
-// VorticityCriterion.cuh
 #pragma once
 #include "../SphSimulation.cuh"
 #include "cuda/Simulation.cuh"

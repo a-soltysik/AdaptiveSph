@@ -1,4 +1,3 @@
-// ParticleOperations.cuh
 #pragma once
 
 #include <thrust/count.h>

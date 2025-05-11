@@ -102,7 +102,7 @@ __global__ void computeDensities(ParticlesData particles,
         nearDensity += neighbourMass * device::nearDensityKernel(distance, neighbourSmoothingRadius);
     });
 
-    particles.densities[idx] = density;
+    particles.densities[idx] = std::max(850.F, density);
     particles.nearDensities[idx] = nearDensity;
 }
 
@@ -263,10 +263,10 @@ __global__ void computeExternalForces(ParticlesData particles, Simulation::Param
     particles.predictedPositions[idx] = particles.positions[idx] + particles.velocities[idx] * 1.F / 200.F;
 }
 
-__global__ void kernel::countNeighbors(ParticlesData particles,
-                                       SphSimulation::State state,
-                                       Simulation::Parameters simulationData,
-                                       uint32_t* neighborCounts)
+__global__ void countNeighbors(ParticlesData particles,
+                               SphSimulation::State state,
+                               Simulation::Parameters simulationData,
+                               uint32_t* neighborCounts)
 {
     const auto idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= particles.particleCount)
@@ -279,7 +279,7 @@ __global__ void kernel::countNeighbors(ParticlesData particles,
     forEachNeighbour(position, simulationData, state.grid, [&](const auto neighbourIdx) {
         if (idx == neighbourIdx)
         {
-            return;  // Don't count self as neighbor
+            return;
         }
         const auto neighbourPosition = particles.positions[neighbourIdx];
         const auto offsetToNeighbour = neighbourPosition - position;
@@ -294,7 +294,7 @@ __global__ void kernel::countNeighbors(ParticlesData particles,
     neighborCounts[idx] = count;
 }
 
-__global__ void kernel::calculateDensityDeviations(ParticlesData particles, float restDensity)
+__global__ void calculateDensityDeviations(ParticlesData particles, float restDensity)
 {
     const auto idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= particles.particleCount)
@@ -302,7 +302,6 @@ __global__ void kernel::calculateDensityDeviations(ParticlesData particles, floa
         return;
     }
 
-    // Calculate deviation as percentage from rest density
     const float deviation = (particles.densities[idx] - restDensity) / restDensity;
     particles.forces[idx] = glm::vec4 {deviation};
 }

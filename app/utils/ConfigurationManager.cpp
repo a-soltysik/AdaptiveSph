@@ -1,19 +1,27 @@
-// ConfigurationManager.cpp
 #include "ConfigurationManager.hpp"
 
 #include <panda/Logger.h>
 
+#include <cmath>
+#include <cstdint>
 #include <cuda/refinement/RefinementParameters.cuh>
+#include <exception>
 #include <fstream>
-#include <iostream>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_uint3.hpp>
 #include <nlohmann/json.hpp>
+#include <nlohmann/json_fwd.hpp>
+#include <optional>
+#include <string>
+
+#include "cuda/Simulation.cuh"
+
+using json = nlohmann::json;
 
 namespace sph
 {
 
-using json = nlohmann::json;
-
-bool ConfigurationManager::loadFromFile(const std::string& filePath)
+auto ConfigurationManager::loadFromFile(const std::string& filePath) -> bool
 {
     try
     {
@@ -24,26 +32,26 @@ bool ConfigurationManager::loadFromFile(const std::string& filePath)
             return false;
         }
 
-        json j;
-        file >> j;
+        json jsonFile;
+        file >> jsonFile;
 
-        if (j.contains("simulation"))
+        if (jsonFile.contains("simulation"))
         {
-            parseSimulationParameters(j["simulation"]);
+            parseSimulationParameters(jsonFile["simulation"]);
         }
 
-        if (j.contains("refinement"))
+        if (jsonFile.contains("refinement"))
         {
-            parseRefinementParameters(j["refinement"]);
+            parseRefinementParameters(jsonFile["refinement"]);
         }
 
-        if (j.contains("initial"))
+        if (jsonFile.contains("initial"))
         {
-            parseInitialParameters(j["initial"]);
+            parseInitialParameters(jsonFile["initial"]);
         }
-        if (j.contains("benchmark"))
+        if (jsonFile.contains("benchmark"))
         {
-            parseBenchmarkParameters(j["benchmark"]);
+            parseBenchmarkParameters(jsonFile["benchmark"]);
         }
 
         return true;
@@ -60,29 +68,29 @@ bool ConfigurationManager::loadFromFile(const std::string& filePath)
     }
 }
 
-bool ConfigurationManager::loadFromString(const std::string& jsonString)
+auto ConfigurationManager::loadFromString(const std::string& jsonString) -> bool
 {
     try
     {
-        json j = json::parse(jsonString);
+        const auto jsonFile = json::parse(jsonString);
 
-        if (j.contains("simulation"))
+        if (jsonFile.contains("simulation"))
         {
-            parseSimulationParameters(j["simulation"]);
+            parseSimulationParameters(jsonFile["simulation"]);
         }
 
-        if (j.contains("refinement"))
+        if (jsonFile.contains("refinement"))
         {
-            parseRefinementParameters(j["refinement"]);
+            parseRefinementParameters(jsonFile["refinement"]);
         }
 
-        if (j.contains("initial"))
+        if (jsonFile.contains("initial"))
         {
-            parseInitialParameters(j["initial"]);
+            parseInitialParameters(jsonFile["initial"]);
         }
-        if (j.contains("benchmark"))
+        if (jsonFile.contains("benchmark"))
         {
-            parseBenchmarkParameters(j["benchmark"]);
+            parseBenchmarkParameters(jsonFile["benchmark"]);
         }
 
         return true;
@@ -99,13 +107,14 @@ bool ConfigurationManager::loadFromString(const std::string& jsonString)
     }
 }
 
-void ConfigurationManager::parseSimulationParameters(const json& j)
+//NOLINTNEXTLINE(readability-function-cognitive-complexity)
+void ConfigurationManager::parseSimulationParameters(const json& jsonFile)
 {
-    cuda::Simulation::Parameters params;
+    cuda::Simulation::Parameters params {};
 
-    if (j.contains("domain"))
+    if (jsonFile.contains("domain"))
     {
-        auto& domain = j["domain"];
+        const auto& domain = jsonFile["domain"];
         if (domain.contains("min") && domain["min"].is_array() && domain["min"].size() == 3)
         {
             params.domain.min =
@@ -119,112 +128,114 @@ void ConfigurationManager::parseSimulationParameters(const json& j)
         }
     }
 
-    if (j.contains("gravity") && j["gravity"].is_array() && j["gravity"].size() == 3)
+    if (jsonFile.contains("gravity") && jsonFile["gravity"].is_array() && jsonFile["gravity"].size() == 3)
     {
-        params.gravity =
-            glm::vec3(j["gravity"][0].get<float>(), j["gravity"][1].get<float>(), j["gravity"][2].get<float>());
+        params.gravity = glm::vec3(jsonFile["gravity"][0].get<float>(),
+                                   jsonFile["gravity"][1].get<float>(),
+                                   jsonFile["gravity"][2].get<float>());
     }
 
-    if (j.contains("restDensity"))
+    if (jsonFile.contains("restDensity"))
     {
-        params.restDensity = j["restDensity"].get<float>();
+        params.restDensity = jsonFile["restDensity"].get<float>();
     }
 
-    if (j.contains("pressureConstant"))
+    if (jsonFile.contains("pressureConstant"))
     {
-        params.pressureConstant = j["pressureConstant"].get<float>();
+        params.pressureConstant = jsonFile["pressureConstant"].get<float>();
     }
 
-    if (j.contains("nearPressureConstant"))
+    if (jsonFile.contains("nearPressureConstant"))
     {
-        params.nearPressureConstant = j["nearPressureConstant"].get<float>();
+        params.nearPressureConstant = jsonFile["nearPressureConstant"].get<float>();
     }
 
-    if (j.contains("restitution"))
+    if (jsonFile.contains("restitution"))
     {
-        params.restitution = j["restitution"].get<float>();
+        params.restitution = jsonFile["restitution"].get<float>();
     }
 
-    if (j.contains("baseSmoothingRadius"))
+    if (jsonFile.contains("baseSmoothingRadius"))
     {
-        params.baseSmoothingRadius = j["baseSmoothingRadius"].get<float>();
+        params.baseSmoothingRadius = jsonFile["baseSmoothingRadius"].get<float>();
     }
 
-    if (j.contains("viscosityConstant"))
+    if (jsonFile.contains("viscosityConstant"))
     {
-        params.viscosityConstant = j["viscosityConstant"].get<float>();
+        params.viscosityConstant = jsonFile["viscosityConstant"].get<float>();
     }
 
-    if (j.contains("maxVelocity"))
+    if (jsonFile.contains("maxVelocity"))
     {
-        params.maxVelocity = j["maxVelocity"].get<float>();
+        params.maxVelocity = jsonFile["maxVelocity"].get<float>();
     }
 
-    if (j.contains("baseParticleRadius"))
+    if (jsonFile.contains("baseParticleRadius"))
     {
-        params.baseParticleRadius = j["baseParticleRadius"].get<float>();
+        params.baseParticleRadius = jsonFile["baseParticleRadius"].get<float>();
     }
 
-    if (j.contains("baseParticleMass"))
+    if (jsonFile.contains("baseParticleMass"))
     {
-        params.baseParticleMass = j["baseParticleMass"].get<float>();
+        params.baseParticleMass = jsonFile["baseParticleMass"].get<float>();
     }
 
-    if (j.contains("threadsPerBlock"))
+    if (jsonFile.contains("threadsPerBlock"))
     {
-        params.threadsPerBlock = j["threadsPerBlock"].get<uint32_t>();
+        params.threadsPerBlock = jsonFile["threadsPerBlock"].get<uint32_t>();
     }
 
     _simulationParams = params;
 }
 
-void ConfigurationManager::parseRefinementParameters(const json& j)
+//NOLINTNEXTLINE(readability-function-cognitive-complexity)
+void ConfigurationManager::parseRefinementParameters(const json& jsonFile)
 {
     cuda::refinement::RefinementParameters params;
 
-    if (j.contains("enabled"))
+    if (jsonFile.contains("enabled"))
     {
-        params.enabled = j["enabled"].get<bool>();
+        params.enabled = jsonFile["enabled"].get<bool>();
     }
 
-    if (j.contains("criterionType"))
+    if (jsonFile.contains("criterionType"))
     {
-        params.criterionType = j["criterionType"].get<std::string>();
+        params.criterionType = jsonFile["criterionType"].get<std::string>();
     }
 
-    if (j.contains("minMassRatio"))
+    if (jsonFile.contains("minMassRatio"))
     {
-        params.minMassRatio = j["minMassRatio"].get<float>();
+        params.minMassRatio = jsonFile["minMassRatio"].get<float>();
     }
 
-    if (j.contains("maxMassRatio"))
+    if (jsonFile.contains("maxMassRatio"))
     {
-        params.maxMassRatio = j["maxMassRatio"].get<float>();
+        params.maxMassRatio = jsonFile["maxMassRatio"].get<float>();
     }
 
-    if (j.contains("maxParticleCount"))
+    if (jsonFile.contains("maxParticleCount"))
     {
-        params.maxParticleCount = j["maxParticleCount"].get<uint32_t>();
+        params.maxParticleCount = jsonFile["maxParticleCount"].get<uint32_t>();
     }
 
-    if (j.contains("maxBatchRatio"))
+    if (jsonFile.contains("maxBatchRatio"))
     {
-        params.maxBatchRatio = j["maxBatchRatio"].get<float>();
+        params.maxBatchRatio = jsonFile["maxBatchRatio"].get<float>();
     }
 
-    if (j.contains("initialCooldown"))
+    if (jsonFile.contains("initialCooldown"))
     {
-        params.initialCooldown = j["initialCooldown"].get<uint32_t>();
+        params.initialCooldown = jsonFile["initialCooldown"].get<uint32_t>();
     }
 
-    if (j.contains("cooldown"))
+    if (jsonFile.contains("cooldown"))
     {
-        params.cooldown = j["cooldown"].get<uint32_t>();
+        params.cooldown = jsonFile["cooldown"].get<uint32_t>();
     }
 
-    if (j.contains("splitting"))
+    if (jsonFile.contains("splitting"))
     {
-        auto& splitting = j["splitting"];
+        const auto& splitting = jsonFile["splitting"];
 
         if (splitting.contains("epsilon"))
         {
@@ -247,9 +258,9 @@ void ConfigurationManager::parseRefinementParameters(const json& j)
         }
     }
 
-    if (j.contains("velocity"))
+    if (jsonFile.contains("velocity"))
     {
-        auto& velocity = j["velocity"];
+        const auto& velocity = jsonFile["velocity"];
 
         if (velocity.contains("split") && velocity["split"].contains("minimalSpeedThreshold"))
         {
@@ -262,78 +273,79 @@ void ConfigurationManager::parseRefinementParameters(const json& j)
         }
     }
 
-    if (j.contains("interface"))
+    if (jsonFile.contains("interface"))
     {
-        auto& interface = j["interface"];
+        const auto& interface = jsonFile["interface"];
 
-        if (interface.contains("splittingThresholdRatio"))
+        if (interface.contains("split") && interface["split"].contains("distanceRatioThreshold"))
         {
-            params.interfaceParameters.splittingThresholdRatio = interface["splittingThresholdRatio"].get<float>();
+            params.interfaceParameters.split.distanceRatioThreshold =
+                interface["split"]["distanceRatioThreshold"].get<float>();
         }
 
-        if (interface.contains("mergingThresholdRatio"))
+        if (interface.contains("merge") && interface["merge"].contains("distanceRatioThreshold"))
         {
-            params.interfaceParameters.mergingThresholdRatio = interface["mergingThresholdRatio"].get<float>();
+            params.interfaceParameters.merge.distanceRatioThreshold =
+                interface["merge"]["distanceRatioThreshold"].get<float>();
         }
     }
 
-    if (j.contains("vorticity"))
+    if (jsonFile.contains("vorticity"))
     {
-        auto& vorticity = j["vorticity"];
-
-        if (vorticity.contains("threshold"))
+        const auto& vorticity = jsonFile["vorticity"];
+        if (vorticity.contains("split") && vorticity["split"].contains("minimalVorticityThreshold"))
         {
-            params.vorticity.threshold = vorticity["threshold"].get<float>();
+            params.vorticity.split.minimalVorticityThreshold =
+                vorticity["split"]["minimalVorticityThreshold"].get<float>();
         }
-
-        if (vorticity.contains("scaleFactor"))
+        if (vorticity.contains("merge") && vorticity["merge"].contains("maximalVorticityThreshold"))
         {
-            params.vorticity.scaleFactor = vorticity["scaleFactor"].get<float>();
+            params.vorticity.merge.maximalVorticityThreshold =
+                vorticity["merge"]["maximalVorticityThreshold"].get<float>();
         }
     }
 
-    if (j.contains("curvature"))
+    if (jsonFile.contains("curvature"))
     {
-        auto& curvature = j["curvature"];
-
-        if (curvature.contains("threshold"))
+        const auto& curvature = jsonFile["curvature"];
+        if (curvature.contains("split") && curvature["split"].contains("minimalCurvatureThreshold"))
         {
-            params.curvature.threshold = curvature["threshold"].get<float>();
+            params.curvature.split.minimalCurvatureThreshold =
+                curvature["split"]["minimalCurvatureThreshold"].get<float>();
         }
-
-        if (curvature.contains("scaleFactor"))
+        if (curvature.contains("merge") && curvature["merge"].contains("maximalCurvatureThreshold"))
         {
-            params.curvature.scaleFactor = curvature["scaleFactor"].get<float>();
+            params.curvature.merge.maximalCurvatureThreshold =
+                curvature["merge"]["maximalCurvatureThreshold"].get<float>();
         }
     }
 
     _refinementParams = params;
 }
 
-void ConfigurationManager::parseInitialParameters(const json& j)
+//NOLINTNEXTLINE(readability-function-cognitive-complexity)
+void ConfigurationManager::parseInitialParameters(const json& jsonFile)
 {
     InitialParameters params;
 
-    if (j.contains("liquidVolumeFraction"))
+    if (jsonFile.contains("liquidVolumeFraction"))
     {
-        params.liquidVolumeFraction = j["liquidVolumeFraction"].get<float>();
+        params.liquidVolumeFraction = jsonFile["liquidVolumeFraction"].get<float>();
     }
 
-    if (j.contains("particleCount"))
+    if (jsonFile.contains("particleCount"))
     {
-        if (j["particleCount"].is_array() && j["particleCount"].size() == 3)
+        if (jsonFile["particleCount"].is_array() && jsonFile["particleCount"].size() == 3)
         {
-            // Parse as 3D vector
-            params.particleCount = glm::uvec3(j["particleCount"][0].get<uint32_t>(),
-                                              j["particleCount"][1].get<uint32_t>(),
-                                              j["particleCount"][2].get<uint32_t>());
+            params.particleCount = glm::uvec3(jsonFile["particleCount"][0].get<uint32_t>(),
+                                              jsonFile["particleCount"][1].get<uint32_t>(),
+                                              jsonFile["particleCount"][2].get<uint32_t>());
         }
-        else if (j["particleCount"].is_number())
+        else if (jsonFile["particleCount"].is_number())
         {
-            // For backward compatibility - convert single number to cubed root distribution
-            uint32_t total = j["particleCount"].get<uint32_t>();
-            float cubeRoot = std::pow(total, 1.0f / 3.0f);
-            uint32_t perAxis = static_cast<uint32_t>(std::ceil(cubeRoot));
+            const auto total = jsonFile["particleCount"].get<uint32_t>();
+            const auto cubeRoot = std::pow(total, 1.F / 3.F);
+            const auto perAxis = static_cast<uint32_t>(std::ceil(cubeRoot));
             params.particleCount = glm::uvec3(perAxis, perAxis, perAxis);
             panda::log::Warning("Converting single particleCount value to 3D: {}x{}x{}", perAxis, perAxis, perAxis);
         }
@@ -342,33 +354,34 @@ void ConfigurationManager::parseInitialParameters(const json& j)
     _initialParams = params;
 }
 
-void ConfigurationManager::parseBenchmarkParameters(const json& j)
+//NOLINTNEXTLINE(readability-function-cognitive-complexity)
+void ConfigurationManager::parseBenchmarkParameters(const json& jsonFile)
 {
     BenchmarkParameters params;
 
-    if (j.contains("enabled"))
+    if (jsonFile.contains("enabled"))
     {
-        params.enabled = j["enabled"].get<bool>();
+        params.enabled = jsonFile["enabled"].get<bool>();
     }
 
-    if (j.contains("testCase"))
+    if (jsonFile.contains("testCase"))
     {
-        params.testCase = j["testCase"].get<std::string>();
+        params.testCase = jsonFile["testCase"].get<std::string>();
     }
 
-    if (j.contains("outputPath"))
+    if (jsonFile.contains("outputPath"))
     {
-        params.outputPath = j["outputPath"].get<std::string>();
+        params.outputPath = jsonFile["outputPath"].get<std::string>();
     }
 
-    if (j.contains("reynoldsNumber"))
+    if (jsonFile.contains("reynoldsNumber"))
     {
-        params.reynoldsNumber = j["reynoldsNumber"].get<float>();
+        params.reynoldsNumber = jsonFile["reynoldsNumber"].get<float>();
     }
 
-    if (j.contains("simulations"))
+    if (jsonFile.contains("simulations"))
     {
-        auto& simulations = j["simulations"];
+        const auto& simulations = jsonFile["simulations"];
         if (simulations.contains("coarse") && simulations["coarse"].contains("particleSize"))
         {
             params.coarse.particleSize = simulations["coarse"]["particleSize"].get<float>();
@@ -379,7 +392,7 @@ void ConfigurationManager::parseBenchmarkParameters(const json& j)
         }
         if (simulations.contains("adaptive"))
         {
-            auto& adaptive = simulations["adaptive"];
+            const auto& adaptive = simulations["adaptive"];
 
             if (adaptive.contains("minParticleSize"))
             {
@@ -393,20 +406,20 @@ void ConfigurationManager::parseBenchmarkParameters(const json& j)
         }
     }
 
-    if (j.contains("measurementInterval"))
+    if (jsonFile.contains("measurementInterval"))
     {
-        params.measurementInterval = j["measurementInterval"].get<uint32_t>();
+        params.measurementInterval = jsonFile["measurementInterval"].get<uint32_t>();
     }
 
-    if (j.contains("totalSimulationFrames"))
+    if (jsonFile.contains("totalSimulationFrames"))
     {
-        params.totalSimulationFrames = j["totalSimulationFrames"].get<uint32_t>();
+        params.totalSimulationFrames = jsonFile["totalSimulationFrames"].get<uint32_t>();
     }
 
     // Test case specific parameters
-    if (j.contains("poiseuille"))
+    if (jsonFile.contains("poiseuille"))
     {
-        auto& poiseuille = j["poiseuille"];
+        const auto& poiseuille = jsonFile["poiseuille"];
         if (poiseuille.contains("channelHeight"))
         {
             params.channelHeight = poiseuille["channelHeight"].get<float>();
@@ -421,18 +434,18 @@ void ConfigurationManager::parseBenchmarkParameters(const json& j)
         }
     }
 
-    if (j.contains("taylorGreen"))
+    if (jsonFile.contains("taylorGreen"))
     {
-        auto& taylorGreen = j["taylorGreen"];
+        const auto& taylorGreen = jsonFile["taylorGreen"];
         if (taylorGreen.contains("domainSize"))
         {
             params.domainSize = taylorGreen["domainSize"].get<float>();
         }
     }
 
-    if (j.contains("damBreak"))
+    if (jsonFile.contains("damBreak"))
     {
-        auto& damBreak = j["damBreak"];
+        const auto& damBreak = jsonFile["damBreak"];
         if (damBreak.contains("tankLength"))
         {
             params.tankLength = damBreak["tankLength"].get<float>();
@@ -455,9 +468,9 @@ void ConfigurationManager::parseBenchmarkParameters(const json& j)
         }
     }
 
-    if (j.contains("lidDrivenCavity"))
+    if (jsonFile.contains("lidDrivenCavity"))
     {
-        auto& lidDrivenCavity = j["lidDrivenCavity"];
+        const auto& lidDrivenCavity = jsonFile["lidDrivenCavity"];
         if (lidDrivenCavity.contains("cavitySize"))
         {
             params.cavitySize = lidDrivenCavity["cavitySize"].get<float>();
@@ -467,22 +480,22 @@ void ConfigurationManager::parseBenchmarkParameters(const json& j)
     _benchmarkParams = params;
 }
 
-std::optional<cuda::Simulation::Parameters> ConfigurationManager::getSimulationParameters() const
+auto ConfigurationManager::getSimulationParameters() const -> std::optional<cuda::Simulation::Parameters>
 {
     return _simulationParams;
 }
 
-std::optional<cuda::refinement::RefinementParameters> ConfigurationManager::getRefinementParameters() const
+auto ConfigurationManager::getRefinementParameters() const -> std::optional<cuda::refinement::RefinementParameters>
 {
     return _refinementParams;
 }
 
-std::optional<InitialParameters> ConfigurationManager::getInitialParameters() const
+auto ConfigurationManager::getInitialParameters() const -> std::optional<InitialParameters>
 {
     return _initialParams;
 }
 
-std::optional<BenchmarkParameters> ConfigurationManager::getBenchmarkParameters() const
+auto ConfigurationManager::getBenchmarkParameters() const -> std::optional<BenchmarkParameters>
 {
     return _benchmarkParams;
 }

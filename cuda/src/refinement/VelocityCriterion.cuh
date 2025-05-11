@@ -1,4 +1,3 @@
-// VelocityCriterion.cuh
 #pragma once
 #include "cuda/Simulation.cuh"
 

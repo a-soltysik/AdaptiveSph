@@ -1,4 +1,3 @@
-// InterfaceCriterion.cuh - Simplified header
 #pragma once
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"

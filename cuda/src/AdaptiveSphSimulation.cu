@@ -25,7 +25,6 @@
 namespace sph::cuda
 {
 
-// Template-based getCriterionValues for criteria with grid support
 template <typename CriterionGenerator>
 __global__ void getCriterionValuesWithGrid(ParticlesData particles,
                                            Span<float> splitCriterionValues,
@@ -42,7 +41,6 @@ __global__ void getCriterionValuesWithGrid(ParticlesData particles,
     splitCriterionValues.data[idx] = value;
 }
 
-// Template-based getCriterionValues for criteria without grid support
 template <typename CriterionGenerator>
 __global__ void getCriterionValuesNoGrid(ParticlesData particles,
                                          Span<float> splitCriterionValues,
@@ -180,15 +178,13 @@ auto AdaptiveSphSimulation::getBlocksPerGridForParticles(uint32_t count) const -
 void AdaptiveSphSimulation::performAdaptiveRefinement()
 {
     resetRefinementCounters();
-
-    // Splitting phase (if enabled)
     identifyAndSplitParticles();
     cudaDeviceSynchronize();
     setParticleCount(fromGpu(_refinementData.particlesCount));
-
-    // Merging phase - replace identifyAndMergeParticles with performMerging
     performMerging();
+
     cudaDeviceSynchronize();
+    setParticleCount(fromGpu(_refinementData.particlesCount));
 }
 
 void AdaptiveSphSimulation::resetRefinementCounters() const
@@ -228,7 +224,7 @@ void AdaptiveSphSimulation::identifyAndSplitParticles() const
             getState().grid,
             getParameters());
     }
-    else  // Default to velocity
+    else
     {
         refinement::getCriterionValues<<<SphSimulation::getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(
             getParticles(),
@@ -294,7 +290,7 @@ void AdaptiveSphSimulation::identifyAndMergeParticles() const
             getState().grid,
             getParameters());
     }
-    else  // Default to velocity
+    else
     {
         refinement::getCriterionValues<<<SphSimulation::getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(
             getParticles(),
@@ -363,15 +359,15 @@ void AdaptiveSphSimulation::performMerging()
     mergeConfig.baseParticleMass = getParameters().baseParticleMass;
     mergeConfig.maxMassThreshold = mergeConfig.maxMassRatio * mergeConfig.baseParticleMass;
 
-    const uint32_t currentCount = getParticlesCount();
-    // Allocate enhanced merge data
-    refinement::EnhancedMergeData enhancedData = allocateEnhancedMergeData(currentCount);
-    // Reset counters
+    const auto currentCount = getParticlesCount();
+
+    const auto enhancedData = allocateEnhancedMergeData(currentCount);
+
     cudaMemset(enhancedData.eligibleCount, 0, sizeof(uint32_t));
     cudaMemset(enhancedData.pairCount, 0, sizeof(uint32_t));
-    // Calculate merge criteria (existing code)
+
     calculateMergeCriteria(enhancedData.criterionValues);
-    // Phase 1: Identify eligible particles
+
     identifyEligibleParticles<<<SphSimulation::getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(
         getParticles(),
         enhancedData,
@@ -382,17 +378,14 @@ void AdaptiveSphSimulation::performMerging()
     {
         return;
     }
-
-    // Phase 2: Propose partnerships
     proposePartners<<<getBlocksPerGridForParticles(eligibleCount), getThreadsPerBlock()>>>(getParticles(),
                                                                                            enhancedData,
                                                                                            getState().grid,
                                                                                            getParameters(),
                                                                                            mergeConfig);
-    // Phase 3: Resolve proposals
     resolveProposals<<<SphSimulation::getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(getParticles(),
                                                                                               enhancedData);
-    // Phase 4: Create merge pairs
+
     createMergePairs<<<getBlocksPerGridForParticles(eligibleCount), getThreadsPerBlock()>>>(enhancedData);
     cudaDeviceSynchronize();
     const uint32_t pairCount = fromGpu(enhancedData.pairCount);
@@ -400,59 +393,52 @@ void AdaptiveSphSimulation::performMerging()
     {
         return;
     }
-
-    // Phase 5: Execute merges
     executeMerges<<<getBlocksPerGridForParticles(pairCount), getThreadsPerBlock()>>>(getParticles(),
                                                                                      enhancedData,
                                                                                      getParameters());
-    // Phase 6: Build compaction map
     buildCompactionMap<<<SphSimulation::getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(enhancedData,
                                                                                                 currentCount);
-    // Perform exclusive scan for compaction
     thrust::exclusive_scan(thrust::device,
                            enhancedData.compactionMap.data,
                            enhancedData.compactionMap.data + currentCount,
                            enhancedData.compactionMap.data);
-    // Phase 7: Compact particles
+
     compactParticles<<<SphSimulation::getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(getParticles(),
                                                                                               enhancedData,
                                                                                               currentCount);
-    // Update particle count
     const uint32_t removedCount = fromGpu(&enhancedData.compactionMap.data[currentCount - 1]);
     const uint32_t newCount = currentCount - removedCount;
 
     setParticleCount(newCount);
     cudaMemcpy(_refinementData.particlesCount, &newCount, sizeof(uint32_t), cudaMemcpyHostToDevice);
 
-    // Cleanup
     freeEnhancedMergeData(enhancedData);
 }
 
 refinement::EnhancedMergeData AdaptiveSphSimulation::allocateEnhancedMergeData(uint32_t maxParticleCount) const
 {
     refinement::EnhancedMergeData data;
-    // Allocate criterion values for all particles
+
     cudaMalloc(&data.criterionValues.data, maxParticleCount * sizeof(float));
     data.criterionValues.size = maxParticleCount;
-    // Allocate eligible particles array (worst case: all particles eligible)
+
     cudaMalloc(&data.eligibleParticles.data, maxParticleCount * sizeof(uint32_t));
     data.eligibleParticles.size = maxParticleCount;
-    // Allocate counter for eligible particles
+
     cudaMalloc(&data.eligibleCount, sizeof(uint32_t));
-    // Allocate merge states for all particles
+
     cudaMalloc(&data.states.data, maxParticleCount * sizeof(refinement::MergeState));
     data.states.size = maxParticleCount;
-    // Allocate merge pairs (worst case: half of particles form pairs)
+
     const size_t maxPairs = maxParticleCount / 2;
     cudaMalloc(&data.pairs.data, maxPairs * sizeof(refinement::MergePair));
     data.pairs.size = maxPairs;
-    // Allocate pair counter
+
     cudaMalloc(&data.pairCount, sizeof(uint32_t));
-    // Allocate compaction map
+
     cudaMalloc(&data.compactionMap.data, maxParticleCount * sizeof(uint32_t));
     data.compactionMap.size = maxParticleCount;
 
-    // Allocate new particle count
     cudaMalloc(&data.newParticleCount, sizeof(uint32_t));
 
     return data;
@@ -488,7 +474,7 @@ void AdaptiveSphSimulation::calculateMergeCriteria(Span<float> criterionValues) 
             getState().grid,
             getParameters());
     }
-    else  // Default to velocity
+    else
     {
         refinement::getCriterionValues<<<SphSimulation::getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(
             getParticles(),
@@ -508,5 +494,4 @@ void AdaptiveSphSimulation::freeEnhancedMergeData(const refinement::EnhancedMerg
     cudaFree(data.compactionMap.data);
     cudaFree(data.newParticleCount);
 }
-
 }
