@@ -1,13 +1,13 @@
-// ConfigurationManager.hpp
 #pragma once
 
+#include <cstdint>
 #include <cuda/Simulation.cuh>
 #include <cuda/refinement/RefinementParameters.cuh>
-#include <nlohmann/json.hpp>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_uint3.hpp>
+#include <nlohmann/json_fwd.hpp>
 #include <optional>
 #include <string>
-
-#include "glm/vec3.hpp"
 
 namespace sph
 {
@@ -26,13 +26,13 @@ struct BenchmarkParameters
 
     struct SimulationConfig
     {
-        float particleSize = 0.05f;
+        float particleSize = 0.05F;
     };
 
     struct AdaptiveConfig
     {
-        float minParticleSize = 0.025f;
-        float maxParticleSize = 0.05f;
+        float minParticleSize = 0.025F;
+        float maxParticleSize = 0.05F;
     };
 
     SimulationConfig coarse;
@@ -41,42 +41,40 @@ struct BenchmarkParameters
     uint32_t measurementInterval = 20;
     uint32_t totalSimulationFrames = 1000;
     // Test case specific parameters
-    float reynoldsNumber = 100.0f;
+    float reynoldsNumber = 100.0F;
     // Poiseuille flow parameters
-    float channelHeight = 0.1f;
-    float channelLength = 0.5f;
-    float channelWidth = 0.1f;
+    float channelHeight = 0.1F;
+    float channelLength = 0.5F;
+    float channelWidth = 0.1F;
     // Taylor-Green parameters
-    float domainSize = 1.0f;
+    float domainSize = 1.0F;
 
     // Dam break parameters
-    float tankLength = 4.0f;
-    float tankHeight = 2.0f;
-    float tankWidth = 1.0f;
-    float waterColumnWidth = 1.0f;
-    float waterColumnHeight = 1.0f;
+    float tankLength = 4.0F;
+    float tankHeight = 2.0F;
+    float tankWidth = 1.0F;
+    float waterColumnWidth = 1.0F;
+    float waterColumnHeight = 1.0F;
 
     // Lid-driven cavity parameters
-    float cavitySize = 1.0f;
+    float cavitySize = 1.0F;
 };
 
 class ConfigurationManager
 {
 public:
-    ConfigurationManager() = default;
-    ~ConfigurationManager() = default;
     auto loadFromFile(const std::string& filePath) -> bool;
     auto loadFromString(const std::string& jsonString) -> bool;
-    [[nodiscard]] std::optional<cuda::Simulation::Parameters> getSimulationParameters() const;
-    [[nodiscard]] std::optional<cuda::refinement::RefinementParameters> getRefinementParameters() const;
-    [[nodiscard]] std::optional<InitialParameters> getInitialParameters() const;
-    [[nodiscard]] std::optional<BenchmarkParameters> getBenchmarkParameters() const;
+    [[nodiscard]] auto getSimulationParameters() const -> std::optional<cuda::Simulation::Parameters>;
+    [[nodiscard]] auto getRefinementParameters() const -> std::optional<cuda::refinement::RefinementParameters>;
+    [[nodiscard]] auto getInitialParameters() const -> std::optional<InitialParameters>;
+    [[nodiscard]] auto getBenchmarkParameters() const -> std::optional<BenchmarkParameters>;
 
 private:
-    void parseSimulationParameters(const nlohmann::json& j);
-    void parseRefinementParameters(const nlohmann::json& j);
-    void parseInitialParameters(const nlohmann::json& j);
-    void parseBenchmarkParameters(const nlohmann::json& j);
+    void parseSimulationParameters(const nlohmann::json& jsonFile);
+    void parseRefinementParameters(const nlohmann::json& jsonFile);
+    void parseInitialParameters(const nlohmann::json& jsonFile);
+    void parseBenchmarkParameters(const nlohmann::json& jsonFile);
 
     std::optional<cuda::Simulation::Parameters> _simulationParams;
     std::optional<cuda::refinement::RefinementParameters> _refinementParams;

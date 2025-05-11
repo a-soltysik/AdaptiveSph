@@ -1,7 +1,10 @@
 #pragma once
 #include <panda/utils/Signals.h>
 
+#include <cstdint>
 #include <cuda/Simulation.cuh>
+#include <glm/ext/vector_float4.hpp>
+#include <vector>
 
 namespace sph
 {
@@ -19,8 +22,8 @@ public:
 
     explicit SimulationDataGui(const Window& window, const cuda::Simulation::Parameters& simulationData);
 
-    auto getParameters() const -> const cuda::Simulation::Parameters&;
-    auto setAverageNeighbourCount(uint32_t neighbourCount) -> void;
+    [[nodiscard]] auto getParameters() const -> const cuda::Simulation::Parameters&;
+    auto setAverageNeighbourCount(float neighbourCount) -> void;
     void setDensityDeviation(DensityDeviation densityDeviation);
 
 private:
@@ -34,8 +37,7 @@ private:
     panda::utils::signals::BeginGuiRender::ReceiverT _beginGuiReceiver;
     cuda::Simulation::Parameters _simulationData;
     const Window& _window;
-    std::function<uint32_t(uint32_t)> _threadsPerBlockSlider;
-    uint32_t _averageNeighbourCount = 0;
+    float _averageNeighbourCount = 0.F;
     DensityDeviation _densityDeviation {};
 };
 }

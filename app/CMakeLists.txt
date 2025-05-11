@@ -13,7 +13,6 @@ target_sources(
         gui/SimulationDataGui.cpp
         utils/FrameTimeManager.cpp
         utils/ConfigurationManager.cpp
-        benchmark/BenchmarkCase.cpp
         App.cpp)
 
 target_link_libraries(

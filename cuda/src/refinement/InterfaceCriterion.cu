@@ -40,11 +40,11 @@ __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles,
     const auto position = particles.positions[id];
     const auto minDistances = calculateMinSurfaceDistance(position, simulationData.domain);
     const auto domainSize = simulationData.domain.max - simulationData.domain.min;
-    const auto splitThresholds = _interface.splittingThresholdRatio * domainSize;
+    const auto splitThresholds = _interface.split.distanceRatioThreshold * domainSize;
     const auto normalizedDistances = minDistances / splitThresholds;
     const auto minNormalizedDistance = glm::compMin(normalizedDistances);
 
-    return 1.F - minNormalizedDistance;
+    return 1.0f - minNormalizedDistance;
 }
 
 __device__ float MergeCriterionGenerator::computePriorityScore(float distance) const
@@ -64,13 +64,11 @@ __device__ auto MergeCriterionGenerator::operator()(ParticlesData particles,
     const auto position = particles.positions[id];
     const auto minDistances = calculateMinSurfaceDistance(position, simulationData.domain);
     const auto domainSize = simulationData.domain.max - simulationData.domain.min;
-    const auto mergeThresholds = _interface.mergingThresholdRatio * domainSize;
+    const auto mergeThresholds = _interface.merge.distanceRatioThreshold * domainSize;
     const auto normalizedDistances = minDistances / mergeThresholds;
-
     const auto minNormalizedDistance = glm::compMin(normalizedDistances);
 
-    static constexpr auto epsilon = 1e-6f;
-    return 1.0f - 1.0f / glm::max(minNormalizedDistance, epsilon);
+    return minNormalizedDistance - 1.0f;
 }
 
 }

@@ -3,16 +3,17 @@
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
 #include <imgui.h>
-#include <panda/Logger.h>
 #include <panda/utils/Signals.h>
 #include <vulkan/vulkan_core.h>
 
-#include <array>
+#include <algorithm>
+#include <cfloat>
 #include <chrono>
 #include <cstdint>
 #include <cuda/Simulation.cuh>
-#include <glm/common.hpp>
-#include <glm/exponential.hpp>
+#include <glm/ext/vector_float4.hpp>
+#include <utility>
+#include <vector>
 
 #include "Window.hpp"
 
@@ -21,16 +22,7 @@ namespace sph
 
 SimulationDataGui::SimulationDataGui(const Window& window, const cuda::Simulation::Parameters& simulationData)
     : _simulationData {simulationData},
-      _window {window},
-      _threadsPerBlockSlider {[rawThreads = static_cast<int>(
-                                   glm::round(glm::log2(static_cast<float>(_simulationData.threadsPerBlock) / 32.F)))](
-                                  uint32_t threadsPerBlock) mutable {
-          static constexpr auto powers = std::array {"32", "64", "128", "256", "512", "1024"};
-
-          rawThreads = static_cast<int>(glm::round(glm::log2(static_cast<float>(threadsPerBlock) / 32.F)));
-          ImGui::SliderInt("Threads per block", &rawThreads, 0, 5, powers[static_cast<uint32_t>(rawThreads)]);
-          return 32U << static_cast<uint32_t>(rawThreads);
-      }}
+      _window {window}
 {
     _beginGuiReceiver = panda::utils::signals::beginGuiRender.connect([this](auto data) {
         ImGui_ImplVulkan_NewFrame();
@@ -65,15 +57,6 @@ auto SimulationDataGui::render() -> void
     ImGui::DragFloat("Viscosity constant", &_simulationData.viscosityConstant, 0.001F, 0.001F, 1.F);
     ImGui::DragFloat("Max speed", &_simulationData.maxVelocity, 0.1F, 0.1F, 10.F);
     ImGui::DragFloat3("Translation", &translation[0], 0.1F, -5.F, 5.F);
-    const auto newThreadsPerBlock = _threadsPerBlockSlider(_simulationData.threadsPerBlock);
-
-    if (newThreadsPerBlock != _simulationData.threadsPerBlock)
-    {
-        panda::log::Info("Number of threads per blocked has changed from {} to {}",
-                         _simulationData.threadsPerBlock,
-                         newThreadsPerBlock);
-    }
-    _simulationData.threadsPerBlock = newThreadsPerBlock;
 
     _simulationData.domain = cuda::Simulation::Parameters::Domain {}.fromTransform(translation, scale);
     ImGui::End();
@@ -114,29 +97,16 @@ auto SimulationDataGui::render() -> void
 void SimulationDataGui::displayAverageNeighborCount(float averageNeighbors)
 {
     ImGui::Begin("Simulation Debug Info");
-    ImGui::Text("Average Neighbors: %.2f", averageNeighbors);
-
-    // Add color coding for quick visual feedback
-    ImGui::SameLine();
-    if (averageNeighbors < 15.0f)
-    {
-        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "(Low)");
-    }
-    else if (averageNeighbors > 60.0f)
-    {
-        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "(High)");
-    }
-    else
-    {
-        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "(Good)");
-    }
-
+    //NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
+    ImGui::Text("Average Neighbors: %.2f", static_cast<double>(averageNeighbors));
     ImGui::End();
 }
 
+//NOLINTBEGIN(bugprone-easily-swappable-parameters)
 void SimulationDataGui::displayDensityStatistics(const std::vector<glm::vec4>& densityDeviations,
                                                  uint32_t particleCount,
                                                  float restDensity)
+//NOLINTEND(bugprone-easily-swappable-parameters)
 {
     if (particleCount == 0)
     {
@@ -145,119 +115,49 @@ void SimulationDataGui::displayDensityStatistics(const std::vector<glm::vec4>& d
 
     ImGui::Begin("Density Statistics");
 
-    // Calculate min, max, and average deviation
-    float minDeviation = FLT_MAX;
-    float maxDeviation = -FLT_MAX;
-    float avgDeviation = 0.0f;
-    int underDensityCount = 0;
-    int overDensityCount = 0;
+    double minDeviation = DBL_MAX;
+    double maxDeviation = -DBL_MAX;
+    double avgDeviation = 0.;
+    uint32_t underDensityCount = 0;
+    uint32_t overDensityCount = 0;
 
     for (uint32_t i = 0; i < particleCount; i++)
     {
-        float deviation = densityDeviations[i].x;
+        const auto deviation = static_cast<double>(densityDeviations[i].x);
         minDeviation = std::min(minDeviation, deviation);
         maxDeviation = std::max(maxDeviation, deviation);
         avgDeviation += deviation;
 
-        if (deviation < -0.1f)
+        if (deviation < -0.1)
         {
             underDensityCount++;
         }
-        if (deviation > 0.1f)
+        if (deviation > 0.1)
         {
             overDensityCount++;
         }
     }
 
-    avgDeviation /= static_cast<float>(particleCount);
+    avgDeviation /= static_cast<double>(particleCount);
 
-    // Display statistics
-    ImGui::Text("Density Deviation from Rest Density (%.1f):", restDensity);
-    ImGui::Text("Min: %.2f%% (%.1f)", minDeviation * 100.0f, restDensity * (1.0f + minDeviation));
-    ImGui::Text("Max: %.2f%% (%.1f)", maxDeviation * 100.0f, restDensity * (1.0f + maxDeviation));
-    ImGui::Text("Avg: %.2f%% (%.1f)", avgDeviation * 100.0f, restDensity * (1.0f + avgDeviation));
+    //NOLINTBEGIN(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
+    ImGui::Text("Density Deviation from Rest Density (%.1f):", static_cast<double>(restDensity));
+    ImGui::Text("Min: %.2f%% (%.1f)", minDeviation * 100.0, static_cast<double>(restDensity) * (1.0 + minDeviation));
+    ImGui::Text("Max: %.2f%% (%.1f)", maxDeviation * 100.0, static_cast<double>(restDensity) * (1.0 + maxDeviation));
+    ImGui::Text("Avg: %.2f%% (%.1f)", avgDeviation * 100.0, static_cast<double>(restDensity) * (1.0 + avgDeviation));
 
     // Display histogram
     ImGui::Text("Deviation Distribution:");
-    ImGui::Text("Under Density (<-10%%): %d particles (%.1f%%)",
+    ImGui::Text("Under Density (<-10%%): %u particles (%.1f%%)",
                 underDensityCount,
-                100.0f * underDensityCount / particleCount);
-    ImGui::Text("Normal Density (±10%%): %d particles (%.1f%%)",
+                100.0 * underDensityCount / particleCount);
+    ImGui::Text("Normal Density (±10%%): %u particles (%.1f%%)",
                 particleCount - underDensityCount - overDensityCount,
-                100.0f * (particleCount - underDensityCount - overDensityCount) / particleCount);
-    ImGui::Text("Over Density (>+10%%): %d particles (%.1f%%)",
+                100.0 * (particleCount - underDensityCount - overDensityCount) / particleCount);
+    ImGui::Text("Over Density (>+10%%): %u particles (%.1f%%)",
                 overDensityCount,
-                100.0f * overDensityCount / particleCount);
-
-    // Create a color bar to visualize the range
-    const float barWidth = ImGui::GetContentRegionAvail().x;
-    const float barHeight = 20.0f;
-    const ImVec2 barPos = ImGui::GetCursorScreenPos();
-
-    ImDrawList* drawList = ImGui::GetWindowDrawList();
-
-    // Draw gradient bar
-    for (int i = 0; i < barWidth; i++)
-    {
-        float t = static_cast<float>(i) / barWidth;
-        float deviation = minDeviation + t * (maxDeviation - minDeviation);
-
-        ImColor color;
-        if (deviation < -0.2f)
-        {
-            color = ImColor(0.0f, 0.0f, 1.0f);  // Blue for very low density
-        }
-        else if (deviation < -0.1f)
-        {
-            color = ImColor(0.0f, 0.5f + (deviation + 0.2f) * 5.0f, 1.0f);  // Cyan for low density
-        }
-        else if (deviation < 0.1f)
-        {
-            color = ImColor(0.0f, 1.0f, 0.0f);  // Green for normal density
-        }
-        else if (deviation < 0.2f)
-        {
-            color = ImColor(1.0f, 1.0f - (deviation - 0.1f) * 10.0f, 0.0f);  // Yellow to orange for high density
-        }
-        else
-        {
-            color = ImColor(1.0f, 0.0f, 0.0f);  // Red for very high density
-        }
-
-        drawList->AddRectFilled(ImVec2(barPos.x + i, barPos.y), ImVec2(barPos.x + i + 1, barPos.y + barHeight), color);
-    }
-
-    // Add labels to the color bar
-    drawList->AddText(ImVec2(barPos.x, barPos.y + barHeight + 5),
-                      ImColor(1.0f, 1.0f, 1.0f),
-                      (std::to_string(static_cast<int>(minDeviation * 100)) + "%").c_str());
-    drawList->AddText(ImVec2(barPos.x + barWidth - 40, barPos.y + barHeight + 5),
-                      ImColor(1.0f, 1.0f, 1.0f),
-                      (std::to_string(static_cast<int>(maxDeviation * 100)) + "%").c_str());
-    drawList->AddText(ImVec2(barPos.x + barWidth / 2 - 20, barPos.y + barHeight + 5),
-                      ImColor(1.0f, 1.0f, 1.0f),
-                      (std::to_string(static_cast<int>(avgDeviation * 100)) + "%").c_str());
-
-    ImGui::Dummy(ImVec2(0, barHeight + 20));  // Add space after the bar
-
-    // Particle coloring legend
-    ImGui::Separator();
-    ImGui::Text("Particle Color Legend:");
-
-    const float legendColorSize = 20.0f;
-    auto drawColorLabel = [&](const char* label, ImColor color) {
-        ImVec2 p = ImGui::GetCursorScreenPos();
-        drawList->AddRectFilled(p, ImVec2(p.x + legendColorSize, p.y + legendColorSize), color);
-        ImGui::Dummy(ImVec2(legendColorSize, legendColorSize));
-        ImGui::SameLine();
-        ImGui::Text("%s", label);
-    };
-
-    drawColorLabel("Very Low Density (<-20%)", ImColor(0.0f, 0.0f, 1.0f));
-    drawColorLabel("Low Density (-20% to -10%)", ImColor(0.0f, 0.75f, 1.0f));
-    drawColorLabel("Normal Density (±10%)", ImColor(0.0f, 1.0f, 0.0f));
-    drawColorLabel("High Density (10% to 20%)", ImColor(1.0f, 0.5f, 0.0f));
-    drawColorLabel("Very High Density (>20%)", ImColor(1.0f, 0.0f, 0.0f));
+                100.0 * overDensityCount / particleCount);
+    //NOLINTEND(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
 
     ImGui::End();
 }
@@ -267,13 +167,13 @@ auto SimulationDataGui::getParameters() const -> const cuda::Simulation::Paramet
     return _simulationData;
 }
 
-auto SimulationDataGui::setAverageNeighbourCount(uint32_t neighbourCount) -> void
+auto SimulationDataGui::setAverageNeighbourCount(float neighbourCount) -> void
 {
     _averageNeighbourCount = neighbourCount;
 }
 
 void SimulationDataGui::setDensityDeviation(DensityDeviation densityDeviation)
 {
-    _densityDeviation = densityDeviation;
+    _densityDeviation = std::move(densityDeviation);
 }
 }

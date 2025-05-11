@@ -1,4 +1,3 @@
-// VelocityCriterion.cu
 #include <cfloat>
 #include <glm/ext/quaternion_geometric.hpp>
 #include <glm/ext/vector_float3.hpp>
@@ -12,13 +11,13 @@ __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles, uin
 {
     if (particles.masses[id] < _minimalMass)
     {
-        return FLT_MAX;
+        return -1;
     }
     const auto velocity = particles.velocities[id];
     const auto velocityMagnitude = glm::length(glm::vec3(velocity));
     if (velocityMagnitude < _split.minimalSpeedThreshold)
     {
-        return FLT_MAX;
+        return -1;
     }
     return velocityMagnitude;
 }
@@ -27,15 +26,18 @@ __device__ auto MergeCriterionGenerator::operator()(ParticlesData particles, uin
 {
     if (particles.masses[id] > _maximalMass)
     {
-        return FLT_MAX;
+        return -1;
     }
+
     const auto velocity = particles.velocities[id];
     const auto velocityMagnitude = glm::length(glm::vec3(velocity));
-    if (velocityMagnitude > _merge.maximalSpeedThreshold)
+
+    if (velocityMagnitude < _merge.maximalSpeedThreshold)
     {
-        return FLT_MAX;
+        return velocityMagnitude / _merge.maximalSpeedThreshold;
     }
-    return velocityMagnitude;
+
+    return -1;
 }
 
 }

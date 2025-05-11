@@ -1,7 +1,6 @@
 #include <device_atomic_functions.h>
 
 #include <array>
-#include <cstdint>
 #include <glm/exponential.hpp>
 #include <glm/geometric.hpp>
 
@@ -41,6 +40,34 @@ __device__ auto getIcosahedronVertices() -> std::array<glm::vec3, 12>
         glm::vec3 {-detail::phi * detail::invnorm, detail::invnorm,                0                             },
         glm::vec3 {-detail::phi * detail::invnorm, -detail::invnorm,               0                             }
     };
+}
+
+__device__ float calculateMergedSmoothingLength(const glm::vec4& posA,
+                                                float massA,
+                                                float hA,
+                                                const glm::vec4& posB,
+                                                float massB,
+                                                float hB,
+                                                const glm::vec4& mergedPos,
+                                                float mergedMass,
+                                                float weightNormal = 0.9f,
+                                                float weightNear = .1f)
+{
+    const float distA = glm::length(glm::vec3(posA - mergedPos));
+    const float distB = glm::length(glm::vec3(posB - mergedPos));
+
+    const float W_MA = device::densityKernel(distA, hA);
+    const float W_MB = device::densityKernel(distB, hB);
+
+    const float denomNormal = massA * W_MA + massB * W_MB;
+    const float W_MA_near = device::nearDensityKernel(distA, hA);
+    const float W_MB_near = device::nearDensityKernel(distB, hB);
+    const float denomNear = massA * W_MA_near + massB * W_MB_near;
+
+    const float h_normal = cbrtf((16.0f * glm::pi<float>() * mergedMass) / (21.f * denomNormal));
+    const float h_near = cbrtf((15.0f * mergedMass) / (glm::pi<float>() * denomNear));
+
+    return (weightNormal * h_normal + weightNear * h_near) / 2.F;  //is better with 2
 }
 
 __global__ void splitParticles(ParticlesData particles,
@@ -105,52 +132,51 @@ __global__ void mergeParticles(ParticlesData particles,
     }
     const auto keepIdx = refinementData.merge.particlesIdsToMerge.first.data[idx];
     const auto removeIdx = refinementData.merge.particlesIdsToMerge.second.data[idx];
-
-    // Check if this merge pair was invalidated
     if (keepIdx == UINT_MAX || removeIdx == UINT_MAX)
     {
         return;
     }
-
-    // Validate indices
     if (keepIdx == removeIdx || keepIdx >= particles.particleCount || removeIdx >= particles.particleCount)
     {
         return;
     }
 
-    // Verify both particles are properly marked
     if (refinementData.merge.removalFlags.data[keepIdx] != RefinementData::RemovalState::Keep ||
         refinementData.merge.removalFlags.data[removeIdx] != RefinementData::RemovalState::Remove)
     {
         return;
     }
 
-    // Perform atomic mass addition to prevent race conditions in multiple merges
     const float removeMass = particles.masses[removeIdx];
     const float addedMass = atomicAdd(&particles.masses[keepIdx], removeMass);
-    // If this was the first addition (original mass), perform the full merge
     if (addedMass == particles.masses[keepIdx] - removeMass)
     {
         const auto positions = std::pair {particles.positions[keepIdx], particles.positions[removeIdx]};
         const auto velocities = std::pair {particles.velocities[keepIdx], particles.velocities[removeIdx]};
+        const auto smoothingRadiuses =
+            std::pair {particles.smoothingRadiuses[keepIdx], particles.smoothingRadiuses[removeIdx]};
         const auto masses = std::pair {addedMass, removeMass};
         const float newMass = addedMass + removeMass;
-        // Use base values from simulation parameters for consistent sizing
+
         const float newRadius =
             simulationData.baseParticleRadius * powf(newMass / simulationData.baseParticleMass, 1.0f / 3.0f);
         const auto newPosition = (masses.first * positions.first + masses.second * positions.second) / newMass;
         const auto newVelocity = (masses.first * velocities.first + masses.second * velocities.second) / newMass;
-        // Update particle properties
+
         particles.positions[keepIdx] = newPosition;
         particles.predictedPositions[keepIdx] = newPosition;
         particles.velocities[keepIdx] = newVelocity;
         particles.radiuses[keepIdx] = newRadius;
 
-        // Recalculate smoothing radius based on new mass
-        const float factor = powf(newMass / simulationData.baseParticleMass, 1.0f / 3.0f);
-        particles.smoothingRadiuses[keepIdx] = simulationData.baseSmoothingRadius * factor;
+        particles.smoothingRadiuses[keepIdx] = calculateMergedSmoothingLength(positions.first,
+                                                                              masses.first,
+                                                                              smoothingRadiuses.first,
+                                                                              positions.second,
+                                                                              masses.second,
+                                                                              smoothingRadiuses.second,
+                                                                              newPosition,
+                                                                              newMass);
 
-        // Reset density values
         particles.densities[keepIdx] = 0.0f;
         particles.nearDensities[keepIdx] = 0.0f;
         particles.pressures[keepIdx] = 0.0f;
@@ -168,7 +194,6 @@ __global__ void validateMergePairs(RefinementData refinementData, uint32_t parti
     const auto keepIdx = refinementData.merge.particlesIdsToMerge.first.data[idx];
     const auto removeIdx = refinementData.merge.particlesIdsToMerge.second.data[idx];
 
-    // Invalidate any pairs that don't have proper marking
     if (keepIdx == UINT_MAX || removeIdx == UINT_MAX || keepIdx >= particleCount || removeIdx >= particleCount ||
         refinementData.merge.removalFlags.data[keepIdx] != RefinementData::RemovalState::Keep ||
         refinementData.merge.removalFlags.data[removeIdx] != RefinementData::RemovalState::Remove)
@@ -277,9 +302,7 @@ __global__ void updateParticleCount(RefinementData refinementData, uint32_t part
 {
     if (blockIdx.x == 0 && threadIdx.x == 0)
     {
-        // Use the prefix sum result for accurate count
         uint32_t removedCount = refinementData.merge.prefixSums.data[particleCount - 1];
-        // Check the last particle's removal flag
         if (refinementData.merge.removalFlags.data[particleCount - 1] == RefinementData::RemovalState::Remove)
         {
             removedCount++;
@@ -298,8 +321,6 @@ __global__ void markPotentialMerges(ParticlesData particles, RefinementData refi
     }
     const auto first = refinementData.merge.particlesIdsToMerge.first.data[idx];
     const auto second = refinementData.merge.particlesIdsToMerge.second.data[idx];
-
-    // Invalidate the merge pair initially
     refinementData.merge.particlesIdsToMerge.first.data[idx] = UINT_MAX;
     refinementData.merge.particlesIdsToMerge.second.data[idx] = UINT_MAX;
 
@@ -310,45 +331,36 @@ __global__ void markPotentialMerges(ParticlesData particles, RefinementData refi
 
     const auto keepIdx = min(first, second);
     const auto removeIdx = max(first, second);
-
-    // Try to mark keepIdx as Keep (value 1)
     const auto keepResult = atomicCAS(reinterpret_cast<int*>(&refinementData.merge.removalFlags.data[keepIdx]),
                                       static_cast<int>(RefinementData::RemovalState::Default),
                                       static_cast<int>(RefinementData::RemovalState::Keep));
     if (keepResult != static_cast<int>(RefinementData::RemovalState::Default))
     {
-        // keepIdx was already marked, abort this merge
         return;
     }
-
-    // Try to mark removeIdx as Remove (value 2)
     const auto removeResult = atomicCAS(reinterpret_cast<int*>(&refinementData.merge.removalFlags.data[removeIdx]),
                                         static_cast<int>(RefinementData::RemovalState::Default),
                                         static_cast<int>(RefinementData::RemovalState::Remove));
 
     if (removeResult != static_cast<int>(RefinementData::RemovalState::Default))
     {
-        // removeIdx was already marked, revert keepIdx and abort
         atomicExch(reinterpret_cast<int*>(&refinementData.merge.removalFlags.data[keepIdx]),
                    static_cast<int>(RefinementData::RemovalState::Default));
         return;
     }
 
-    // Both marks successful, validate the merge pair
     refinementData.merge.particlesIdsToMerge.first.data[idx] = keepIdx;
     refinementData.merge.particlesIdsToMerge.second.data[idx] = removeIdx;
 }
 
 __device__ float computeMergeScore(float distance, float neighborMass, float neighborCriterion)
 {
-    // Combine multiple factors for stable selection
-    const float distanceWeight = 0.6f;
-    const float massWeight = 0.2f;
-    const float criterionWeight = 0.2f;
-    // Normalize factors
-    const float normalizedDistance = distance / 1.0f;            // Assuming max distance of 1.0
-    const float normalizedMass = neighborMass / 10.0f;           // Assuming max mass of 10.0
-    const float normalizedCriterion = 1.0f - neighborCriterion;  // Invert so lower is better
+    const float distanceWeight = 0.8f;
+    const float massWeight = 0.1f;
+    const float criterionWeight = 0.1f;
+    const float normalizedDistance = distance / 1.0f;
+    float normalizedMass = neighborMass / 10.0f;
+    const float normalizedCriterion = 1.0f - neighborCriterion;
     return distanceWeight * normalizedDistance + massWeight * normalizedMass + criterionWeight * normalizedCriterion;
 }
 
@@ -368,20 +380,18 @@ __global__ void proposePartners(ParticlesData particles,
     const auto position = particles.positions[particleId];
     auto bestCandidate = UINT_MAX;
     auto bestScore = FLT_MAX;
-    // Search for nearest eligible neighbor
+
     forEachNeighbour(position, simulationData, grid, [&](const auto neighborIdx) {
         if (neighborIdx == particleId)
         {
             return;
         }
 
-        // Check if neighbor is eligible and available
         if (mergeData.states.data[neighborIdx].status != MergeState::Status::Available)
         {
             return;
         }
 
-        // Use configurable threshold instead of hardcoded value
         if (particles.masses[neighborIdx] > mergeConfig.maxMassThreshold)
         {
             return;
@@ -391,8 +401,7 @@ __global__ void proposePartners(ParticlesData particles,
         const auto dist = glm::length(glm::vec3(neighborPos - position));
         if (dist < particles.smoothingRadiuses[particleId])
         {
-            // Define score function for deterministic selection
-            float score =
+            const auto score =
                 computeMergeScore(dist, particles.masses[neighborIdx], mergeData.criterionValues.data[neighborIdx]);
             if (score < bestScore)
             {
@@ -404,7 +413,6 @@ __global__ void proposePartners(ParticlesData particles,
 
     if (bestCandidate != UINT_MAX)
     {
-        // Atomically propose partnership
         auto expected = MergeState::Status::Available;
         if (atomicCAS(reinterpret_cast<uint32_t*>(&mergeData.states.data[particleId].status),
                       static_cast<uint32_t>(expected),
@@ -430,12 +438,11 @@ __global__ void resolveProposals(ParticlesData particles, EnhancedMergeData merg
     }
 
     const auto partnerId = mergeData.states.data[idx].partner;
-    // Check for mutual proposal
+
     bool isMutualProposal = false;
     bool isLowerIndex = false;
     if (partnerId < particles.particleCount && mergeData.states.data[partnerId].status == MergeState::Status::Proposing)
     {
-        // Use atomic load to ensure consistency
         uint32_t partnerPartner = atomicAdd(&mergeData.states.data[partnerId].partner, 0);
         if (partnerPartner == idx)
         {
@@ -446,7 +453,6 @@ __global__ void resolveProposals(ParticlesData particles, EnhancedMergeData merg
 
     if (isMutualProposal && isLowerIndex)
     {
-        // Atomic state transition for thread safety
         auto expected = MergeState::Status::Proposing;
         auto desired = MergeState::Status::Accepted;
 
@@ -454,15 +460,12 @@ __global__ void resolveProposals(ParticlesData particles, EnhancedMergeData merg
                       static_cast<uint32_t>(expected),
                       static_cast<uint32_t>(desired)) == static_cast<uint32_t>(expected))
         {
-            // Successfully claimed acceptance, now mark partner
             atomicExch(reinterpret_cast<uint32_t*>(&mergeData.states.data[partnerId].status),
                        static_cast<uint32_t>(MergeState::Status::Paired));
         }
     }
     else if (!isMutualProposal)
     {
-        // Non-mutual proposals need additional handling
-        // Reset status to Available for next iteration
         atomicExch(reinterpret_cast<uint32_t*>(&mergeData.states.data[idx].status),
                    static_cast<uint32_t>(MergeState::Status::Available));
     }
@@ -475,11 +478,7 @@ __global__ void identifyEligibleParticles(ParticlesData particles, EnhancedMerge
     {
         return;
     }
-
-    // Initialize state
     mergeData.states.data[idx] = {MergeState::Status::Available, UINT_MAX, FLT_MAX};
-
-    // Check eligibility
     if (particles.masses[idx] <= maxMass && mergeData.criterionValues.data[idx] > 0.0f)
     {
         const auto pos = atomicAdd(mergeData.eligibleCount, 1);
@@ -524,35 +523,32 @@ __global__ void executeMerges(ParticlesData particles,
 
     const auto keepIdx = pair.first;
     const auto removeIdx = pair.second;
-    // Load particle data
+
     const auto pos1 = particles.positions[keepIdx];
     const auto pos2 = particles.positions[removeIdx];
     const auto vel1 = particles.velocities[keepIdx];
     const auto vel2 = particles.velocities[removeIdx];
     const auto mass1 = particles.masses[keepIdx];
     const auto mass2 = particles.masses[removeIdx];
-    // Calculate merged properties
+
     const float newMass = mass1 + mass2;
     const auto newPosition = (mass1 * pos1 + mass2 * pos2) / newMass;
     const auto newVelocity = (mass1 * vel1 + mass2 * vel2) / newMass;
-    // Volume-preserving radius calculation
+
     const float volumeRatio = newMass / simulationData.baseParticleMass;
     const float newRadius = simulationData.baseParticleRadius * powf(volumeRatio, 1.0f / 3.0f);
     const float newSmoothingRadius = simulationData.baseSmoothingRadius * powf(volumeRatio, 1.0f / 3.0f);
-    // Update kept particle
+
     particles.positions[keepIdx] = newPosition;
     particles.predictedPositions[keepIdx] = newPosition;
     particles.velocities[keepIdx] = newVelocity;
     particles.masses[keepIdx] = newMass;
     particles.radiuses[keepIdx] = newRadius;
     particles.smoothingRadiuses[keepIdx] = newSmoothingRadius;
-
-    // Reset density values
     particles.densities[keepIdx] = 0.0f;
     particles.nearDensities[keepIdx] = 0.0f;
     particles.pressures[keepIdx] = 0.0f;
 
-    // Mark for removal
     mergeData.states.data[removeIdx].status = MergeState::Status::Paired;
 }
 
@@ -564,7 +560,6 @@ __global__ void buildCompactionMap(EnhancedMergeData mergeData, uint32_t particl
         return;
     }
 
-    // Mark particles for removal (1 if removed, 0 if kept)
     mergeData.compactionMap.data[idx] = (mergeData.states.data[idx].status == MergeState::Status::Paired) ? 1 : 0;
 }
 
@@ -581,7 +576,6 @@ __global__ void compactParticles(ParticlesData particles, EnhancedMergeData merg
         const auto newIdx = idx - mergeData.compactionMap.data[idx];
         if (newIdx != idx)
         {
-            // Copy particle data to new position
             particles.positions[newIdx] = particles.positions[idx];
             particles.predictedPositions[newIdx] = particles.predictedPositions[idx];
             particles.velocities[newIdx] = particles.velocities[idx];
