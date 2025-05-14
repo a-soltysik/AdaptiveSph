@@ -78,6 +78,12 @@ public:
             }
         };
 
+        enum class TestCase
+        {
+            None,
+            LidDrivenCavity,
+        };
+
         Domain domain;
         glm::vec3 gravity;
         float restDensity;
@@ -89,6 +95,8 @@ public:
         float baseSmoothingRadius;
         float baseParticleRadius;
         float baseParticleMass;
+        float lidVelocity = 0.F;
+        TestCase testCase = TestCase::None;
 
         uint32_t threadsPerBlock;
     };

@@ -1,4 +1,14 @@
-add_executable(AdaptiveSph)
+add_executable(AdaptiveSph
+        benchmark/BenchmarkManager.cpp
+        benchmark/BenchmarkManager.hpp
+        benchmark/ExperimentBase.cpp
+        benchmark/ExperimentBase.hpp
+        benchmark/LidDrivenCavity.cpp
+        benchmark/LidDrivenCavity.hpp
+        benchmark/MetricsCollector.cpp
+        benchmark/MetricsCollector.hpp
+        benchmark/BenchmarkVisualizer.cpp
+        benchmark/BenchmarkVisualizer.hpp)
 
 target_sources(
         AdaptiveSph

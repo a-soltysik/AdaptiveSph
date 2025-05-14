@@ -88,6 +88,12 @@ auto FileLogger::log(Level level, std::string_view message, const std::source_lo
         {
             flush();
         }
+        fmt::println("{:%H:%M:%S} {} {}:{}, {}",
+                     std::chrono::system_clock::now(),
+                     getLevelTag(level),
+                     getFunctionName(location.function_name()),
+                     location.line(),
+                     message);
     }
 }
 

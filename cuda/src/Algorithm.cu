@@ -232,21 +232,54 @@ __global__ void integrateMotion(ParticlesData particles, Simulation::Parameters 
 
 __device__ void handleCollision(ParticlesData particles, uint32_t id, const Simulation::Parameters& simulationData)
 {
-    for (int i = 0; i < 3; i++)
+    if (simulationData.testCase == cuda::Simulation::Parameters::TestCase::LidDrivenCavity)
     {
-        const auto minBoundary = simulationData.domain.min[i] + particles.radiuses[id];
-        const auto maxBoundary = simulationData.domain.max[i] - particles.radiuses[id];
-
-        if (particles.positions[id][i] < minBoundary)
+        // Special handling for lid-driven cavity
+        for (int i = 0; i < 3; i++)
         {
-            particles.positions[id][i] = minBoundary;
-            particles.velocities[id][i] = -particles.velocities[id][i] * simulationData.restitution;
+            const auto minBoundary = simulationData.domain.min[i] + particles.radiuses[id];
+            const auto maxBoundary = simulationData.domain.max[i] - particles.radiuses[id];
+
+            if (particles.positions[id][i] < minBoundary)
+            {
+                particles.positions[id][i] = minBoundary;
+                if (i == 1)
+                {
+                    particles.velocities[id] = glm::vec4(simulationData.lidVelocity, 0.6f, 0.0f, 0.0f);
+                }
+                else
+                {
+                    // Other walls have zero velocity (no-slip)
+                    particles.velocities[id][i] = -particles.velocities[id][i] * simulationData.restitution;
+                }
+            }
+
+            if (particles.positions[id][i] > maxBoundary)
+            {
+                particles.positions[id][i] = maxBoundary;
+                particles.velocities[id][i] = -particles.velocities[id][i] * simulationData.restitution;
+            }
         }
-
-        if (particles.positions[id][i] > maxBoundary)
+    }
+    else
+    {
+        // Standard collision handling for other simulations
+        for (int i = 0; i < 3; i++)
         {
-            particles.positions[id][i] = maxBoundary;
-            particles.velocities[id][i] = -particles.velocities[id][i] * simulationData.restitution;
+            const auto minBoundary = simulationData.domain.min[i] + particles.radiuses[id];
+            const auto maxBoundary = simulationData.domain.max[i] - particles.radiuses[id];
+
+            if (particles.positions[id][i] < minBoundary)
+            {
+                particles.positions[id][i] = minBoundary;
+                particles.velocities[id][i] = -particles.velocities[id][i] * simulationData.restitution;
+            }
+
+            if (particles.positions[id][i] > maxBoundary)
+            {
+                particles.positions[id][i] = maxBoundary;
+                particles.velocities[id][i] = -particles.velocities[id][i] * simulationData.restitution;
+            }
         }
     }
 }
