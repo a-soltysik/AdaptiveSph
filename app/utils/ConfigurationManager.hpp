@@ -9,6 +9,8 @@
 #include <optional>
 #include <string>
 
+#include "cuda/Simulation.cuh"
+
 namespace sph
 {
 
@@ -21,7 +23,7 @@ struct InitialParameters
 struct BenchmarkParameters
 {
     bool enabled = false;
-    std::string testCase = "lidDrivenCavity";
+    cuda::Simulation::Parameters::TestCase testCase = cuda::Simulation::Parameters::TestCase::LidDrivenCavity;
     std::string outputPath = "benchmarks/";
 
     struct SimulationConfig

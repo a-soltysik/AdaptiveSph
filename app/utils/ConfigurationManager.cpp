@@ -366,7 +366,10 @@ void ConfigurationManager::parseBenchmarkParameters(const json& jsonFile)
 
     if (jsonFile.contains("testCase"))
     {
-        params.testCase = jsonFile["testCase"].get<std::string>();
+        if (jsonFile["testCase"].get<std::string>() == "lidDrivenCavity")
+        {
+            params.testCase = cuda::Simulation::Parameters::TestCase::LidDrivenCavity;
+        }
     }
 
     if (jsonFile.contains("outputPath"))

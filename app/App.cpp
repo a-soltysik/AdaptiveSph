@@ -30,6 +30,7 @@
 #include <utility>
 #include <vector>
 
+#include "benchmark/BenchmarkManager.hpp"
 #include "glm/gtx/string_cast.hpp"
 #include "gui/SimulationDataGui.hpp"
 #include "input_handler/MouseHandler.hpp"
@@ -190,6 +191,21 @@ auto App::runBenchmarks() -> void
     }
 
     panda::log::Info("Running benchmarks...");
+    // Ensure window is created and visible
+    if (!_window)
+    {
+        _window = std::make_unique<Window>(glm::uvec2 {1280, 720}, "SPH Benchmark");
+    }
+
+    // Create API if not already created
+    if (!_api)
+    {
+        _api = std::make_unique<panda::gfx::vulkan::Context>(*_window);
+    }
+
+    // Create and run the benchmark manager
+    benchmark::BenchmarkManager benchmarkManager;
+    benchmarkManager.runBenchmarks(_benchmarkParams.value(), *_api, *_window);
 
     panda::log::Info("Benchmarks completed.");
 }
