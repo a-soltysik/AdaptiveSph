@@ -30,6 +30,17 @@ BenchmarkResult ExperimentBase::runBenchmark(const BenchmarkParameters& params,
     cuda::refinement::RefinementParameters refinementParams;
     refinementParams.enabled = (simulationType == BenchmarkResult::SimulationType::Adaptive);
     refinementParams.maxParticleCount = 1000000;
+    refinementParams.initialCooldown = 10000;
+    refinementParams.cooldown = 1000;
+    refinementParams.maxMassRatio = 1.1;
+    refinementParams.minMassRatio = 0.9;
+    refinementParams.criterionType = "velocity";
+    refinementParams.velocity.merge.maximalSpeedThreshold = 2.F;
+    refinementParams.velocity.split.minimalSpeedThreshold = 4.F;
+    refinementParams.splitting.alpha = 0.55;
+    refinementParams.splitting.epsilon = 0.65;
+    refinementParams.splitting.centerMassRatio = 0.2;
+    refinementParams.splitting.vertexMassRatio = 0.067;
     auto simulation = cuda::createSimulation(simulationParams,
                                              particles,
                                              api.initializeParticleSystem(refinementParams.maxParticleCount),
@@ -79,7 +90,7 @@ void ExperimentBase::runSimulation(cuda::Simulation& simulation,
             window->processInput();  // This processes GLFW events
         }
         // Run one simulation step (use fixed time step for consistent physics)
-        simulation.update(simulationParams, 0.001f);
+        simulation.update(simulationParams, 0.0001f);
         gui.setAverageNeighbourCount(simulation.calculateAverageNeighborCount());
         gui.setDensityDeviation({.densityDeviations = simulation.updateDensityDeviations(),
                                  .particleCount = simulation.getParticlesCount(),

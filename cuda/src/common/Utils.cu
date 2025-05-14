@@ -65,4 +65,40 @@ __device__ auto getStartEndIndices(glm::uvec3 cellIndex, const SphSimulation::Gr
 
     return {grid.cellStartIndices.data[neighbourCellId], grid.cellEndIndices.data[neighbourCellId]};
 }
+
+__device__ float computePeriodicDistanceSquared(const glm::vec4& pos1,
+                                                const glm::vec4& pos2,
+                                                const cuda::Simulation::Parameters& simulationData,
+                                                glm::vec4* adjustedOffset)
+{
+    glm::vec4 offset = pos2 - pos1;
+    // Check if we should use periodic boundary in X direction
+    if (simulationData.testCase == cuda::Simulation::Parameters::TestCase::PoiseuilleFlow)
+    {
+        const float domainWidth = simulationData.domain.max.x - simulationData.domain.min.x;
+
+        // If distance in X axis is greater than half the domain width,
+        // it's shorter to wrap around
+        if (fabsf(offset.x) > domainWidth * 0.5f)
+        {
+            if (offset.x > 0)
+            {
+                offset.x -= domainWidth;
+            }
+            else
+            {
+                offset.x += domainWidth;
+            }
+        }
+    }
+
+    // If caller wants the adjusted offset, provide it
+    if (adjustedOffset != nullptr)
+    {
+        *adjustedOffset = offset;
+    }
+
+    // Return the squared Euclidean distance
+    return glm::dot(glm::vec3(offset), glm::vec3(offset));
+}
 }

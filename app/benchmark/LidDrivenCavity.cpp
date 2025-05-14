@@ -197,29 +197,3 @@ cuda::refinement::RefinementParameters LidDrivenCavity::createRefinementParamete
 }
 
 }  // namespace sph::benchmark
-
-I have working normal and adaptive refinement SPH simulation. However now I need to perform tests on the simulation in order to provide the analysis of my project.
-
-I need a benchamrking test framework. In the framework I will need to compare 3 simulation:
-1. Simulation with big particles (the size should be configurable), normal SPH
-2. Simulation with small particles (the size should be configurable), normal SPH
-3. Simulation with medium particles, but using adaptyive SPH
-
-For each type of simulation I need to have adjustible pressure constant, near pressure constant, baseSmothingRadius, baseParticleRadius, baseParticleMass and Reynolds number (the refinement parameters can be used from refinementr section in json file, because there will be only one refinement case in each test)
-
-The bencharking framework will in the end include several types of experiments, however, for now I need lid-driven cavity. Please propose extensible framework, so that I will be able to add new experimets easily.
-
-You can modify whole codebase. For example I know thet for lid-driven cavity we will need top wall to be "moving". So for example we can just instead of bouncing particle when it hits a top wall, it will bounced parallel to the wall with velocity V (this way I think we can simulate moving top wall, please tell me if I am wrong). To do this I think you will need communicate the type of experiment from App to SphSimulation and change the impleemntation for handleCollision (but only for this experiment)
-
-Please, let your code be clean. I mean try not to cerate big function and if you need to impleemnt new feature, meybe it will be better to create new class.
-
-Provide full implementation of code you will create. I mean, do not ever create empty function that should be implemented by me. All functions should be implemented.
-
-The test frameowrk should also capture data from the simulation into json or csv file.
-
-Also the framework should collect data like:
-* l2 density error norm
-* pressure field smoothness
-* mass conservation error
-* time to simulate a frame
-* particle clustering index (Detects unphysical particle clustering, a common instability in SPH)

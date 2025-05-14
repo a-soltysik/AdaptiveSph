@@ -381,35 +381,39 @@ __global__ void proposePartners(ParticlesData particles,
     auto bestCandidate = UINT_MAX;
     auto bestScore = FLT_MAX;
 
-    forEachNeighbour(position, simulationData, grid, [&](const auto neighborIdx) {
-        if (neighborIdx == particleId)
-        {
-            return;
-        }
-
-        if (mergeData.states.data[neighborIdx].status != MergeState::Status::Available)
-        {
-            return;
-        }
-
-        if (particles.masses[neighborIdx] > mergeConfig.maxMassThreshold)
-        {
-            return;
-        }
-
-        const auto neighborPos = particles.positions[neighborIdx];
-        const auto dist = glm::length(glm::vec3(neighborPos - position));
-        if (dist < particles.smoothingRadiuses[particleId])
-        {
-            const auto score =
-                computeMergeScore(dist, particles.masses[neighborIdx], mergeData.criterionValues.data[neighborIdx]);
-            if (score < bestScore)
+    forEachNeighbour(
+        position,
+        particles,
+        simulationData,
+        grid,
+        [&](const auto neighborIdx, const glm::vec4& adjustedPos) {
+            if (neighborIdx == particleId)
             {
-                bestScore = score;
-                bestCandidate = neighborIdx;
+                return;
             }
-        }
-    });
+
+            if (mergeData.states.data[neighborIdx].status != MergeState::Status::Available)
+            {
+                return;
+            }
+
+            if (particles.masses[neighborIdx] > mergeConfig.maxMassThreshold)
+            {
+                return;
+            }
+
+            const auto dist = glm::length(glm::vec3(adjustedPos - position));
+            if (dist < particles.smoothingRadiuses[particleId])
+            {
+                const auto score =
+                    computeMergeScore(dist, particles.masses[neighborIdx], mergeData.criterionValues.data[neighborIdx]);
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    bestCandidate = neighborIdx;
+                }
+            }
+        });
 
     if (bestCandidate != UINT_MAX)
     {

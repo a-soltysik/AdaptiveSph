@@ -6,6 +6,7 @@
 #include <filesystem>
 
 #include "LidDrivenCavity.hpp"
+#include "PoiseuilleFlow.hpp"
 
 namespace sph::benchmark
 {
@@ -14,6 +15,7 @@ BenchmarkManager::BenchmarkManager()
 {
     // Register default experiments
     registerExperiment(std::make_unique<LidDrivenCavity>());
+    registerExperiment(std::make_unique<PoiseuilleFlow>());
 }
 
 void BenchmarkManager::runBenchmarks(const BenchmarkParameters& params,
@@ -41,12 +43,12 @@ void BenchmarkManager::runBenchmarks(const BenchmarkParameters& params,
             panda::log::Info("Running {} benchmark", std::to_underlying(experiment->getName()));
             MetricsCollector metricsCollector;
             // Run coarse simulation
-            //panda::log::Info("Running coarse simulation");
+            panda::log::Info("Running coarse simulation");
             //auto coarseResult =
             //    experiment->runBenchmark(params, BenchmarkResult::SimulationType::Coarse, api, true, &window);
             //metricsCollector.saveToFile(coarseResult, params.outputPath);
             // Run fine simulation
-            //panda::log::Info("Running fine simulation");
+            panda::log::Info("Running fine simulation");
             //auto fineResult =
             //    experiment->runBenchmark(params, BenchmarkResult::SimulationType::Fine, api, true, &window);
             //metricsCollector.saveToFile(fineResult, params.outputPath);

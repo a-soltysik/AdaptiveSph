@@ -8,7 +8,9 @@ add_executable(AdaptiveSph
         benchmark/MetricsCollector.cpp
         benchmark/MetricsCollector.hpp
         benchmark/BenchmarkVisualizer.cpp
-        benchmark/BenchmarkVisualizer.hpp)
+        benchmark/BenchmarkVisualizer.hpp
+        benchmark/PoiseuilleFlow.cpp
+        benchmark/PoiseuilleFlow.hpp)
 
 target_sources(
         AdaptiveSph

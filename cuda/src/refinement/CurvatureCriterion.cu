@@ -26,27 +26,30 @@ __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles,
     float totalWeight = 0.0f;
     int validNeighbors = 0;
 
-    forEachNeighbour(position, simulationData, grid, [&](const auto neighbourIdx) {
-        if (neighbourIdx == id)
-        {
-            return;
-        }
+    forEachNeighbour(position,
+                     particles,
+                     simulationData,
+                     grid,
+                     [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
+                         if (neighbourIdx == id)
+                         {
+                             return;
+                         }
 
-        const glm::vec4 neighborPos = particles.positions[neighbourIdx];
-        const glm::vec3 r = glm::vec3(neighborPos - position);
-        const float dist = glm::length(r);
-        if (dist < h && dist > 1e-5f)
-        {
-            const float neighborDensity = particles.densities[neighbourIdx];
-            const float densityDiff = neighborDensity - density;
-            // Use proper Laplacian kernel
-            const float lapW = device::wendlandLaplacianKernel(dist, h);
-            const float weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
-            densityLaplacian += weight * densityDiff * lapW;
-            totalWeight += weight * lapW;
-            validNeighbors++;
-        }
-    });
+                         const glm::vec3 r = glm::vec3(adjustedPos - position);
+                         const float dist = glm::length(r);
+                         if (dist < h && dist > 1e-5f)
+                         {
+                             const float neighborDensity = particles.densities[neighbourIdx];
+                             const float densityDiff = neighborDensity - density;
+                             // Use proper Laplacian kernel
+                             const float lapW = device::wendlandLaplacianKernel(dist, h);
+                             const float weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
+                             densityLaplacian += weight * densityDiff * lapW;
+                             totalWeight += weight * lapW;
+                             validNeighbors++;
+                         }
+                     });
     if (validNeighbors < 3)
     {
         return -1;
@@ -83,27 +86,30 @@ __device__ auto MergeCriterionGenerator::operator()(ParticlesData particles,
     float densityLaplacian = 0.0f;
     float totalWeight = 0.0f;
     int validNeighbors = 0;
-    forEachNeighbour(position, simulationData, grid, [&](const auto neighbourIdx) {
-        if (neighbourIdx == id)
-        {
-            return;
-        }
+    forEachNeighbour(position,
+                     particles,
+                     simulationData,
+                     grid,
+                     [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
+                         if (neighbourIdx == id)
+                         {
+                             return;
+                         }
 
-        const glm::vec4 neighborPos = particles.positions[neighbourIdx];
-        const glm::vec3 r = glm::vec3(neighborPos - position);
-        const float dist = glm::length(r);
-        if (dist < h && dist > 1e-5f)
-        {
-            const float neighborDensity = particles.densities[neighbourIdx];
-            const float densityDiff = neighborDensity - density;
+                         const glm::vec3 r = glm::vec3(adjustedPos - position);
+                         const float dist = glm::length(r);
+                         if (dist < h && dist > 1e-5f)
+                         {
+                             const float neighborDensity = particles.densities[neighbourIdx];
+                             const float densityDiff = neighborDensity - density;
 
-            const float lapW = device::wendlandLaplacianKernel(dist, h);
-            const float weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
-            densityLaplacian += weight * densityDiff * lapW;
-            totalWeight += weight * fabsf(lapW);
-            validNeighbors++;
-        }
-    });
+                             const float lapW = device::wendlandLaplacianKernel(dist, h);
+                             const float weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
+                             densityLaplacian += weight * densityDiff * lapW;
+                             totalWeight += weight * fabsf(lapW);
+                             validNeighbors++;
+                         }
+                     });
 
     if (validNeighbors < 3)
     {

@@ -27,35 +27,39 @@ __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles,
     float totalWeight = 0.0f;
     int validNeighbors = 0;
 
-    forEachNeighbour(position, simulationData, grid, [&](const auto neighbourIdx) {
-        if (neighbourIdx == id)
-        {
-            return;
-        }
-        const glm::vec4 neighborPos = particles.positions[neighbourIdx];
-        const glm::vec3 r = glm::vec3(neighborPos - position);
-        const float dist = glm::length(r);
-        if (dist < h && dist > 1e-5f)
-        {
-            const glm::vec4 neighborVel = particles.velocities[neighbourIdx];
-            const glm::vec3 velDiff = glm::vec3(neighborVel - particles.velocities[id]);
-            const float gradW = device::densityDerivativeKernel(dist, h);
-            const float weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
-            const glm::vec3 gradDir = r / dist;
+    forEachNeighbour(position,
+                     particles,
+                     simulationData,
+                     grid,
+                     [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
+                         if (neighbourIdx == id)
+                         {
+                             return;
+                         }
 
-            dvx_dx += weight * velDiff.x * gradDir.x * gradW;
-            dvx_dy += weight * velDiff.x * gradDir.y * gradW;
-            dvx_dz += weight * velDiff.x * gradDir.z * gradW;
-            dvy_dx += weight * velDiff.y * gradDir.x * gradW;
-            dvy_dy += weight * velDiff.y * gradDir.y * gradW;
-            dvy_dz += weight * velDiff.y * gradDir.z * gradW;
-            dvz_dx += weight * velDiff.z * gradDir.x * gradW;
-            dvz_dy += weight * velDiff.z * gradDir.y * gradW;
-            dvz_dz += weight * velDiff.z * gradDir.z * gradW;
-            totalWeight += weight * fabsf(gradW);
-            validNeighbors++;
-        }
-    });
+                         const glm::vec3 r = glm::vec3(adjustedPos - position);
+                         const float dist = glm::length(r);
+                         if (dist < h && dist > 1e-5f)
+                         {
+                             const glm::vec4 neighborVel = particles.velocities[neighbourIdx];
+                             const glm::vec3 velDiff = glm::vec3(neighborVel - particles.velocities[id]);
+                             const float gradW = device::densityDerivativeKernel(dist, h);
+                             const float weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
+                             const glm::vec3 gradDir = r / dist;
+
+                             dvx_dx += weight * velDiff.x * gradDir.x * gradW;
+                             dvx_dy += weight * velDiff.x * gradDir.y * gradW;
+                             dvx_dz += weight * velDiff.x * gradDir.z * gradW;
+                             dvy_dx += weight * velDiff.y * gradDir.x * gradW;
+                             dvy_dy += weight * velDiff.y * gradDir.y * gradW;
+                             dvy_dz += weight * velDiff.y * gradDir.z * gradW;
+                             dvz_dx += weight * velDiff.z * gradDir.x * gradW;
+                             dvz_dy += weight * velDiff.z * gradDir.y * gradW;
+                             dvz_dz += weight * velDiff.z * gradDir.z * gradW;
+                             totalWeight += weight * fabsf(gradW);
+                             validNeighbors++;
+                         }
+                     });
     if (validNeighbors < 4)
     {
         return -1;
@@ -105,34 +109,38 @@ __device__ auto MergeCriterionGenerator::operator()(ParticlesData particles,
     float dvz_dx = 0.0f, dvz_dy = 0.0f, dvz_dz = 0.0f;
     float totalWeight = 0.0f;
     int validNeighbors = 0;
-    forEachNeighbour(position, simulationData, grid, [&](const auto neighbourIdx) {
-        if (neighbourIdx == id)
-        {
-            return;
-        }
-        const glm::vec4 neighborPos = particles.positions[neighbourIdx];
-        const glm::vec3 r = glm::vec3(neighborPos - position);
-        const float dist = glm::length(r);
-        if (dist < h && dist > 1e-5f)
-        {
-            const glm::vec4 neighborVel = particles.velocities[neighbourIdx];
-            const glm::vec3 velDiff = glm::vec3(neighborVel - particles.velocities[id]);
-            const float gradW = device::densityDerivativeKernel(dist, h);
-            const float weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
-            const glm::vec3 gradDir = r / dist;
-            dvx_dx += weight * velDiff.x * gradDir.x * gradW;
-            dvx_dy += weight * velDiff.x * gradDir.y * gradW;
-            dvx_dz += weight * velDiff.x * gradDir.z * gradW;
-            dvy_dx += weight * velDiff.y * gradDir.x * gradW;
-            dvy_dy += weight * velDiff.y * gradDir.y * gradW;
-            dvy_dz += weight * velDiff.y * gradDir.z * gradW;
-            dvz_dx += weight * velDiff.z * gradDir.x * gradW;
-            dvz_dy += weight * velDiff.z * gradDir.y * gradW;
-            dvz_dz += weight * velDiff.z * gradDir.z * gradW;
-            totalWeight += weight * fabsf(gradW);
-            validNeighbors++;
-        }
-    });
+    forEachNeighbour(position,
+                     particles,
+                     simulationData,
+                     grid,
+                     [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
+                         if (neighbourIdx == id)
+                         {
+                             return;
+                         }
+
+                         const glm::vec3 r = glm::vec3(adjustedPos - position);
+                         const float dist = glm::length(r);
+                         if (dist < h && dist > 1e-5f)
+                         {
+                             const glm::vec4 neighborVel = particles.velocities[neighbourIdx];
+                             const glm::vec3 velDiff = glm::vec3(neighborVel - particles.velocities[id]);
+                             const float gradW = device::densityDerivativeKernel(dist, h);
+                             const float weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
+                             const glm::vec3 gradDir = r / dist;
+                             dvx_dx += weight * velDiff.x * gradDir.x * gradW;
+                             dvx_dy += weight * velDiff.x * gradDir.y * gradW;
+                             dvx_dz += weight * velDiff.x * gradDir.z * gradW;
+                             dvy_dx += weight * velDiff.y * gradDir.x * gradW;
+                             dvy_dy += weight * velDiff.y * gradDir.y * gradW;
+                             dvy_dz += weight * velDiff.y * gradDir.z * gradW;
+                             dvz_dx += weight * velDiff.z * gradDir.x * gradW;
+                             dvz_dy += weight * velDiff.z * gradDir.y * gradW;
+                             dvz_dz += weight * velDiff.z * gradDir.z * gradW;
+                             totalWeight += weight * fabsf(gradW);
+                             validNeighbors++;
+                         }
+                     });
 
     if (validNeighbors < 4)
     {
