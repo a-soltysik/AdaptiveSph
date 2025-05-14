@@ -82,6 +82,7 @@ public:
         {
             None,
             LidDrivenCavity,
+            PoiseuilleFlow
         };
 
         Domain domain;

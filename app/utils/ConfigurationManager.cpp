@@ -370,6 +370,10 @@ void ConfigurationManager::parseBenchmarkParameters(const json& jsonFile)
         {
             params.testCase = cuda::Simulation::Parameters::TestCase::LidDrivenCavity;
         }
+        else if (jsonFile["testCase"].get<std::string>() == "poiseuilleFlow")
+        {
+            params.testCase = cuda::Simulation::Parameters::TestCase::PoiseuilleFlow;
+        }
     }
 
     if (jsonFile.contains("outputPath"))

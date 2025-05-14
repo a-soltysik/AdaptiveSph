@@ -83,7 +83,7 @@ struct RefinementParameters
     bool enabled = false;
     float minMassRatio = 0.3f;
     float maxMassRatio = 8.0f;
-    uint32_t maxParticleCount = 500000;
+    uint32_t maxParticleCount = 100000000;
     float maxBatchRatio = 0.2F;
     uint32_t initialCooldown = 10;
     uint32_t cooldown = 10;

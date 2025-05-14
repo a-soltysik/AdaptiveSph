@@ -40,17 +40,21 @@ private:
     void updateParticleCount();
     [[nodiscard]] auto getBlocksPerGridForParticles(uint32_t count) const -> dim3;
     void performMerging();
-    refinement::EnhancedMergeData allocateEnhancedMergeData(uint32_t maxParticleCount) const;
+    static refinement::EnhancedMergeData allocateEnhancedMergeData(uint32_t maxParticleCount);
     void calculateMergeCriteria(Span<float> criterionValues) const;
-    void freeEnhancedMergeData(const refinement::EnhancedMergeData& data) const;
+    static void freeEnhancedMergeData(const refinement::EnhancedMergeData& data);
 
     void resetRefinementCounters() const;
+    void resetEnhancedMergeData(uint32_t currentParticleCount) const;
 
     static auto initializeRefinementData(uint32_t maxParticleCount, float maxBatchSize) -> refinement::RefinementData;
 
     refinement::RefinementParameters _refinementParams;
     refinement::RefinementData _refinementData;
+    refinement::EnhancedMergeData _enhancedMergeData;
     uint32_t _frameCounter = 0;
+    uint32_t _targetParticleCount = 0;
+    uint32_t _particlesRemovedInLastMerge = 0;
 };
 
 }
