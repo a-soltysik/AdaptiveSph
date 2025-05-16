@@ -119,6 +119,15 @@ void BenchmarkVisualizer::updateCamera()
         _scene->getCamera().setViewYXZ(
             panda::gfx::view::YXZ {.position = cameraObject.translation, .rotation = cameraObject.rotation});
     }
+    else if (_experimentName == cuda::Simulation::Parameters::TestCase::TaylorGreenVortex)
+    {
+        auto cameraObject = panda::gfx::vulkan::Transform {};
+        cameraObject.translation = {6.28, -3.14, -8};
+        // Rotate to get a good view of the flow profile
+        cameraObject.rotation = {glm::radians(0.F), glm::radians(-30.F), 0.0f};
+        _scene->getCamera().setViewYXZ(
+            panda::gfx::view::YXZ {.position = cameraObject.translation, .rotation = cameraObject.rotation});
+    }
     else
     {
         // Default camera position for other experiments

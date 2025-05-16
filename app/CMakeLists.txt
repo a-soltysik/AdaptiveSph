@@ -10,7 +10,9 @@ add_executable(AdaptiveSph
         benchmark/BenchmarkVisualizer.cpp
         benchmark/BenchmarkVisualizer.hpp
         benchmark/PoiseuilleFlow.cpp
-        benchmark/PoiseuilleFlow.hpp)
+        benchmark/PoiseuilleFlow.hpp
+        benchmark/TaylorGreenVortex.cpp
+        benchmark/TaylorGreenVortex.hpp)
 
 target_sources(
         AdaptiveSph

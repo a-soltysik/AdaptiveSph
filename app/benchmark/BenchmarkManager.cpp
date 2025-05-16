@@ -7,6 +7,7 @@
 
 #include "LidDrivenCavity.hpp"
 #include "PoiseuilleFlow.hpp"
+#include "TaylorGreenVortex.hpp"
 
 namespace sph::benchmark
 {
@@ -16,6 +17,7 @@ BenchmarkManager::BenchmarkManager()
     // Register default experiments
     registerExperiment(std::make_unique<LidDrivenCavity>());
     registerExperiment(std::make_unique<PoiseuilleFlow>());
+    registerExperiment(std::make_unique<TaylorGreenVortex>());
 }
 
 void BenchmarkManager::runBenchmarks(const BenchmarkParameters& params,
@@ -44,14 +46,14 @@ void BenchmarkManager::runBenchmarks(const BenchmarkParameters& params,
             MetricsCollector metricsCollector;
             // Run coarse simulation
             panda::log::Info("Running coarse simulation");
-            //auto coarseResult =
-            //    experiment->runBenchmark(params, BenchmarkResult::SimulationType::Coarse, api, true, &window);
-            //metricsCollector.saveToFile(coarseResult, params.outputPath);
+            auto coarseResult =
+                experiment->runBenchmark(params, BenchmarkResult::SimulationType::Coarse, api, true, &window);
+            metricsCollector.saveToFile(coarseResult, params.outputPath);
             // Run fine simulation
             panda::log::Info("Running fine simulation");
-            //auto fineResult =
-            //    experiment->runBenchmark(params, BenchmarkResult::SimulationType::Fine, api, true, &window);
-            //metricsCollector.saveToFile(fineResult, params.outputPath);
+            auto fineResult =
+                experiment->runBenchmark(params, BenchmarkResult::SimulationType::Fine, api, true, &window);
+            metricsCollector.saveToFile(fineResult, params.outputPath);
             // Run adaptive simulation
             panda::log::Info("Running adaptive simulation");
             auto adaptiveResult =

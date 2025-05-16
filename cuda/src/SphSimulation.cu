@@ -282,4 +282,15 @@ std::vector<glm::vec4> SphSimulation::updateDensityDeviations() const
     return fromGpu(getParticles().forces, getParticlesCount());
 }
 
+void SphSimulation::setParticleVelocity(uint32_t particleIndex, const glm::vec4& velocity)
+{
+    if (particleIndex < _particleCount)
+    {
+        cudaMemcpy(_particleBuffer.velocities.getData<glm::vec4>() + particleIndex,
+                   &velocity,
+                   sizeof(glm::vec4),
+                   cudaMemcpyHostToDevice);
+    }
+}
+
 }

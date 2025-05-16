@@ -8,6 +8,7 @@
 #include "common/Iteration.hpp"
 #include "common/Utils.cuh"
 #include "device/Kernel.cuh"
+#include "glm/ext/scalar_constants.hpp"
 #include "glm/geometric.hpp"
 
 namespace sph::cuda::kernel
@@ -326,6 +327,31 @@ __device__ void handleCollision(ParticlesData particles, uint32_t id, const Simu
             particles.positions[id].x -= domainLengthX;
         }
     }
+    else if (simulationData.testCase == cuda::Simulation::Parameters::TestCase::TaylorGreenVortex)
+    {
+        const glm::vec3 domainMin = simulationData.domain.min;
+        const glm::vec3 domainMax = simulationData.domain.max;
+        const glm::vec3 domainSize = domainMax - domainMin;
+
+        // Handle periodic boundaries in all directions
+        for (int i = 0; i < 3; i++)
+        {
+            const float particleRadius = particles.radiuses[id];
+
+            // Don't add the particle radius to the boundary check
+            // This ensures particles can move smoothly across boundaries
+            if (particles.positions[id][i] < domainMin[i])
+            {
+                particles.positions[id][i] += domainSize[i];
+                particles.predictedPositions[id][i] += domainSize[i];
+            }
+            else if (particles.positions[id][i] >= domainMax[i])
+            {
+                particles.positions[id][i] -= domainSize[i];
+                particles.predictedPositions[id][i] -= domainSize[i];
+            }
+        }
+    }
     else
     {
         // Standard collision handling for other simulations
@@ -357,7 +383,32 @@ __global__ void computeExternalForces(ParticlesData particles, Simulation::Param
         return;
     }
 
+    // Apply gravity force to velocity
     particles.velocities[idx] += glm::vec4 {simulationData.gravity, 0.F} * deltaTime;
+    // Special handling for Taylor-Green vortex - initialize velocity field
+    if (simulationData.testCase == cuda::Simulation::Parameters::TestCase::TaylorGreenVortex)
+    {
+        // Only set velocity at the first time step - check if velocity is zero
+        if (glm::length(glm::vec3(particles.velocities[idx])) < 1e-6f)
+        {
+            const glm::vec3 pos = particles.positions[idx];
+            const glm::vec3 domainMin = simulationData.domain.min;
+            const glm::vec3 domainSize = simulationData.domain.max - domainMin;
+            // Map position to [0, 2π] range for Taylor-Green equations
+            float x = ((pos.x - domainMin.x) / domainSize.x) * 2.0f * glm::pi<float>();
+            float y = ((pos.y - domainMin.y) / domainSize.y) * 2.0f * glm::pi<float>();
+            float z = ((pos.z - domainMin.z) / domainSize.z) * 2.0f * glm::pi<float>();
+            // Calculate Taylor-Green velocity field
+            float u = std::cos(x) * std::sin(y) * std::cos(z);
+            float v = -std::sin(x) * std::cos(y) * std::cos(z);
+            float w = 0.0f;
+
+            // Set the velocity
+            particles.velocities[idx] = glm::vec4(u, v, w, 0.0f);
+        }
+    }
+
+    // Update predicted positions
     particles.predictedPositions[idx] = particles.positions[idx] + particles.velocities[idx] * deltaTime;
 }
 
