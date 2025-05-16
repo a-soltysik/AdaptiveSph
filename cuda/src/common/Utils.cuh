@@ -32,10 +32,4 @@ auto fromGpu(const T* gpuPtr, size_t elementsCount) -> std::vector<T>
     cudaMemcpy(hostData.data(), gpuPtr, elementsCount * sizeof(T), cudaMemcpyDeviceToHost);
     return hostData;
 }
-
-__device__ float computePeriodicDistanceSquared(const glm::vec4& pos1,
-                                                const glm::vec4& pos2,
-                                                const Simulation::Parameters& simulationData,
-                                                glm::vec4* adjustedOffset = nullptr);
-
 }

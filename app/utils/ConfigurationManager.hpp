@@ -49,7 +49,7 @@ struct BenchmarkParameters
     float channelLength = 0.5F;
     float channelWidth = 0.1F;
     // Taylor-Green parameters
-    float domainSize = 1.0F;
+    float domainSize = 6.28F;
 
     // Dam break parameters
     float tankLength = 4.0F;

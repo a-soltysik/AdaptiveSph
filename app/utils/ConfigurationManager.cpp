@@ -374,6 +374,10 @@ void ConfigurationManager::parseBenchmarkParameters(const json& jsonFile)
         {
             params.testCase = cuda::Simulation::Parameters::TestCase::PoiseuilleFlow;
         }
+        else if (jsonFile["testCase"].get<std::string>() == "taylorGreenVortex")
+        {
+            params.testCase = cuda::Simulation::Parameters::TestCase::TaylorGreenVortex;
+        }
     }
 
     if (jsonFile.contains("outputPath"))

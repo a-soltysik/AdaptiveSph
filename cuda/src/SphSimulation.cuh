@@ -55,6 +55,7 @@ public:
 
     [[nodiscard]] auto calculateAverageNeighborCount() const -> float override;
     std::vector<glm::vec4> updateDensityDeviations() const override;
+    void setParticleVelocity(uint32_t particleIndex, const glm::vec4& velocity) override;
 
 protected:
     struct ParticlesInternalDataBuffer

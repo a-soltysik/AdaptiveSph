@@ -82,7 +82,8 @@ public:
         {
             None,
             LidDrivenCavity,
-            PoiseuilleFlow
+            PoiseuilleFlow,
+            TaylorGreenVortex
         };
 
         Domain domain;
@@ -108,6 +109,7 @@ public:
     [[nodiscard]] virtual uint32_t getParticlesCount() const = 0;
     [[nodiscard]] virtual auto calculateAverageNeighborCount() const -> float = 0;
     [[nodiscard]] virtual std::vector<glm::vec4> updateDensityDeviations() const = 0;
+    virtual void setParticleVelocity(uint32_t particleIndex, const glm::vec4& velocity) = 0;
 };
 
 SPH_CUDA_API std::unique_ptr<Simulation> createSimulation(const Simulation::Parameters& parameters,
