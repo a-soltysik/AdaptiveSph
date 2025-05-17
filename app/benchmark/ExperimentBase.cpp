@@ -111,4 +111,62 @@ void ExperimentBase::runSimulation(cuda::Simulation& simulation,
     panda::log::Info("Simulation completed");
 }
 
+void ExperimentBase::initializeParticlesGrid(std::vector<glm::vec4>& particles,
+                                             const cuda::Simulation::Parameters& simulationParams,
+                                             const std::string& experimentName)
+{
+    // Clear any existing particles
+    particles.clear();
+
+    // Calculate the domain size
+    const glm::vec3 domainMin = simulationParams.domain.min;
+    const glm::vec3 domainMax = simulationParams.domain.max;
+    const glm::vec3 domainSize = domainMax - domainMin;
+
+    // Calculate particle spacing based on particle radius
+    float particleSpacing = simulationParams.baseParticleRadius * 2.0f;
+
+    // Calculate number of particles in each dimension
+    glm::uvec3 gridSize;
+    gridSize.x = static_cast<uint32_t>(std::floor(domainSize.x / particleSpacing));
+    gridSize.y = static_cast<uint32_t>(std::floor(domainSize.y / particleSpacing));
+    gridSize.z = static_cast<uint32_t>(std::floor(domainSize.z / particleSpacing));
+
+    panda::log::Info("Creating {} with grid size: {}x{}x{}", experimentName, gridSize.x, gridSize.y, gridSize.z);
+
+    // Calculate actual spacing to distribute particles evenly
+    glm::vec3 actualSpacing;
+    actualSpacing.x = domainSize.x / static_cast<float>(gridSize.x);
+    actualSpacing.y = domainSize.y / static_cast<float>(gridSize.y);
+    actualSpacing.z = domainSize.z / static_cast<float>(gridSize.z);
+
+    // Calculate offset to center particles within the domain
+    glm::vec3 offset = actualSpacing * 0.5f;
+
+    // Create particles throughout the domain
+    for (uint32_t i = 0; i < gridSize.x; i++)
+    {
+        for (uint32_t j = 0; j < gridSize.y; j++)
+        {
+            for (uint32_t k = 0; k < gridSize.z; k++)
+            {
+                // Calculate position with offset to avoid domain boundaries
+                float x = domainMin.x + i * actualSpacing.x + offset.x;
+                float y = domainMin.y + j * actualSpacing.y + offset.y;
+                float z = domainMin.z + k * actualSpacing.z + offset.z;
+
+                const auto position = glm::vec3(x, y, z);
+                particles.emplace_back(position, 0.0f);
+            }
+        }
+    }
+
+    panda::log::Info("Created {} particles for {}", particles.size(), experimentName);
+    panda::log::Info("Particle spacing: {}, {}, {}", actualSpacing.x, actualSpacing.y, actualSpacing.z);
+    panda::log::Info("First particle at: {}, {}, {}",
+                     domainMin.x + offset.x,
+                     domainMin.y + offset.y,
+                     domainMin.z + offset.z);
+}
+
 }  // namespace sph::benchmark

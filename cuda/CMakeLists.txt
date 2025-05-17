@@ -15,7 +15,8 @@ add_library(
         src/common/Utils.cu
         src/refinement/VorticityCriterion.cu
         src/refinement/CurvatureCriterion.cu
-        src/refinement/InterfaceCriterion.cu)
+        src/refinement/InterfaceCriterion.cu
+        src/common/Iteration.cu)
 target_compile_features(AdaptiveSphCuda PRIVATE cxx_std_20)
 target_compile_definitions(AdaptiveSphCuda PRIVATE EXPORTING_CUDA_LIB)
 target_include_directories(AdaptiveSphCuda PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)

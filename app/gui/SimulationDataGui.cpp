@@ -94,7 +94,7 @@ void SimulationDataGui::displayDensityStatistics(const std::vector<glm::vec4>& d
 
     double minDeviation = DBL_MAX;
     double maxDeviation = -DBL_MAX;
-    double avgDeviation = 0.;
+    double avgDeviation = 0.0;
     uint32_t underDensityCount = 0;
     uint32_t overDensityCount = 0;
 
