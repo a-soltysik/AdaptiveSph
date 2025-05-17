@@ -62,85 +62,59 @@ AdaptiveSphSimulation::AdaptiveSphSimulation(const Parameters& initialParameters
                                              const refinement::RefinementParameters& refinementParams)
     : SphSimulation(initialParameters, positions, memory, refinementParams.maxParticleCount),
       _refinementParams(refinementParams),
-      _refinementData {initializeRefinementData(_refinementParams.maxParticleCount, _refinementParams.maxBatchRatio)},
-      _enhancedMergeData {allocateEnhancedMergeData(refinementParams.maxParticleCount)},
-      _targetParticleCount {static_cast<uint32_t>(positions.size())}
+      // Initialize CudaMemory objects with RAII
+      _criterionValuesSplit(refinementParams.maxParticleCount),
+      _particlesIdsToSplit(static_cast<size_t>(refinementParams.maxParticleCount * refinementParams.maxBatchRatio)),
+      _particlesSplitCount(1),
+      _criterionValuesMerge(refinementParams.maxParticleCount),
+      _particlesIdsToMergeFirst(
+          static_cast<size_t>(refinementParams.maxParticleCount * refinementParams.maxBatchRatio)),
+      _particlesIdsToMergeSecond(
+          static_cast<size_t>(refinementParams.maxParticleCount * refinementParams.maxBatchRatio)),
+      _removalFlags(refinementParams.maxParticleCount),
+      _prefixSums(refinementParams.maxParticleCount),
+      _particlesMergeCount(1),
+      _particlesIds(refinementParams.maxParticleCount),
+      _particlesCount(1),
+      // Initialize enhanced merge data
+      _enhancedCriterionValues(refinementParams.maxParticleCount),
+      _eligibleParticles(refinementParams.maxParticleCount),
+      _eligibleCount(1),
+      _states(refinementParams.maxParticleCount),
+      _pairs(refinementParams.maxParticleCount / 2),
+      _pairCount(1),
+      _compactionMap(refinementParams.maxParticleCount),
+      _newParticleCount(1),
+      // Create wrapped data structures
+      _refinementData {
+          .split {.criterionValues {.data = _criterionValuesSplit.get(), .size = _criterionValuesSplit.size()},
+                  .particlesIdsToSplit {.data = _particlesIdsToSplit.get(), .size = _particlesIdsToSplit.size()},
+                  .particlesSplitCount {_particlesSplitCount.get()}},
+          .merge {.criterionValues {.data = _criterionValuesMerge.get(), .size = _criterionValuesMerge.size()},
+                  .particlesIdsToMerge {
+                      Span {.data = _particlesIdsToMergeFirst.get(), .size = _particlesIdsToMergeFirst.size()},
+                      Span {.data = _particlesIdsToMergeSecond.get(), .size = _particlesIdsToMergeSecond.size()}},
+                  .removalFlags {.data = _removalFlags.get(), .size = _removalFlags.size()},
+                  .prefixSums {.data = _prefixSums.get(), .size = _prefixSums.size()},
+                  .particlesMergeCount {_particlesMergeCount.get()}},
+          .particlesIds {.data = _particlesIds.get(), .size = _particlesIds.size()},
+          .particlesCount {_particlesCount.get()}
+}
+
+      ,
+      _enhancedMergeData {
+          .criterionValues = {.data = _enhancedCriterionValues.get(), .size = _enhancedCriterionValues.size()},
+          .eligibleParticles = {.data = _eligibleParticles.get(), .size = _eligibleParticles.size()},
+          .eligibleCount = _eligibleCount.get(),
+          .states = {.data = _states.get(), .size = _states.size()},
+          .pairs = {.data = _pairs.get(), .size = _pairs.size()},
+          .pairCount = _pairCount.get(),
+          .compactionMap = {.data = _compactionMap.get(), .size = _compactionMap.size()},
+          .newParticleCount = _newParticleCount.get()},
+      _targetParticleCount(static_cast<uint32_t>(positions.size()))
 {
     const auto initialCount = SphSimulation::getParticlesCount();
     cudaMemcpy(_refinementData.particlesCount, &initialCount, sizeof(uint32_t), cudaMemcpyHostToDevice);
-}
-
-AdaptiveSphSimulation::~AdaptiveSphSimulation()
-{
-    cudaFree(_refinementData.split.criterionValues.data);
-    cudaFree(_refinementData.split.particlesIdsToSplit.data);
-    cudaFree(_refinementData.split.particlesSplitCount);
-
-    // Free merge-related memory
-    cudaFree(_refinementData.merge.criterionValues.data);
-    cudaFree(_refinementData.merge.particlesIdsToMerge.first.data);
-    cudaFree(_refinementData.merge.particlesIdsToMerge.second.data);
-    cudaFree(_refinementData.merge.removalFlags.data);
-    cudaFree(_refinementData.merge.prefixSums.data);
-    cudaFree(_refinementData.merge.particlesMergeCount);
-
-    // Free shared memory
-    cudaFree(_refinementData.particlesIds.data);
-    cudaFree(_refinementData.particlesCount);
-
-    freeEnhancedMergeData(_enhancedMergeData);
-}
-
-auto AdaptiveSphSimulation::initializeRefinementData(uint32_t maxParticleCount, float maxBatchSize)
-    -> refinement::RefinementData
-{
-    uint32_t* particlesIdsToSplit = nullptr;
-    uint32_t* particlesIds = nullptr;
-    uint32_t* particlesSplitCount = nullptr;
-    uint32_t* particlesCount = nullptr;
-    float* criterionValuesSplit = nullptr;
-    float* criterionValuesMerge = nullptr;
-
-    uint32_t* particlesIdsToMergeFirst = nullptr;
-    uint32_t* particlesIdsToMergeSecond = nullptr;
-    uint32_t* particlesMergeCount = nullptr;
-    refinement::RefinementData::RemovalState* removalMarks = nullptr;
-    uint32_t* prefixSums = nullptr;
-
-    cudaMalloc(&particlesIdsToSplit,
-               static_cast<size_t>(static_cast<float>(maxParticleCount) * maxBatchSize) * sizeof(uint32_t));
-    cudaMalloc(&particlesSplitCount, sizeof(uint32_t));
-    cudaMalloc(&particlesCount, sizeof(uint32_t));
-    cudaMalloc(&criterionValuesSplit, maxParticleCount * sizeof(float));
-    cudaMalloc(&criterionValuesMerge, maxParticleCount * sizeof(float));
-    cudaMalloc(&particlesIds, maxParticleCount * sizeof(uint32_t));
-
-    cudaMalloc(&particlesIdsToMergeFirst,
-               static_cast<size_t>(static_cast<float>(maxParticleCount) * maxBatchSize) * sizeof(uint32_t));
-    cudaMalloc(&particlesIdsToMergeSecond,
-               static_cast<size_t>(static_cast<float>(maxParticleCount) * maxBatchSize) * sizeof(uint32_t));
-    cudaMalloc(&particlesMergeCount, sizeof(uint32_t));
-    cudaMalloc(&removalMarks, maxParticleCount * sizeof(uint32_t));
-    cudaMalloc(&prefixSums, maxParticleCount * sizeof(uint32_t));
-
-    return {
-        .split = {.criterionValues = {.data = criterionValuesSplit, .size = maxParticleCount},
-                  .particlesIdsToSplit = {.data = particlesIdsToSplit,
-                                          .size =
-                                              static_cast<size_t>(static_cast<float>(maxParticleCount) * maxBatchSize)},
-                  .particlesSplitCount = particlesSplitCount},
-        .merge = {.criterionValues = {.data = criterionValuesMerge, .size = maxParticleCount},
-                  .particlesIdsToMerge =
-                      {Span {.data = particlesIdsToMergeFirst,
-                             .size = static_cast<size_t>(static_cast<float>(maxParticleCount) * maxBatchSize)},
-                       Span {.data = particlesIdsToMergeSecond,
-                             .size = static_cast<size_t>(static_cast<float>(maxParticleCount) * maxBatchSize)}},
-                  .removalFlags = {.data = removalMarks, .size = maxParticleCount},
-                  .prefixSums = {.data = prefixSums, .size = maxParticleCount},
-                  .particlesMergeCount = particlesMergeCount},
-        .particlesIds = {.data = particlesIds, .size = maxParticleCount},
-        .particlesCount = particlesCount
-    };
 }
 
 void AdaptiveSphSimulation::update(float deltaTime)
@@ -458,35 +432,6 @@ void AdaptiveSphSimulation::performMerging()
     cudaMemcpy(_refinementData.particlesCount, &newCount, sizeof(uint32_t), cudaMemcpyHostToDevice);
 }
 
-refinement::EnhancedMergeData AdaptiveSphSimulation::allocateEnhancedMergeData(uint32_t maxParticleCount)
-{
-    refinement::EnhancedMergeData data;
-
-    cudaMalloc(&data.criterionValues.data, maxParticleCount * sizeof(float));
-    data.criterionValues.size = maxParticleCount;
-
-    cudaMalloc(&data.eligibleParticles.data, maxParticleCount * sizeof(uint32_t));
-    data.eligibleParticles.size = maxParticleCount;
-
-    cudaMalloc(&data.eligibleCount, sizeof(uint32_t));
-
-    cudaMalloc(&data.states.data, maxParticleCount * sizeof(refinement::MergeState));
-    data.states.size = maxParticleCount;
-
-    const size_t maxPairs = maxParticleCount / 2;
-    cudaMalloc(&data.pairs.data, maxPairs * sizeof(refinement::MergePair));
-    data.pairs.size = maxPairs;
-
-    cudaMalloc(&data.pairCount, sizeof(uint32_t));
-
-    cudaMalloc(&data.compactionMap.data, maxParticleCount * sizeof(uint32_t));
-    data.compactionMap.size = maxParticleCount;
-
-    cudaMalloc(&data.newParticleCount, sizeof(uint32_t));
-
-    return data;
-}
-
 void AdaptiveSphSimulation::calculateMergeCriteria(Span<float> criterionValues) const
 {
     const float maxMass = _refinementParams.maxMassRatio * getParameters().baseParticleMass;
@@ -524,18 +469,6 @@ void AdaptiveSphSimulation::calculateMergeCriteria(Span<float> criterionValues) 
             criterionValues,
             refinement::velocity::MergeCriterionGenerator(maxMass, _refinementParams.velocity.merge));
     }
-}
-
-void AdaptiveSphSimulation::freeEnhancedMergeData(const refinement::EnhancedMergeData& data)
-{
-    cudaFree(data.criterionValues.data);
-    cudaFree(data.eligibleParticles.data);
-    cudaFree(data.eligibleCount);
-    cudaFree(data.states.data);
-    cudaFree(data.pairs.data);
-    cudaFree(data.pairCount);
-    cudaFree(data.compactionMap.data);
-    cudaFree(data.newParticleCount);
 }
 
 void AdaptiveSphSimulation::resetEnhancedMergeData(uint32_t currentParticleCount) const

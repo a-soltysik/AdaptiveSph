@@ -67,13 +67,11 @@ void MetricsCollector::collectFrameMetrics(const cuda::Simulation& simulation, f
 }
 
 BenchmarkResult MetricsCollector::calculateResults(cuda::Simulation::Parameters::TestCase experimentType,
-                                                   BenchmarkResult::SimulationType simulationType,
-                                                   float reynoldsNumber) const
+                                                   BenchmarkResult::SimulationType simulationType) const
 {
     BenchmarkResult result;
     result.experimentType = experimentType;
     result.simulationType = simulationType;
-    result.reynoldsNumber = reynoldsNumber;
 
     // Calculate metrics
     result.l2DensityErrorNorm = calculateL2DensityErrorNorm();
@@ -98,7 +96,6 @@ void MetricsCollector::saveToFile(const BenchmarkResult& result, const std::stri
     json resultJson;
     resultJson["experimentType"] = result.experimentType;
     resultJson["simulationType"] = result.simulationType;
-    resultJson["reynoldsNumber"] = result.reynoldsNumber;
     resultJson["metrics"]["l2DensityErrorNorm"] = result.l2DensityErrorNorm;
     resultJson["metrics"]["pressureFieldSmoothness"] = result.pressureFieldSmoothness;
     resultJson["metrics"]["massConservationError"] = result.massConservationError;
@@ -111,11 +108,10 @@ void MetricsCollector::saveToFile(const BenchmarkResult& result, const std::stri
     resultJson["timeSeries"]["totalMasses"] = result.totalMasses;
 
     // Create filename
-    const auto filename = fmt::format("{}/{}_{}_Re{}.json",
+    const auto filename = fmt::format("{}/{}.json",
                                       outputPath,
                                       std::to_underlying(result.experimentType),
-                                      std::to_underlying(result.simulationType),
-                                      result.reynoldsNumber);
+                                      std::to_underlying(result.simulationType));
 
     // Write to file
     std::ofstream file(filename);

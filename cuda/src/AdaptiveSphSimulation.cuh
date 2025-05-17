@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "SphSimulation.cuh"
+#include "common/Memory.cuh"
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
 #include "refinement/Common.cuh"
@@ -23,13 +24,6 @@ public:
                           const ParticlesDataBuffer& memory,
                           const refinement::RefinementParameters& refinementParams);
 
-    AdaptiveSphSimulation(const AdaptiveSphSimulation&) = delete;
-    AdaptiveSphSimulation(AdaptiveSphSimulation&&) = delete;
-
-    auto operator=(const AdaptiveSphSimulation&) -> AdaptiveSphSimulation& = delete;
-    auto operator=(AdaptiveSphSimulation&&) -> AdaptiveSphSimulation& = delete;
-    ~AdaptiveSphSimulation() override;
-
     void update(float deltaTime) override;
     void identifyAndSplitParticles() const;
     void identifyAndMergeParticles() const;
@@ -40,14 +34,32 @@ private:
     void updateParticleCount();
     [[nodiscard]] auto getBlocksPerGridForParticles(uint32_t count) const -> dim3;
     void performMerging();
-    static refinement::EnhancedMergeData allocateEnhancedMergeData(uint32_t maxParticleCount);
     void calculateMergeCriteria(Span<float> criterionValues) const;
-    static void freeEnhancedMergeData(const refinement::EnhancedMergeData& data);
 
     void resetRefinementCounters() const;
     void resetEnhancedMergeData(uint32_t currentParticleCount) const;
 
-    static auto initializeRefinementData(uint32_t maxParticleCount, float maxBatchSize) -> refinement::RefinementData;
+    Memory<float> _criterionValuesSplit;
+    Memory<uint32_t> _particlesIdsToSplit;
+    Memory<uint32_t> _particlesSplitCount;
+    Memory<float> _criterionValuesMerge;
+    Memory<uint32_t> _particlesIdsToMergeFirst;
+    Memory<uint32_t> _particlesIdsToMergeSecond;
+    Memory<refinement::RefinementData::RemovalState> _removalFlags;
+    Memory<uint32_t> _prefixSums;
+    Memory<uint32_t> _particlesMergeCount;
+    Memory<uint32_t> _particlesIds;
+    Memory<uint32_t> _particlesCount;
+
+    // Enhanced merge data with RAII
+    Memory<float> _enhancedCriterionValues;
+    Memory<uint32_t> _eligibleParticles;
+    Memory<uint32_t> _eligibleCount;
+    Memory<refinement::MergeState> _states;
+    Memory<refinement::MergePair> _pairs;
+    Memory<uint32_t> _pairCount;
+    Memory<uint32_t> _compactionMap;
+    Memory<uint32_t> _newParticleCount;
 
     refinement::RefinementParameters _refinementParams;
     refinement::RefinementData _refinementData;

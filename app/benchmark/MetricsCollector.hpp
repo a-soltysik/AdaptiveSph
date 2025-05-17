@@ -18,7 +18,6 @@ struct BenchmarkResult
     };
     cuda::Simulation::Parameters::TestCase experimentType;
     SimulationType simulationType;
-    float reynoldsNumber;
     // Metrics
     float l2DensityErrorNorm;
     float pressureFieldSmoothness;
@@ -43,8 +42,7 @@ public:
     void collectFrameMetrics(const cuda::Simulation& simulation, float frameTime);
     // Calculate and return final results
     BenchmarkResult calculateResults(cuda::Simulation::Parameters::TestCase experimentType,
-                                     BenchmarkResult::SimulationType simulationType,
-                                     float reynoldsNumber) const;
+                                     BenchmarkResult::SimulationType simulationType) const;
     // Save results to file
     void saveToFile(const BenchmarkResult& result, const std::string& outputPath) const;
 
