@@ -1,4 +1,3 @@
-// PoiseuilleFlow.cpp
 #include "PoiseuilleFlow.hpp"
 
 #include <panda/Logger.h>
@@ -12,19 +11,22 @@ PoiseuilleFlow::PoiseuilleFlow()
 }
 
 BenchmarkResult PoiseuilleFlow::runBenchmark(const BenchmarkParameters& params,
+                                             const cuda::Simulation::Parameters& simulationParameters,
                                              BenchmarkResult::SimulationType simulationType,
                                              panda::gfx::vulkan::Context& api,
                                              bool visualize,
                                              Window* window)
 {
     // Call the base class implementation with visualization enabled
-    return ExperimentBase::runBenchmark(params, simulationType, api, visualize, window);
+    return ExperimentBase::runBenchmark(params, simulationParameters, simulationType, api, visualize, window);
 }
 
-cuda::Simulation::Parameters PoiseuilleFlow::createSimulationParameters(const BenchmarkParameters& params,
-                                                                        BenchmarkResult::SimulationType simulationType)
+cuda::Simulation::Parameters PoiseuilleFlow::createSimulationParameters(
+    const BenchmarkParameters& params,
+    const cuda::Simulation::Parameters& simulationParameters,
+    BenchmarkResult::SimulationType simulationType)
 {
-    cuda::Simulation::Parameters simulationParams;
+    cuda::Simulation::Parameters simulationParams = simulationParameters;
 
     // Set up the domain for Poiseuille flow
     float halfHeight = params.channelHeight / 2.0f;
@@ -35,54 +37,36 @@ cuda::Simulation::Parameters PoiseuilleFlow::createSimulationParameters(const Be
 
     // Set gravity as a driving force along the channel length (x-axis)
     // For Poiseuille flow, we use gravity as a proxy for pressure gradient
-    // Scale by Reynolds number to create appropriate flow conditions
-    simulationParams.gravity = glm::vec3(10.F, 0.0f, 0.0f);
-
-    // Set basic simulation parameters
-    simulationParams.restDensity = 1000.0f;
-    simulationParams.threadsPerBlock = 256;
-    simulationParams.restitution = 0.0f;  // No bounce for viscous fluid
+    simulationParams.gravity = glm::vec3(params.forceMagnitude, 0.0f, 0.0f);
 
     // Set particle size and fluid properties based on simulation type
     if (simulationType == BenchmarkResult::SimulationType::Coarse)
     {
-        simulationParams.baseParticleRadius = 0.025F * 1.26F;
-        simulationParams.baseParticleMass = 1.2F * 2.F * 0.25F;
-        simulationParams.baseSmoothingRadius = 0.22F * 1.26F * 0.55;
-
-        simulationParams.pressureConstant = 0.3f;
-        simulationParams.nearPressureConstant = 0.005f;
-        simulationParams.viscosityConstant = 0.05f;
+        simulationParams.baseParticleRadius = params.coarse.baseParticleRadius;
+        simulationParams.baseParticleMass = params.coarse.baseParticleMass;
+        simulationParams.baseSmoothingRadius = params.coarse.baseSmoothingRadius;
+        simulationParams.pressureConstant = params.coarse.pressureConstant;
+        simulationParams.nearPressureConstant = params.coarse.nearPressureConstant;
+        simulationParams.viscosityConstant = params.coarse.viscosityConstant;
     }
     else if (simulationType == BenchmarkResult::SimulationType::Fine)
     {
-        simulationParams.baseParticleRadius = 0.025F / 2.F;
-        simulationParams.baseParticleMass = 1.2F / 8.F * 0.22;
-        simulationParams.baseSmoothingRadius = 0.22F / 2.F * 0.65;
-
-        simulationParams.pressureConstant = 0.03f;
-        simulationParams.nearPressureConstant = 0.002f;
-        simulationParams.viscosityConstant = 0.0001f;
+        simulationParams.baseParticleRadius = params.fine.baseParticleRadius;
+        simulationParams.baseParticleMass = params.fine.baseParticleMass;
+        simulationParams.baseSmoothingRadius = params.fine.baseSmoothingRadius;
+        simulationParams.pressureConstant = params.fine.pressureConstant;
+        simulationParams.nearPressureConstant = params.fine.nearPressureConstant;
+        simulationParams.viscosityConstant = params.fine.viscosityConstant;
     }
-    else
-    {  // adaptive
-        simulationParams.baseParticleRadius = 0.025F;
-        simulationParams.baseParticleMass = 1.2F * 0.25;
-        simulationParams.baseSmoothingRadius = 0.22F * 0.65;
-
-        simulationParams.pressureConstant = .5f;
-        simulationParams.nearPressureConstant = 0.005f;
-        simulationParams.viscosityConstant = 0.001f;
+    else  // adaptive
+    {
+        simulationParams.baseParticleRadius = params.adaptive.baseParticleRadius;
+        simulationParams.baseParticleMass = params.adaptive.baseParticleMass;
+        simulationParams.baseSmoothingRadius = params.adaptive.baseSmoothingRadius;
+        simulationParams.pressureConstant = params.adaptive.pressureConstant;
+        simulationParams.nearPressureConstant = params.adaptive.nearPressureConstant;
+        simulationParams.viscosityConstant = params.adaptive.viscosityConstant;
     }
-
-    // Tune viscosity based on Reynolds number
-    // For Poiseuille flow: Re = (mean velocity * channel height) / kinematic viscosity
-    // Mean velocity is determined by the pressure gradient (gravity in our case)
-    //float kinematicViscosity = (params.channelHeight * params.channelHeight) / params.reynoldsNumber;
-    //simulationParams.viscosityConstant = kinematicViscosity * 10.0f;  // Scale factor for SPH formulation
-
-    // Limit maximum velocity to avoid instability
-    simulationParams.maxVelocity = 10.0f;
 
     // Set test case type for custom collision handling
     simulationParams.testCase = cuda::Simulation::Parameters::TestCase::PoiseuilleFlow;
@@ -101,105 +85,53 @@ void PoiseuilleFlow::initializeParticles(std::vector<glm::vec4>& particles,
     const glm::vec3 domainMax = simulationParams.domain.max;
     const glm::vec3 domainSize = domainMax - domainMin;
 
-    panda::log::Info("Domain size: {}x{}x{}", domainSize.x, domainSize.y, domainSize.z);
+    // Calculate particle spacing based on particle radius
+    float particleSpacing = simulationParams.baseParticleRadius * 2.0f;
 
-    // Calculate particle spacing based on particle diameter (2 * radius)
-    float particleSpacing = simulationParams.baseParticleRadius * 2.0f * 1.1F;  // Slight overlap for stability
-
-    // Calculate grid size
+    // Calculate number of particles in each dimension
+    // For periodic domains, we use one fewer particle than would fit exactly
+    // This prevents duplicate particles at domain boundaries
     glm::uvec3 gridSize;
-    gridSize.x = static_cast<uint32_t>(domainSize.x / particleSpacing);
-    gridSize.y = static_cast<uint32_t>(domainSize.y / particleSpacing);
-    gridSize.z = static_cast<uint32_t>(domainSize.z / particleSpacing);
+    gridSize.x = static_cast<uint32_t>(std::floor(domainSize.x / particleSpacing));
+    gridSize.y = static_cast<uint32_t>(std::floor(domainSize.y / particleSpacing));
+    gridSize.z = static_cast<uint32_t>(std::floor(domainSize.z / particleSpacing));
 
-    // Ensure at least one particle in each dimension
-    gridSize.x = std::max(gridSize.x, 1u);
-    gridSize.y = std::max(gridSize.y, 1u);
-    gridSize.z = std::max(gridSize.z, 1u);
+    panda::log::Info("Creating Taylor-Green vortex with grid size: {}x{}x{}", gridSize.x, gridSize.y, gridSize.z);
 
-    panda::log::Info("Creating Poiseuille flow with grid size: {}x{}x{}", gridSize.x, gridSize.y, gridSize.z);
-
-    // Calculate actual spacing to evenly distribute particles
+    // Calculate actual spacing to distribute particles evenly
     glm::vec3 actualSpacing;
-    actualSpacing.x = domainSize.x / (gridSize.x + 1);
-    actualSpacing.y = domainSize.y / (gridSize.y + 1);
-    actualSpacing.z = domainSize.z / (gridSize.z + 1);
+    actualSpacing.x = domainSize.x / static_cast<float>(gridSize.x);
+    actualSpacing.y = domainSize.y / static_cast<float>(gridSize.y);
+    actualSpacing.z = domainSize.z / static_cast<float>(gridSize.z);
 
-    // Create particles throughout the domain, but keep a small gap near the walls
-    // This helps with the no-slip boundary condition
-    const float wallGap = simulationParams.baseParticleRadius * 0.5f;
-    const glm::vec3 startPos = domainMin + glm::vec3(actualSpacing.x, wallGap, wallGap);
+    // Calculate offset to center particles within the domain
+    // This ensures particles are not placed directly on domain boundaries
+    glm::vec3 offset = actualSpacing * 0.5f;
+
+    // Create particles throughout the domain
     for (uint32_t i = 0; i < gridSize.x; i++)
     {
         for (uint32_t j = 0; j < gridSize.y; j++)
         {
             for (uint32_t k = 0; k < gridSize.z; k++)
             {
-                const auto position = startPos + glm::vec3(actualSpacing.x * static_cast<float>(i),
-                                                           actualSpacing.y * static_cast<float>(j),
-                                                           actualSpacing.z * static_cast<float>(k));
-                // Check if the particle is within the proper domain bounds
-                if (position.y >= domainMin.y + wallGap && position.y <= domainMax.y - wallGap &&
-                    position.z >= domainMin.z + wallGap && position.z <= domainMax.z - wallGap)
-                {
-                    particles.emplace_back(position, 0.0f);
-                }
+                // Calculate position with offset to avoid domain boundaries
+                float x = domainMin.x + i * actualSpacing.x + offset.x;
+                float y = domainMin.y + j * actualSpacing.y + offset.y;
+                float z = domainMin.z + k * actualSpacing.z + offset.z;
+
+                const auto position = glm::vec3(x, y, z);
+                particles.emplace_back(position, 0.0f);
             }
         }
     }
 
-    panda::log::Info("Created {} particles for Poiseuille flow", particles.size());
-}
-
-cuda::refinement::RefinementParameters PoiseuilleFlow::createRefinementParameters(
-    const BenchmarkParameters& params,
-    BenchmarkResult::SimulationType simulationType,
-    const cuda::Simulation::Parameters& simulationParams)
-{
-    cuda::refinement::RefinementParameters refinementParams;
-
-    // Enable refinement only for adaptive simulation
-    refinementParams.enabled = (simulationType == BenchmarkResult::SimulationType::Adaptive);
-
-    // Set refinement parameters
-    if (refinementParams.enabled)
-    {
-        // Calculate mass ratios based on particle sizes
-        float minRadius = params.adaptive.minParticleSize;
-        float maxRadius = params.adaptive.maxParticleSize;
-        float avgRadius = simulationParams.baseParticleRadius;
-
-        // Mass scales with radius^3
-        //refinementParams.minMassRatio = std::pow(minRadius / avgRadius, 3.0f);
-        //refinementParams.maxMassRatio = std::pow(maxRadius / avgRadius, 3.0f);
-
-        // For Poiseuille flow, velocity gradient is an ideal criterion
-        refinementParams.criterionType = "velocity";
-
-        // Set other refinement parameters
-        refinementParams.maxParticleCount = 10000000;
-        refinementParams.maxBatchRatio = 0.1f;
-        refinementParams.initialCooldown = 100;
-        refinementParams.cooldown = 10;
-
-        // Set velocity thresholds for a Poiseuille flow
-        // Higher refinement near walls where velocity gradients are highest
-        refinementParams.velocity.split.minimalSpeedThreshold = 1.5f;
-        refinementParams.velocity.merge.maximalSpeedThreshold = 0.3f;
-
-        // Splitting parameters
-        refinementParams.splitting.epsilon = 0.65f;
-        refinementParams.splitting.alpha = 0.85f;
-        refinementParams.splitting.centerMassRatio = 0.2f;
-        refinementParams.splitting.vertexMassRatio = 0.067f;
-    }
-    else
-    {
-        // Set a high max particle count for non-adaptive cases
-        refinementParams.maxParticleCount = 10000000;
-    }
-
-    return refinementParams;
+    panda::log::Info("Created {} particles for Taylor-Green vortex with periodic boundaries", particles.size());
+    panda::log::Info("Particle spacing: {}, {}, {}", actualSpacing.x, actualSpacing.y, actualSpacing.z);
+    panda::log::Info("First particle at: {}, {}, {}",
+                     domainMin.x + offset.x,
+                     domainMin.y + offset.y,
+                     domainMin.z + offset.z);
 }
 
 }  // namespace sph::benchmark

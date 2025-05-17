@@ -1,4 +1,3 @@
-// TaylorGreenVortex.hpp
 #pragma once
 #include "ExperimentBase.hpp"
 
@@ -12,6 +11,7 @@ public:
 
     // Run the Taylor-Green vortex benchmark
     BenchmarkResult runBenchmark(const BenchmarkParameters& params,
+                                 const cuda::Simulation::Parameters& simulationParameters,
                                  BenchmarkResult::SimulationType simulationType,
                                  panda::gfx::vulkan::Context& api,
                                  bool visualize = true,
@@ -20,17 +20,12 @@ public:
 protected:
     // Create simulation parameters for Taylor-Green vortex
     cuda::Simulation::Parameters createSimulationParameters(const BenchmarkParameters& params,
+                                                            const cuda::Simulation::Parameters& simulationParameters,
                                                             BenchmarkResult::SimulationType simulationType) override;
 
     // Initialize particles for Taylor-Green vortex
     void initializeParticles(std::vector<glm::vec4>& particles,
                              const cuda::Simulation::Parameters& simulationParams) override;
-
-    // Create refinement parameters
-    cuda::refinement::RefinementParameters createRefinementParameters(
-        const BenchmarkParameters& params,
-        BenchmarkResult::SimulationType simulationType,
-        const cuda::Simulation::Parameters& simulationParams);
 };
 
 }  // namespace sph::benchmark

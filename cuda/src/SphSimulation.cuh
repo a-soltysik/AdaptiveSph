@@ -46,7 +46,7 @@ public:
     auto operator=(SphSimulation&&) -> SphSimulation& = delete;
     ~SphSimulation() override;
 
-    void update(const Parameters& parameters, float deltaTime) override;
+    void update(float deltaTime) override;
 
     [[nodiscard]] auto getParticlesCount() const -> uint32_t override
     {

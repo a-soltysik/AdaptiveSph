@@ -390,29 +390,118 @@ void ConfigurationManager::parseBenchmarkParameters(const json& jsonFile)
         params.reynoldsNumber = jsonFile["reynoldsNumber"].get<float>();
     }
 
+    // Parse resolution-specific parameters
+    if (jsonFile.contains("resolutions"))
+    {
+        const auto& resolutions = jsonFile["resolutions"];
+
+        // Parse Coarse simulation parameters
+        if (resolutions.contains("coarse"))
+        {
+            const auto& coarse = resolutions["coarse"];
+            if (coarse.contains("baseParticleRadius"))
+            {
+                params.coarse.baseParticleRadius = coarse["baseParticleRadius"].get<float>();
+            }
+            if (coarse.contains("baseParticleMass"))
+            {
+                params.coarse.baseParticleMass = coarse["baseParticleMass"].get<float>();
+            }
+            if (coarse.contains("baseSmoothingRadius"))
+            {
+                params.coarse.baseSmoothingRadius = coarse["baseSmoothingRadius"].get<float>();
+            }
+            if (coarse.contains("pressureConstant"))
+            {
+                params.coarse.pressureConstant = coarse["pressureConstant"].get<float>();
+            }
+            if (coarse.contains("nearPressureConstant"))
+            {
+                params.coarse.nearPressureConstant = coarse["nearPressureConstant"].get<float>();
+            }
+            if (coarse.contains("viscosityConstant"))
+            {
+                params.coarse.viscosityConstant = coarse["viscosityConstant"].get<float>();
+            }
+        }
+        // Parse Fine simulation parameters
+        if (resolutions.contains("fine"))
+        {
+            const auto& fine = resolutions["fine"];
+            if (fine.contains("baseParticleRadius"))
+            {
+                params.fine.baseParticleRadius = fine["baseParticleRadius"].get<float>();
+            }
+            if (fine.contains("baseParticleMass"))
+            {
+                params.fine.baseParticleMass = fine["baseParticleMass"].get<float>();
+            }
+            if (fine.contains("baseSmoothingRadius"))
+            {
+                params.fine.baseSmoothingRadius = fine["baseSmoothingRadius"].get<float>();
+            }
+            if (fine.contains("pressureConstant"))
+            {
+                params.fine.pressureConstant = fine["pressureConstant"].get<float>();
+            }
+            if (fine.contains("nearPressureConstant"))
+            {
+                params.fine.nearPressureConstant = fine["nearPressureConstant"].get<float>();
+            }
+            if (fine.contains("viscosityConstant"))
+            {
+                params.fine.viscosityConstant = fine["viscosityConstant"].get<float>();
+            }
+        }
+        // Parse Adaptive simulation parameters
+        if (resolutions.contains("adaptive"))
+        {
+            const auto& adaptive = resolutions["adaptive"];
+            if (adaptive.contains("baseParticleRadius"))
+            {
+                params.adaptive.baseParticleRadius = adaptive["baseParticleRadius"].get<float>();
+            }
+            if (adaptive.contains("baseParticleMass"))
+            {
+                params.adaptive.baseParticleMass = adaptive["baseParticleMass"].get<float>();
+            }
+            if (adaptive.contains("baseSmoothingRadius"))
+            {
+                params.adaptive.baseSmoothingRadius = adaptive["baseSmoothingRadius"].get<float>();
+            }
+            if (adaptive.contains("pressureConstant"))
+            {
+                params.adaptive.pressureConstant = adaptive["pressureConstant"].get<float>();
+            }
+            if (adaptive.contains("nearPressureConstant"))
+            {
+                params.adaptive.nearPressureConstant = adaptive["nearPressureConstant"].get<float>();
+            }
+            if (adaptive.contains("viscosityConstant"))
+            {
+                params.adaptive.viscosityConstant = adaptive["viscosityConstant"].get<float>();
+            }
+        }
+    }
+    // Legacy simulations section - for backward compatibility
     if (jsonFile.contains("simulations"))
     {
         const auto& simulations = jsonFile["simulations"];
         if (simulations.contains("coarse") && simulations["coarse"].contains("particleSize"))
         {
-            params.coarse.particleSize = simulations["coarse"]["particleSize"].get<float>();
+            // Only use if not already set from the new format
+            if (params.coarse.baseParticleRadius == 0.025F)
+            {
+                params.coarse.baseParticleRadius = simulations["coarse"]["particleSize"].get<float>();
+            }
         }
+
         if (simulations.contains("fine") && simulations["fine"].contains("particleSize"))
         {
-            params.fine.particleSize = simulations["fine"]["particleSize"].get<float>();
-        }
-        if (simulations.contains("adaptive"))
-        {
-            const auto& adaptive = simulations["adaptive"];
-
-            if (adaptive.contains("minParticleSize"))
+            // Only use if not already set from the new format
+            if (params.fine.baseParticleRadius == 0.025F)
             {
-                params.adaptive.minParticleSize = adaptive["minParticleSize"].get<float>();
-            }
-
-            if (adaptive.contains("maxParticleSize"))
-            {
-                params.adaptive.maxParticleSize = adaptive["maxParticleSize"].get<float>();
+                params.fine.baseParticleRadius = simulations["fine"]["particleSize"].get<float>();
             }
         }
     }
@@ -425,6 +514,10 @@ void ConfigurationManager::parseBenchmarkParameters(const json& jsonFile)
     if (jsonFile.contains("totalSimulationFrames"))
     {
         params.totalSimulationFrames = jsonFile["totalSimulationFrames"].get<uint32_t>();
+    }
+    if (jsonFile.contains("timestep"))
+    {
+        params.timestep = jsonFile["timestep"].get<float>();
     }
 
     // Test case specific parameters
@@ -442,6 +535,10 @@ void ConfigurationManager::parseBenchmarkParameters(const json& jsonFile)
         if (poiseuille.contains("channelWidth"))
         {
             params.channelWidth = poiseuille["channelWidth"].get<float>();
+        }
+        if (poiseuille.contains("forceMagnitude"))
+        {
+            params.forceMagnitude = poiseuille["forceMagnitude"].get<float>();
         }
     }
 
@@ -486,6 +583,16 @@ void ConfigurationManager::parseBenchmarkParameters(const json& jsonFile)
         {
             params.cavitySize = lidDrivenCavity["cavitySize"].get<float>();
         }
+        if (lidDrivenCavity.contains("lidVelocity"))
+        {
+            params.lidVelocity = lidDrivenCavity["lidVelocity"].get<float>();
+        }
+    }
+
+    // Copy the global refinement parameters to the benchmark parameters
+    if (_refinementParams.has_value())
+    {
+        params.refinement = _refinementParams.value();
     }
 
     _benchmarkParams = params;

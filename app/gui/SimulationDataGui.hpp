@@ -20,9 +20,8 @@ public:
         float restDensity;
     };
 
-    explicit SimulationDataGui(const Window& window, const cuda::Simulation::Parameters& simulationData);
+    explicit SimulationDataGui(const Window& window);
 
-    [[nodiscard]] auto getParameters() const -> const cuda::Simulation::Parameters&;
     auto setAverageNeighbourCount(float neighbourCount) -> void;
     void setDensityDeviation(DensityDeviation densityDeviation);
 
@@ -35,7 +34,6 @@ private:
                                          float restDensity);
 
     panda::utils::signals::BeginGuiRender::ReceiverT _beginGuiReceiver;
-    cuda::Simulation::Parameters _simulationData;
     const Window& _window;
     float _averageNeighbourCount = 0.F;
     DensityDeviation _densityDeviation {};

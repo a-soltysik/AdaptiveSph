@@ -143,10 +143,8 @@ auto AdaptiveSphSimulation::initializeRefinementData(uint32_t maxParticleCount, 
     };
 }
 
-void AdaptiveSphSimulation::update(const Parameters& parameters, float deltaTime)
+void AdaptiveSphSimulation::update(float deltaTime)
 {
-    updateParameters(parameters);
-
     computeExternalForces(deltaTime);
     resetGrid();
     assignParticlesToCells();

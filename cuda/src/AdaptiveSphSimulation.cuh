@@ -30,7 +30,7 @@ public:
     auto operator=(AdaptiveSphSimulation&&) -> AdaptiveSphSimulation& = delete;
     ~AdaptiveSphSimulation() override;
 
-    void update(const Parameters& parameters, float deltaTime) override;
+    void update(float deltaTime) override;
     void identifyAndSplitParticles() const;
     void identifyAndMergeParticles() const;
     void computePrefixSum() const;
