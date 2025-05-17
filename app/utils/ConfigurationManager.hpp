@@ -13,7 +13,6 @@ namespace sph
 
 struct InitialParameters
 {
-    float liquidVolumeFraction = 0.1F;
     glm::uvec3 particleCount = {40, 40, 25};
 };
 
@@ -42,8 +41,6 @@ struct BenchmarkParameters
     uint32_t measurementInterval = 20;
     uint32_t totalSimulationFrames = 1000;
     float timestep = 0.0001F;  // Simulation time step
-    // Test case specific parameters
-    float reynoldsNumber = 100.0F;
     // Poiseuille flow parameters
     float channelHeight = 0.1F;
     float channelLength = 0.5F;
@@ -83,6 +80,17 @@ private:
     void parseRefinementParameters(const nlohmann::json& jsonFile);
     void parseInitialParameters(const nlohmann::json& jsonFile);
     void parseBenchmarkParameters(const nlohmann::json& jsonFile);
+
+    static void parseDomainParameters(const nlohmann::json& jsonFile, cuda::Simulation::Parameters& params);
+    static void parseFluidParameters(const nlohmann::json& jsonFile, cuda::Simulation::Parameters& params);
+    static void parseSimulationControlParameters(const nlohmann::json& jsonFile, cuda::Simulation::Parameters& params);
+
+    template <typename T>
+    static auto parseScalarProperty(const nlohmann::json& jsonFile, const std::string& propertyName, T defaultValue)
+        -> T;
+
+    template <typename T>
+    static auto parseVec3Property(const nlohmann::json& jsonFile, const std::string& propertyName, T defaultValue) -> T;
 
     std::optional<cuda::Simulation::Parameters> _simulationParams;
     std::optional<cuda::refinement::RefinementParameters> _refinementParams;

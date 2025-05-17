@@ -15,6 +15,7 @@
 #include <string>
 
 #include "cuda/Simulation.cuh"
+#include "glm/ext/scalar_constants.hpp"
 
 using json = nlohmann::json;
 
@@ -108,248 +109,75 @@ auto ConfigurationManager::loadFromString(const std::string& jsonString) -> bool
 }
 
 //NOLINTNEXTLINE(readability-function-cognitive-complexity)
-void ConfigurationManager::parseSimulationParameters(const json& jsonFile)
-{
-    cuda::Simulation::Parameters params {};
-
-    if (jsonFile.contains("domain"))
-    {
-        const auto& domain = jsonFile["domain"];
-        if (domain.contains("min") && domain["min"].is_array() && domain["min"].size() == 3)
-        {
-            params.domain.min =
-                glm::vec3(domain["min"][0].get<float>(), domain["min"][1].get<float>(), domain["min"][2].get<float>());
-        }
-
-        if (domain.contains("max") && domain["max"].is_array() && domain["max"].size() == 3)
-        {
-            params.domain.max =
-                glm::vec3(domain["max"][0].get<float>(), domain["max"][1].get<float>(), domain["max"][2].get<float>());
-        }
-    }
-
-    if (jsonFile.contains("gravity") && jsonFile["gravity"].is_array() && jsonFile["gravity"].size() == 3)
-    {
-        params.gravity = glm::vec3(jsonFile["gravity"][0].get<float>(),
-                                   jsonFile["gravity"][1].get<float>(),
-                                   jsonFile["gravity"][2].get<float>());
-    }
-
-    if (jsonFile.contains("restDensity"))
-    {
-        params.restDensity = jsonFile["restDensity"].get<float>();
-    }
-
-    if (jsonFile.contains("pressureConstant"))
-    {
-        params.pressureConstant = jsonFile["pressureConstant"].get<float>();
-    }
-
-    if (jsonFile.contains("nearPressureConstant"))
-    {
-        params.nearPressureConstant = jsonFile["nearPressureConstant"].get<float>();
-    }
-
-    if (jsonFile.contains("restitution"))
-    {
-        params.restitution = jsonFile["restitution"].get<float>();
-    }
-
-    if (jsonFile.contains("baseSmoothingRadius"))
-    {
-        params.baseSmoothingRadius = jsonFile["baseSmoothingRadius"].get<float>();
-    }
-
-    if (jsonFile.contains("viscosityConstant"))
-    {
-        params.viscosityConstant = jsonFile["viscosityConstant"].get<float>();
-    }
-
-    if (jsonFile.contains("maxVelocity"))
-    {
-        params.maxVelocity = jsonFile["maxVelocity"].get<float>();
-    }
-
-    if (jsonFile.contains("baseParticleRadius"))
-    {
-        params.baseParticleRadius = jsonFile["baseParticleRadius"].get<float>();
-    }
-
-    if (jsonFile.contains("baseParticleMass"))
-    {
-        params.baseParticleMass = jsonFile["baseParticleMass"].get<float>();
-    }
-
-    if (jsonFile.contains("threadsPerBlock"))
-    {
-        params.threadsPerBlock = jsonFile["threadsPerBlock"].get<uint32_t>();
-    }
-
-    _simulationParams = params;
-}
-
-//NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void ConfigurationManager::parseRefinementParameters(const json& jsonFile)
 {
     cuda::refinement::RefinementParameters params;
 
-    if (jsonFile.contains("enabled"))
-    {
-        params.enabled = jsonFile["enabled"].get<bool>();
-    }
-
-    if (jsonFile.contains("criterionType"))
-    {
-        params.criterionType = jsonFile["criterionType"].get<std::string>();
-    }
-
-    if (jsonFile.contains("minMassRatio"))
-    {
-        params.minMassRatio = jsonFile["minMassRatio"].get<float>();
-    }
-
-    if (jsonFile.contains("maxMassRatio"))
-    {
-        params.maxMassRatio = jsonFile["maxMassRatio"].get<float>();
-    }
-
-    if (jsonFile.contains("maxParticleCount"))
-    {
-        params.maxParticleCount = jsonFile["maxParticleCount"].get<uint32_t>();
-    }
-
-    if (jsonFile.contains("maxBatchRatio"))
-    {
-        params.maxBatchRatio = jsonFile["maxBatchRatio"].get<float>();
-    }
-
-    if (jsonFile.contains("initialCooldown"))
-    {
-        params.initialCooldown = jsonFile["initialCooldown"].get<uint32_t>();
-    }
-
-    if (jsonFile.contains("cooldown"))
-    {
-        params.cooldown = jsonFile["cooldown"].get<uint32_t>();
-    }
+    params.enabled = parseScalarProperty(jsonFile, "enabled", false);
+    params.maxParticleCount = parseScalarProperty(jsonFile, "maxParticleCount", 1000000);
+    params.maxBatchRatio = parseScalarProperty(jsonFile, "maxBatchRatio", 0.5f);
+    params.minMassRatio = parseScalarProperty(jsonFile, "minMassRatio", 0.01f);
+    params.maxMassRatio = parseScalarProperty(jsonFile, "maxMassRatio", 100.0f);
+    params.initialCooldown = parseScalarProperty(jsonFile, "initialCooldown", 1000);
+    params.cooldown = parseScalarProperty(jsonFile, "cooldown", 1000);
+    params.criterionType = parseScalarProperty(jsonFile, "criterionType", std::string {"interface"});
 
     if (jsonFile.contains("splitting"))
     {
         const auto& splitting = jsonFile["splitting"];
-
-        if (splitting.contains("epsilon"))
-        {
-            params.splitting.epsilon = splitting["epsilon"].get<float>();
-        }
-
-        if (splitting.contains("alpha"))
-        {
-            params.splitting.alpha = splitting["alpha"].get<float>();
-        }
-
-        if (splitting.contains("centerMassRatio"))
-        {
-            params.splitting.centerMassRatio = splitting["centerMassRatio"].get<float>();
-        }
-
-        if (splitting.contains("vertexMassRatio"))
-        {
-            params.splitting.vertexMassRatio = splitting["vertexMassRatio"].get<float>();
-        }
+        params.splitting.epsilon = parseScalarProperty(splitting, "epsilon", 0.6f);
+        params.splitting.alpha = parseScalarProperty(splitting, "alpha", 0.6f);
+        params.splitting.centerMassRatio = parseScalarProperty(splitting, "centerMassRatio", 0.2f);
+        params.splitting.vertexMassRatio = parseScalarProperty(splitting, "vertexMassRatio", 0.067f);
     }
 
     if (jsonFile.contains("velocity"))
     {
         const auto& velocity = jsonFile["velocity"];
 
-        if (velocity.contains("split") && velocity["split"].contains("minimalSpeedThreshold"))
-        {
-            params.velocity.split.minimalSpeedThreshold = velocity["split"]["minimalSpeedThreshold"].get<float>();
-        }
-
-        if (velocity.contains("merge") && velocity["merge"].contains("maximalSpeedThreshold"))
-        {
-            params.velocity.merge.maximalSpeedThreshold = velocity["merge"]["maximalSpeedThreshold"].get<float>();
-        }
+        params.velocity.split.minimalSpeedThreshold =
+            parseScalarProperty(velocity["split"], "minimalSpeedThreshold", 0.5f);
+        params.velocity.merge.maximalSpeedThreshold =
+            parseScalarProperty(velocity["merge"], "maximalSpeedThreshold", 4.0f);
     }
 
     if (jsonFile.contains("interface"))
     {
         const auto& interface = jsonFile["interface"];
 
-        if (interface.contains("split") && interface["split"].contains("distanceRatioThreshold"))
-        {
-            params.interfaceParameters.split.distanceRatioThreshold =
-                interface["split"]["distanceRatioThreshold"].get<float>();
-        }
-
-        if (interface.contains("merge") && interface["merge"].contains("distanceRatioThreshold"))
-        {
-            params.interfaceParameters.merge.distanceRatioThreshold =
-                interface["merge"]["distanceRatioThreshold"].get<float>();
-        }
+        params.interfaceParameters.split.distanceRatioThreshold =
+            parseScalarProperty(interface["split"], "distanceRatioThreshold", 0.07f);
+        params.interfaceParameters.merge.distanceRatioThreshold =
+            parseScalarProperty(interface["merge"], "distanceRatioThreshold", 0.18f);
     }
 
     if (jsonFile.contains("vorticity"))
     {
         const auto& vorticity = jsonFile["vorticity"];
-        if (vorticity.contains("split") && vorticity["split"].contains("minimalVorticityThreshold"))
-        {
-            params.vorticity.split.minimalVorticityThreshold =
-                vorticity["split"]["minimalVorticityThreshold"].get<float>();
-        }
-        if (vorticity.contains("merge") && vorticity["merge"].contains("maximalVorticityThreshold"))
-        {
-            params.vorticity.merge.maximalVorticityThreshold =
-                vorticity["merge"]["maximalVorticityThreshold"].get<float>();
-        }
+
+        params.vorticity.split.minimalVorticityThreshold =
+            parseScalarProperty(vorticity["split"], "minimalVorticityThreshold", 34.f);
+        params.vorticity.merge.maximalVorticityThreshold =
+            parseScalarProperty(vorticity["merge"], "maximalVorticityThreshold", 3.4F);
     }
 
     if (jsonFile.contains("curvature"))
     {
         const auto& curvature = jsonFile["curvature"];
-        if (curvature.contains("split") && curvature["split"].contains("minimalCurvatureThreshold"))
-        {
-            params.curvature.split.minimalCurvatureThreshold =
-                curvature["split"]["minimalCurvatureThreshold"].get<float>();
-        }
-        if (curvature.contains("merge") && curvature["merge"].contains("maximalCurvatureThreshold"))
-        {
-            params.curvature.merge.maximalCurvatureThreshold =
-                curvature["merge"]["maximalCurvatureThreshold"].get<float>();
-        }
+        params.curvature.split.minimalCurvatureThreshold =
+            parseScalarProperty(curvature["split"], "minimalCurvatureThreshold", 25000.F);
+        params.curvature.merge.maximalCurvatureThreshold =
+            parseScalarProperty(curvature["merge"], "maximalCurvatureThreshold", 12800.F);
     }
 
     _refinementParams = params;
 }
 
-//NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void ConfigurationManager::parseInitialParameters(const json& jsonFile)
 {
     InitialParameters params;
 
-    if (jsonFile.contains("liquidVolumeFraction"))
-    {
-        params.liquidVolumeFraction = jsonFile["liquidVolumeFraction"].get<float>();
-    }
-
-    if (jsonFile.contains("particleCount"))
-    {
-        if (jsonFile["particleCount"].is_array() && jsonFile["particleCount"].size() == 3)
-        {
-            params.particleCount = glm::uvec3(jsonFile["particleCount"][0].get<uint32_t>(),
-                                              jsonFile["particleCount"][1].get<uint32_t>(),
-                                              jsonFile["particleCount"][2].get<uint32_t>());
-        }
-        else if (jsonFile["particleCount"].is_number())
-        {
-            const auto total = jsonFile["particleCount"].get<uint32_t>();
-            const auto cubeRoot = std::pow(total, 1.F / 3.F);
-            const auto perAxis = static_cast<uint32_t>(std::ceil(cubeRoot));
-            params.particleCount = glm::uvec3(perAxis, perAxis, perAxis);
-            panda::log::Warning("Converting single particleCount value to 3D: {}x{}x{}", perAxis, perAxis, perAxis);
-        }
-    }
+    params.particleCount = parseVec3Property(jsonFile, "particleCount", glm::uvec3 {20, 20, 20});
 
     _initialParams = params;
 }
@@ -359,10 +187,7 @@ void ConfigurationManager::parseBenchmarkParameters(const json& jsonFile)
 {
     BenchmarkParameters params;
 
-    if (jsonFile.contains("enabled"))
-    {
-        params.enabled = jsonFile["enabled"].get<bool>();
-    }
+    params.enabled = parseScalarProperty(jsonFile, "enabled", false);
 
     if (jsonFile.contains("testCase"))
     {
@@ -380,15 +205,7 @@ void ConfigurationManager::parseBenchmarkParameters(const json& jsonFile)
         }
     }
 
-    if (jsonFile.contains("outputPath"))
-    {
-        params.outputPath = jsonFile["outputPath"].get<std::string>();
-    }
-
-    if (jsonFile.contains("reynoldsNumber"))
-    {
-        params.reynoldsNumber = jsonFile["reynoldsNumber"].get<float>();
-    }
+    params.outputPath = parseScalarProperty(jsonFile, "outputPath", std::string {"output"});
 
     // Parse resolution-specific parameters
     if (jsonFile.contains("resolutions"))
@@ -399,197 +216,63 @@ void ConfigurationManager::parseBenchmarkParameters(const json& jsonFile)
         if (resolutions.contains("coarse"))
         {
             const auto& coarse = resolutions["coarse"];
-            if (coarse.contains("baseParticleRadius"))
-            {
-                params.coarse.baseParticleRadius = coarse["baseParticleRadius"].get<float>();
-            }
-            if (coarse.contains("baseParticleMass"))
-            {
-                params.coarse.baseParticleMass = coarse["baseParticleMass"].get<float>();
-            }
-            if (coarse.contains("baseSmoothingRadius"))
-            {
-                params.coarse.baseSmoothingRadius = coarse["baseSmoothingRadius"].get<float>();
-            }
-            if (coarse.contains("pressureConstant"))
-            {
-                params.coarse.pressureConstant = coarse["pressureConstant"].get<float>();
-            }
-            if (coarse.contains("nearPressureConstant"))
-            {
-                params.coarse.nearPressureConstant = coarse["nearPressureConstant"].get<float>();
-            }
-            if (coarse.contains("viscosityConstant"))
-            {
-                params.coarse.viscosityConstant = coarse["viscosityConstant"].get<float>();
-            }
+            params.coarse.baseParticleRadius = parseScalarProperty(coarse, "baseParticleRadius", 0.25F);
+            params.coarse.baseParticleMass = parseScalarProperty(coarse, "baseParticleMass", 1.F);
+            params.coarse.baseSmoothingRadius = parseScalarProperty(coarse, "baseSmoothingRadius", 1.F);
+            params.coarse.pressureConstant = parseScalarProperty(coarse, "pressureConstant", 1.F);
+            params.coarse.nearPressureConstant = parseScalarProperty(coarse, "nearPressureConstant", 0.01F);
+            params.coarse.viscosityConstant = parseScalarProperty(coarse, "viscosityConstant", 0.001F);
         }
         // Parse Fine simulation parameters
         if (resolutions.contains("fine"))
         {
             const auto& fine = resolutions["fine"];
-            if (fine.contains("baseParticleRadius"))
-            {
-                params.fine.baseParticleRadius = fine["baseParticleRadius"].get<float>();
-            }
-            if (fine.contains("baseParticleMass"))
-            {
-                params.fine.baseParticleMass = fine["baseParticleMass"].get<float>();
-            }
-            if (fine.contains("baseSmoothingRadius"))
-            {
-                params.fine.baseSmoothingRadius = fine["baseSmoothingRadius"].get<float>();
-            }
-            if (fine.contains("pressureConstant"))
-            {
-                params.fine.pressureConstant = fine["pressureConstant"].get<float>();
-            }
-            if (fine.contains("nearPressureConstant"))
-            {
-                params.fine.nearPressureConstant = fine["nearPressureConstant"].get<float>();
-            }
-            if (fine.contains("viscosityConstant"))
-            {
-                params.fine.viscosityConstant = fine["viscosityConstant"].get<float>();
-            }
+            params.fine.baseParticleRadius = parseScalarProperty(fine, "baseParticleRadius", 0.25F);
+            params.fine.baseParticleMass = parseScalarProperty(fine, "baseParticleMass", 1.F);
+            params.fine.baseSmoothingRadius = parseScalarProperty(fine, "baseSmoothingRadius", 1.F);
+            params.fine.pressureConstant = parseScalarProperty(fine, "pressureConstant", 1.F);
+            params.fine.nearPressureConstant = parseScalarProperty(fine, "nearPressureConstant", 0.01F);
+            params.fine.viscosityConstant = parseScalarProperty(fine, "viscosityConstant", 0.001F);
         }
         // Parse Adaptive simulation parameters
         if (resolutions.contains("adaptive"))
         {
             const auto& adaptive = resolutions["adaptive"];
-            if (adaptive.contains("baseParticleRadius"))
-            {
-                params.adaptive.baseParticleRadius = adaptive["baseParticleRadius"].get<float>();
-            }
-            if (adaptive.contains("baseParticleMass"))
-            {
-                params.adaptive.baseParticleMass = adaptive["baseParticleMass"].get<float>();
-            }
-            if (adaptive.contains("baseSmoothingRadius"))
-            {
-                params.adaptive.baseSmoothingRadius = adaptive["baseSmoothingRadius"].get<float>();
-            }
-            if (adaptive.contains("pressureConstant"))
-            {
-                params.adaptive.pressureConstant = adaptive["pressureConstant"].get<float>();
-            }
-            if (adaptive.contains("nearPressureConstant"))
-            {
-                params.adaptive.nearPressureConstant = adaptive["nearPressureConstant"].get<float>();
-            }
-            if (adaptive.contains("viscosityConstant"))
-            {
-                params.adaptive.viscosityConstant = adaptive["viscosityConstant"].get<float>();
-            }
-        }
-    }
-    // Legacy simulations section - for backward compatibility
-    if (jsonFile.contains("simulations"))
-    {
-        const auto& simulations = jsonFile["simulations"];
-        if (simulations.contains("coarse") && simulations["coarse"].contains("particleSize"))
-        {
-            // Only use if not already set from the new format
-            if (params.coarse.baseParticleRadius == 0.025F)
-            {
-                params.coarse.baseParticleRadius = simulations["coarse"]["particleSize"].get<float>();
-            }
-        }
-
-        if (simulations.contains("fine") && simulations["fine"].contains("particleSize"))
-        {
-            // Only use if not already set from the new format
-            if (params.fine.baseParticleRadius == 0.025F)
-            {
-                params.fine.baseParticleRadius = simulations["fine"]["particleSize"].get<float>();
-            }
+            params.adaptive.baseParticleRadius = parseScalarProperty(adaptive, "baseParticleRadius", 0.25F);
+            params.adaptive.baseParticleMass = parseScalarProperty(adaptive, "baseParticleMass", 1.F);
+            params.adaptive.baseSmoothingRadius = parseScalarProperty(adaptive, "baseSmoothingRadius", 1.F);
+            params.adaptive.pressureConstant = parseScalarProperty(adaptive, "pressureConstant", 1.F);
+            params.adaptive.nearPressureConstant = parseScalarProperty(adaptive, "nearPressureConstant", 0.01F);
+            params.adaptive.viscosityConstant = parseScalarProperty(adaptive, "viscosityConstant", 0.001F);
         }
     }
 
-    if (jsonFile.contains("measurementInterval"))
-    {
-        params.measurementInterval = jsonFile["measurementInterval"].get<uint32_t>();
-    }
+    params.measurementInterval = parseScalarProperty(jsonFile, "measurementInterval", 1000);
+    params.totalSimulationFrames = parseScalarProperty(jsonFile, "totalSimulationFrames", 100000);
+    params.timestep = parseScalarProperty(jsonFile, "timestep", 0.001F);
 
-    if (jsonFile.contains("totalSimulationFrames"))
-    {
-        params.totalSimulationFrames = jsonFile["totalSimulationFrames"].get<uint32_t>();
-    }
-    if (jsonFile.contains("timestep"))
-    {
-        params.timestep = jsonFile["timestep"].get<float>();
-    }
-
-    // Test case specific parameters
     if (jsonFile.contains("poiseuille"))
     {
         const auto& poiseuille = jsonFile["poiseuille"];
-        if (poiseuille.contains("channelHeight"))
-        {
-            params.channelHeight = poiseuille["channelHeight"].get<float>();
-        }
-        if (poiseuille.contains("channelLength"))
-        {
-            params.channelLength = poiseuille["channelLength"].get<float>();
-        }
-        if (poiseuille.contains("channelWidth"))
-        {
-            params.channelWidth = poiseuille["channelWidth"].get<float>();
-        }
-        if (poiseuille.contains("forceMagnitude"))
-        {
-            params.forceMagnitude = poiseuille["forceMagnitude"].get<float>();
-        }
+        params.channelHeight = parseScalarProperty(poiseuille, "channelHeight", 1.F);
+        params.channelLength = parseScalarProperty(poiseuille, "channelLength", 5.F);
+        params.channelWidth = parseScalarProperty(poiseuille, "channelWidth", 1.F);
+        params.forceMagnitude = parseScalarProperty(poiseuille, "forceMagnitude", 5.F);
     }
 
     if (jsonFile.contains("taylorGreen"))
     {
         const auto& taylorGreen = jsonFile["taylorGreen"];
-        if (taylorGreen.contains("domainSize"))
-        {
-            params.domainSize = taylorGreen["domainSize"].get<float>();
-        }
-    }
-
-    if (jsonFile.contains("damBreak"))
-    {
-        const auto& damBreak = jsonFile["damBreak"];
-        if (damBreak.contains("tankLength"))
-        {
-            params.tankLength = damBreak["tankLength"].get<float>();
-        }
-        if (damBreak.contains("tankHeight"))
-        {
-            params.tankHeight = damBreak["tankHeight"].get<float>();
-        }
-        if (damBreak.contains("tankWidth"))
-        {
-            params.tankWidth = damBreak["tankWidth"].get<float>();
-        }
-        if (damBreak.contains("waterColumnWidth"))
-        {
-            params.waterColumnWidth = damBreak["waterColumnWidth"].get<float>();
-        }
-        if (damBreak.contains("waterColumnHeight"))
-        {
-            params.waterColumnHeight = damBreak["waterColumnHeight"].get<float>();
-        }
+        params.domainSize = parseScalarProperty(taylorGreen, "domainSize", 2.F * glm::pi<float>());
     }
 
     if (jsonFile.contains("lidDrivenCavity"))
     {
         const auto& lidDrivenCavity = jsonFile["lidDrivenCavity"];
-        if (lidDrivenCavity.contains("cavitySize"))
-        {
-            params.cavitySize = lidDrivenCavity["cavitySize"].get<float>();
-        }
-        if (lidDrivenCavity.contains("lidVelocity"))
-        {
-            params.lidVelocity = lidDrivenCavity["lidVelocity"].get<float>();
-        }
+        params.cavitySize = parseScalarProperty(lidDrivenCavity, "cavitySize", 3.F);
+        params.lidVelocity = parseScalarProperty(lidDrivenCavity, "lidVelocity", 1.F);
     }
 
-    // Copy the global refinement parameters to the benchmark parameters
     if (_refinementParams.has_value())
     {
         params.refinement = _refinementParams.value();
@@ -616,6 +299,69 @@ auto ConfigurationManager::getInitialParameters() const -> std::optional<Initial
 auto ConfigurationManager::getBenchmarkParameters() const -> std::optional<BenchmarkParameters>
 {
     return _benchmarkParams;
+}
+
+void ConfigurationManager::parseSimulationParameters(const json& jsonFile)
+{
+    cuda::Simulation::Parameters params {};
+    parseDomainParameters(jsonFile, params);
+    parseFluidParameters(jsonFile, params);
+    parseSimulationControlParameters(jsonFile, params);
+    _simulationParams = params;
+}
+
+void ConfigurationManager::parseDomainParameters(const json& jsonFile, cuda::Simulation::Parameters& params)
+{
+    if (!jsonFile.contains("domain"))
+    {
+        return;
+    }
+
+    const auto& domain = jsonFile["domain"];
+    params.domain.min = parseVec3Property(domain, "min", glm::vec3(0.0f));
+    params.domain.max = parseVec3Property(domain, "max", glm::vec3(1.0f));
+}
+
+void ConfigurationManager::parseFluidParameters(const json& jsonFile, cuda::Simulation::Parameters& params)
+{
+    params.restDensity = parseScalarProperty(jsonFile, "restDensity", 1000.0f);
+    params.pressureConstant = parseScalarProperty(jsonFile, "pressureConstant", 100.0f);
+    params.nearPressureConstant = parseScalarProperty(jsonFile, "nearPressureConstant", 100.0f);
+    params.viscosityConstant = parseScalarProperty(jsonFile, "viscosityConstant", 0.01f);
+}
+
+void ConfigurationManager::parseSimulationControlParameters(const json& jsonFile, cuda::Simulation::Parameters& params)
+{
+    params.gravity = parseVec3Property(jsonFile, "gravity", glm::vec3(0.0f, -9.81f, 0.0f));
+    params.restitution = parseScalarProperty(jsonFile, "restitution", 0.5f);
+    params.maxVelocity = parseScalarProperty(jsonFile, "maxVelocity", 100.0f);
+    params.baseParticleRadius = parseScalarProperty(jsonFile, "baseParticleRadius", 0.01f);
+    params.baseParticleMass = parseScalarProperty(jsonFile, "baseParticleMass", 1.0f);
+    params.baseSmoothingRadius = parseScalarProperty(jsonFile, "baseSmoothingRadius", 0.02f);
+    params.threadsPerBlock = parseScalarProperty<uint32_t>(jsonFile, "threadsPerBlock", 256);
+}
+
+template <typename T>
+auto ConfigurationManager::parseScalarProperty(const json& jsonFile, const std::string& propertyName, T defaultValue)
+    -> T
+{
+    if (jsonFile.contains(propertyName))
+    {
+        return jsonFile[propertyName].get<T>();
+    }
+    return defaultValue;
+}
+
+template <typename T>
+auto ConfigurationManager::parseVec3Property(const json& jsonFile, const std::string& propertyName, T defaultValue) -> T
+{
+    if (jsonFile.contains(propertyName) && jsonFile[propertyName].is_array() && jsonFile[propertyName].size() == 3)
+    {
+        return T(jsonFile[propertyName][0].get<typename T::value_type>(),
+                 jsonFile[propertyName][1].get<typename T::value_type>(),
+                 jsonFile[propertyName][2].get<typename T::value_type>());
+    }
+    return defaultValue;
 }
 
 }

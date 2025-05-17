@@ -23,6 +23,9 @@ public:
     void registerExperiment(std::unique_ptr<ExperimentBase> experiment);
 
 private:
+    static void ensureOutputDirectoryExists(const std::string& outputPath);
+    ExperimentBase* findExperimentByName(cuda::Simulation::Parameters::TestCase testCase) const;
+
     std::vector<std::unique_ptr<ExperimentBase>> _experiments;
 };
 

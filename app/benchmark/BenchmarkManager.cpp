@@ -13,7 +13,6 @@ namespace sph::benchmark
 
 BenchmarkManager::BenchmarkManager()
 {
-    // Register default experiments
     registerExperiment(std::make_unique<LidDrivenCavity>());
     registerExperiment(std::make_unique<PoiseuilleFlow>());
     registerExperiment(std::make_unique<TaylorGreenVortex>());
@@ -30,53 +29,50 @@ void BenchmarkManager::runBenchmarks(const BenchmarkParameters& params,
         return;
     }
     panda::log::Info("Starting benchmark suite with {} experiments", _experiments.size());
-    // Create output directory if it doesn't exist
-    std::filesystem::path outputPath(params.outputPath);
-    if (!std::filesystem::exists(outputPath))
+    ensureOutputDirectoryExists(params.outputPath);
+    auto* experiment = findExperimentByName(params.testCase);
+    if (!experiment)
     {
-        std::filesystem::create_directories(outputPath);
-        panda::log::Info("Created output directory: {}", params.outputPath);
+        panda::log::Error("No experiment found with name: {}", std::to_underlying(params.testCase));
+        return;
     }
-    // Find the requested experiment
-    for (const auto& experiment : _experiments)
+    panda::log::Info("Running {} benchmark", std::to_underlying(experiment->getName()));
+    MetricsCollector metricsCollector;
+    static constexpr auto simulationTypes = std::array {BenchmarkResult::SimulationType::Coarse,
+                                                        BenchmarkResult::SimulationType::Fine,
+                                                        BenchmarkResult::SimulationType::Adaptive};
+    for (const auto& simulationType : simulationTypes)
     {
-        if (experiment->getName() == params.testCase)
-        {
-            panda::log::Info("Running {} benchmark", std::to_underlying(experiment->getName()));
-            MetricsCollector metricsCollector;
-            // Run coarse simulation
-            panda::log::Info("Running coarse simulation");
-            auto coarseResult = experiment->runBenchmark(params,
-                                                         simulationParameters,
-                                                         BenchmarkResult::SimulationType::Coarse,
-                                                         api,
-                                                         true,
-                                                         &window);
-            metricsCollector.saveToFile(coarseResult, params.outputPath);
-            // Run fine simulation
-            panda::log::Info("Running fine simulation");
-            auto fineResult = experiment->runBenchmark(params,
-                                                       simulationParameters,
-                                                       BenchmarkResult::SimulationType::Fine,
-                                                       api,
-                                                       true,
-                                                       &window);
-            metricsCollector.saveToFile(fineResult, params.outputPath);
-            // Run adaptive simulation
-            panda::log::Info("Running adaptive simulation");
-            auto adaptiveResult = experiment->runBenchmark(params,
-                                                           simulationParameters,
-                                                           BenchmarkResult::SimulationType::Adaptive,
-                                                           api,
-                                                           true,
-                                                           &window);
-            metricsCollector.saveToFile(adaptiveResult, params.outputPath);
-            panda::log::Info("Benchmark completed for {}", std::to_underlying(experiment->getName()));
-            return;
-        }
+        panda::log::Info("Running {} simulation", std::to_underlying(simulationType));
+
+        auto result = experiment->runBenchmark(params, simulationParameters, simulationType, api, true, &window);
+
+        metricsCollector.saveToFile(result, params.outputPath);
     }
 
-    panda::log::Error("No experiment found with name: {}", std::to_underlying(params.testCase));
+    panda::log::Info("Benchmark completed for {}", std::to_underlying(experiment->getName()));
+}
+
+void BenchmarkManager::ensureOutputDirectoryExists(const std::string& outputPath)
+{
+    std::filesystem::path path(outputPath);
+    if (!std::filesystem::exists(path))
+    {
+        std::filesystem::create_directories(path);
+        panda::log::Info("Created output directory: {}", outputPath);
+    }
+}
+
+ExperimentBase* BenchmarkManager::findExperimentByName(cuda::Simulation::Parameters::TestCase testCase) const
+{
+    for (const auto& experiment : _experiments)
+    {
+        if (experiment->getName() == testCase)
+        {
+            return experiment.get();
+        }
+    }
+    return nullptr;
 }
 
 void BenchmarkManager::registerExperiment(std::unique_ptr<ExperimentBase> experiment)

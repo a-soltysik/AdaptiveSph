@@ -55,7 +55,7 @@ BenchmarkResult ExperimentBase::runBenchmark(const BenchmarkParameters& params,
                   window);
 
     // Calculate and return results
-    return metricsCollector.calculateResults(_name, simulationType, params.reynoldsNumber);
+    return metricsCollector.calculateResults(_name, simulationType);
 }
 
 void ExperimentBase::runSimulation(cuda::Simulation& simulation,
