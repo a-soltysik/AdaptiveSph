@@ -52,6 +52,10 @@ protected:
                                BenchmarkVisualizer* visualizer = nullptr,
                                Window* window = nullptr);
 
+    static void initializeParticlesGrid(std::vector<glm::vec4>& particles,
+                                        const cuda::Simulation::Parameters& simulationParams,
+                                        const std::string& experimentName);
+
     cuda::Simulation::Parameters::TestCase _name;
 };
 

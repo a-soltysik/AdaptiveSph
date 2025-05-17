@@ -67,7 +67,7 @@ __device__ float calculateMergedSmoothingLength(const glm::vec4& posA,
     const float h_normal = cbrtf((16.0f * glm::pi<float>() * mergedMass) / (21.f * denomNormal));
     const float h_near = cbrtf((15.0f * mergedMass) / (glm::pi<float>() * denomNear));
 
-    return (weightNormal * h_normal + weightNear * h_near) / 2.F;  //is better with 2
+    return (weightNormal * h_normal + weightNear * h_near);
 }
 
 __global__ void splitParticles(ParticlesData particles,

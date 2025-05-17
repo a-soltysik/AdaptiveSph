@@ -15,6 +15,30 @@ namespace sph::cuda::kernel
 {
 
 __device__ void handleCollision(ParticlesData particles, uint32_t id, const Simulation::Parameters& simulationData);
+__device__ void handleLidDrivenCavityCollision(ParticlesData particles,
+                                               uint32_t id,
+                                               const Simulation::Parameters& simulationData);
+__device__ void handlePoiseuilleFlowCollision(ParticlesData particles,
+                                              uint32_t id,
+                                              const Simulation::Parameters& simulationData);
+__device__ void handleTaylorGreenVortexCollision(ParticlesData particles,
+                                                 uint32_t id,
+                                                 const Simulation::Parameters& simulationData);
+__device__ void handleStandardCollision(ParticlesData particles,
+                                        uint32_t id,
+                                        const Simulation::Parameters& simulationData);
+__device__ void handleNoSlipBoundaries(ParticlesData particles,
+                                       uint32_t id,
+                                       const Simulation::Parameters& simulationData,
+                                       int axis);
+__device__ void handleStandardBoundariesForAxis(ParticlesData particles,
+                                                uint32_t id,
+                                                const Simulation::Parameters& simulationData,
+                                                int axis);
+__device__ void handlePeriodicBoundariesForAxis(ParticlesData particles,
+                                                uint32_t id,
+                                                const Simulation::Parameters& simulationData,
+                                                int axis);
 
 __global__ void handleCollisions(ParticlesData particles, Simulation::Parameters simulationData)
 {
@@ -107,7 +131,7 @@ __global__ void computeDensities(ParticlesData particles,
                          nearDensity += neighbourMass * device::nearDensityKernel(distance, neighbourSmoothingRadius);
                      });
 
-    particles.densities[idx] = std::max(850.F, density);
+    particles.densities[idx] = density;
     particles.nearDensities[idx] = nearDensity;
 }
 
@@ -173,7 +197,7 @@ __global__ void computePressureForce(ParticlesData particles,
                      });
 
     const auto particleMass = particles.masses[idx];
-    const auto acceleration = pressureForce / particleMass;
+    const auto acceleration = (pressureForce / particleMass) / particles.densities[idx];
 
     particles.velocities[idx] += acceleration * dt;
 }
@@ -225,7 +249,7 @@ __global__ void computeViscosityForce(ParticlesData particles,
 
     const auto particleMass = particles.masses[idx];
     const auto acceleration = simulationData.viscosityConstant * viscosityForce / particleMass;
-    particles.velocities[idx] += acceleration * dt / particleMass;
+    particles.velocities[idx] += acceleration * dt;
 }
 
 __global__ void integrateMotion(ParticlesData particles, Simulation::Parameters simulationData, float dt)
@@ -246,132 +270,166 @@ __global__ void integrateMotion(ParticlesData particles, Simulation::Parameters 
 
 __device__ void handleCollision(ParticlesData particles, uint32_t id, const Simulation::Parameters& simulationData)
 {
-    if (simulationData.testCase == cuda::Simulation::Parameters::TestCase::LidDrivenCavity)
+    switch (simulationData.testCase)
     {
-        // Special handling for lid-driven cavity
-        for (int i = 0; i < 3; i++)
+    case Simulation::Parameters::TestCase::LidDrivenCavity:
+        handleLidDrivenCavityCollision(particles, id, simulationData);
+        break;
+    case Simulation::Parameters::TestCase::PoiseuilleFlow:
+        handlePoiseuilleFlowCollision(particles, id, simulationData);
+        break;
+    case Simulation::Parameters::TestCase::TaylorGreenVortex:
+        handleTaylorGreenVortexCollision(particles, id, simulationData);
+        break;
+    default:
+        handleStandardCollision(particles, id, simulationData);
+        break;
+    }
+}
+
+__device__ void handleLidDrivenCavityCollision(ParticlesData particles,
+                                               uint32_t id,
+                                               const Simulation::Parameters& simulationData)
+{
+    for (int i = 0; i < 3; i++)
+    {
+        const auto minBoundary = simulationData.domain.min[i] + particles.radiuses[id];
+        const auto maxBoundary = simulationData.domain.max[i] - particles.radiuses[id];
+
+        if (particles.positions[id][i] < minBoundary)
         {
-            const auto minBoundary = simulationData.domain.min[i] + particles.radiuses[id];
-            const auto maxBoundary = simulationData.domain.max[i] - particles.radiuses[id];
-
-            if (particles.positions[id][i] < minBoundary)
+            particles.positions[id][i] = minBoundary;
+            if (i == 1)
             {
-                particles.positions[id][i] = minBoundary;
-                if (i == 1)
-                {
-                    particles.velocities[id] = glm::vec4(simulationData.lidVelocity, 0.6f, 0.0f, 0.0f);
-                }
-                else
-                {
-                    // Other walls have zero velocity (no-slip)
-                    particles.velocities[id][i] = -particles.velocities[id][i] * simulationData.restitution;
-                }
+                // Top wall moves at lid velocity
+                particles.velocities[id] = glm::vec4(simulationData.lidVelocity, 0.5f, 0.0f, 0.0f);
             }
-
-            if (particles.positions[id][i] > maxBoundary)
+            else
             {
-                particles.positions[id][i] = maxBoundary;
                 particles.velocities[id][i] = -particles.velocities[id][i] * simulationData.restitution;
             }
         }
-    }
-    else if (simulationData.testCase == cuda::Simulation::Parameters::TestCase::PoiseuilleFlow)
-    {
-        // Special handling for Poiseuille flow
-        // No-slip boundaries on top and bottom (y-axis)
-        // Periodic boundaries on flow direction (x-axis)
-        // Standard boundaries for width (z-axis)
-        // Handle y-axis (channel height) - no-slip boundaries
-        const auto minBoundaryY = simulationData.domain.min.y + particles.radiuses[id];
-        const auto maxBoundaryY = simulationData.domain.max.y - particles.radiuses[id];
-        if (particles.positions[id].y < minBoundaryY)
-        {
-            particles.positions[id].y = minBoundaryY;
-            // No-slip condition: zero velocity at the wall
-            particles.velocities[id] = glm::vec4(0.0f);
-        }
-        if (particles.positions[id].y > maxBoundaryY)
-        {
-            particles.positions[id].y = maxBoundaryY;
-            // No-slip condition: zero velocity at the wall
-            particles.velocities[id] = glm::vec4(0.0f);
-        }
-        // Handle z-axis (channel width) - standard boundaries
-        const auto minBoundaryZ = simulationData.domain.min.z + particles.radiuses[id];
-        const auto maxBoundaryZ = simulationData.domain.max.z - particles.radiuses[id];
-        if (particles.positions[id].z < minBoundaryZ)
-        {
-            particles.positions[id].z = minBoundaryZ;
-            particles.velocities[id].z = -particles.velocities[id].z * simulationData.restitution;
-        }
-        if (particles.positions[id].z > maxBoundaryZ)
-        {
-            particles.positions[id].z = maxBoundaryZ;
-            particles.velocities[id].z = -particles.velocities[id].z * simulationData.restitution;
-        }
-        // Handle x-axis (flow direction) - periodic boundaries
-        const auto minBoundaryX = simulationData.domain.min.x + particles.radiuses[id];
-        const auto maxBoundaryX = simulationData.domain.max.x - particles.radiuses[id];
-        const auto domainLengthX =
-            simulationData.domain.max.x - simulationData.domain.min.x - 2 * particles.radiuses[id];
 
-        if (particles.positions[id].x < minBoundaryX)
+        if (particles.positions[id][i] > maxBoundary)
         {
-            // Move particle to the other end of the domain
-            particles.positions[id].x += domainLengthX;
-        }
-
-        if (particles.positions[id].x > maxBoundaryX)
-        {
-            // Move particle to the beginning of the domain
-            particles.positions[id].x -= domainLengthX;
+            particles.positions[id][i] = maxBoundary;
+            particles.velocities[id][i] = -particles.velocities[id][i] * simulationData.restitution;
         }
     }
-    else if (simulationData.testCase == cuda::Simulation::Parameters::TestCase::TaylorGreenVortex)
+}
+
+__device__ void handlePoiseuilleFlowCollision(ParticlesData particles,
+                                              uint32_t id,
+                                              const Simulation::Parameters& simulationData)
+{
+    // Handle y-axis (channel height) - no-slip boundaries
+    handleNoSlipBoundaries(particles, id, simulationData, 1);
+
+    // Handle z-axis (channel width) - standard boundaries
+    handleStandardBoundariesForAxis(particles, id, simulationData, 2);
+
+    // Handle x-axis (flow direction) - periodic boundaries
+    handlePeriodicBoundariesForAxis(particles, id, simulationData, 0);
+}
+
+__device__ void handleTaylorGreenVortexCollision(ParticlesData particles,
+                                                 uint32_t id,
+                                                 const Simulation::Parameters& simulationData)
+{
+    const glm::vec3 domainMin = simulationData.domain.min;
+    const glm::vec3 domainMax = simulationData.domain.max;
+    const glm::vec3 domainSize = domainMax - domainMin;
+
+    // Handle periodic boundaries in all directions
+    for (int i = 0; i < 3; i++)
     {
-        const glm::vec3 domainMin = simulationData.domain.min;
-        const glm::vec3 domainMax = simulationData.domain.max;
-        const glm::vec3 domainSize = domainMax - domainMin;
-
-        // Handle periodic boundaries in all directions
-        for (int i = 0; i < 3; i++)
+        if (particles.positions[id][i] < domainMin[i])
         {
-            const float particleRadius = particles.radiuses[id];
-
-            // Don't add the particle radius to the boundary check
-            // This ensures particles can move smoothly across boundaries
-            if (particles.positions[id][i] < domainMin[i])
-            {
-                particles.positions[id][i] += domainSize[i];
-                particles.predictedPositions[id][i] += domainSize[i];
-            }
-            else if (particles.positions[id][i] >= domainMax[i])
-            {
-                particles.positions[id][i] -= domainSize[i];
-                particles.predictedPositions[id][i] -= domainSize[i];
-            }
+            particles.positions[id][i] += domainSize[i];
+            particles.predictedPositions[id][i] += domainSize[i];
+        }
+        else if (particles.positions[id][i] >= domainMax[i])
+        {
+            particles.positions[id][i] -= domainSize[i];
+            particles.predictedPositions[id][i] -= domainSize[i];
         }
     }
-    else
+}
+
+__device__ void handleStandardCollision(ParticlesData particles,
+                                        uint32_t id,
+                                        const Simulation::Parameters& simulationData)
+{
+    for (int i = 0; i < 3; i++)
     {
-        // Standard collision handling for other simulations
-        for (int i = 0; i < 3; i++)
-        {
-            const auto minBoundary = simulationData.domain.min[i] + particles.radiuses[id];
-            const auto maxBoundary = simulationData.domain.max[i] - particles.radiuses[id];
+        handleStandardBoundariesForAxis(particles, id, simulationData, i);
+    }
+}
 
-            if (particles.positions[id][i] < minBoundary)
-            {
-                particles.positions[id][i] = minBoundary;
-                particles.velocities[id][i] = -particles.velocities[id][i] * simulationData.restitution;
-            }
+__device__ void handleNoSlipBoundaries(ParticlesData particles,
+                                       uint32_t id,
+                                       const Simulation::Parameters& simulationData,
+                                       int axis)
+{
+    const auto minBoundary = simulationData.domain.min[axis] + particles.radiuses[id];
+    const auto maxBoundary = simulationData.domain.max[axis] - particles.radiuses[id];
 
-            if (particles.positions[id][i] > maxBoundary)
-            {
-                particles.positions[id][i] = maxBoundary;
-                particles.velocities[id][i] = -particles.velocities[id][i] * simulationData.restitution;
-            }
-        }
+    if (particles.positions[id][axis] < minBoundary)
+    {
+        particles.positions[id][axis] = minBoundary;
+        // No-slip condition: zero velocity at the wall
+        particles.velocities[id] = glm::vec4(0.0f);
+    }
+
+    if (particles.positions[id][axis] > maxBoundary)
+    {
+        particles.positions[id][axis] = maxBoundary;
+        // No-slip condition: zero velocity at the wall
+        particles.velocities[id] = glm::vec4(0.0f);
+    }
+}
+
+__device__ void handleStandardBoundariesForAxis(ParticlesData particles,
+                                                uint32_t id,
+                                                const Simulation::Parameters& simulationData,
+                                                int axis)
+{
+    const auto minBoundary = simulationData.domain.min[axis] + particles.radiuses[id];
+    const auto maxBoundary = simulationData.domain.max[axis] - particles.radiuses[id];
+
+    if (particles.positions[id][axis] < minBoundary)
+    {
+        particles.positions[id][axis] = minBoundary;
+        particles.velocities[id][axis] = -particles.velocities[id][axis] * simulationData.restitution;
+    }
+
+    if (particles.positions[id][axis] > maxBoundary)
+    {
+        particles.positions[id][axis] = maxBoundary;
+        particles.velocities[id][axis] = -particles.velocities[id][axis] * simulationData.restitution;
+    }
+}
+
+__device__ void handlePeriodicBoundariesForAxis(ParticlesData particles,
+                                                uint32_t id,
+                                                const Simulation::Parameters& simulationData,
+                                                int axis)
+{
+    const auto minBoundary = simulationData.domain.min[axis] + particles.radiuses[id];
+    const auto maxBoundary = simulationData.domain.max[axis] - particles.radiuses[id];
+    const auto domainLength =
+        simulationData.domain.max[axis] - simulationData.domain.min[axis] - 2 * particles.radiuses[id];
+
+    if (particles.positions[id][axis] < minBoundary)
+    {
+        // Move particle to the other end of the domain
+        particles.positions[id][axis] += domainLength;
+    }
+
+    if (particles.positions[id][axis] > maxBoundary)
+    {
+        // Move particle to the beginning of the domain
+        particles.positions[id][axis] -= domainLength;
     }
 }
 

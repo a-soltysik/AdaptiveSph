@@ -27,11 +27,18 @@ public:
 private:
     static auto initializeLogger() -> void;
     static auto registerSignalHandlers() -> void;
+    static glm::vec3 calculateParticleSpacing(const glm::vec3& domainSize, const glm::uvec3& gridSize);
 
     auto loadConfigurationFromFile(const std::string& configPath) -> bool;
 
     auto mainLoop() const -> void;
     auto setDefaultScene() -> void;
+
+    void createDomainBoundaries();
+    void createParticleDistribution();
+    void setupLighting() const;
+
+    void createParticlesInGrid(const glm::vec3& startPos, const glm::uvec3& gridSize, const glm::vec3& spacing);
 
     std::vector<glm::vec4> _particles;
     std::unique_ptr<panda::gfx::vulkan::Scene> _scene;

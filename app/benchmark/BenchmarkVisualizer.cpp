@@ -78,10 +78,6 @@ void BenchmarkVisualizer::setupScene(const cuda::Simulation::Parameters& params)
         directionalLight.value().get().makeColorLight({0.9f, 0.9f, 1.0f}, 0.1f, 0.7f, 1.0f, 0.7f);
         directionalLight.value().get().direction = {1.0f, -1.0f, 1.0f};
     }
-    // Add title text to the scene
-    std::string title =
-        fmt::format("{}-{} simulation", std::to_underlying(_experimentName), std::to_underlying(_simulationType));
-    // Note: In a real implementation, you might want to add text rendering here
 }
 
 void BenchmarkVisualizer::updateCamera()
@@ -97,40 +93,31 @@ void BenchmarkVisualizer::updateCamera()
 
     // Position camera based on the simulation type
     // For lid-driven cavity, a view from the side is good
+    auto cameraObject = panda::gfx::vulkan::Transform {};
     if (_experimentName == cuda::Simulation::Parameters::TestCase::LidDrivenCavity)
     {
-        //camera.setViewYXZ(panda::gfx::view::YXZ {
-        //    .position = {1.5f,                 0.5f,                -1.5f},
-        //    .rotation = {glm::radians(-20.0f), glm::radians(45.0f), 0.0f }
-        //});
-        auto cameraObject = panda::gfx::vulkan::Transform {};
-
         cameraObject.translation = {0, 0, -7};
-        _scene->getCamera().setViewYXZ(
+        camera.setViewYXZ(
             panda::gfx::view::YXZ {.position = cameraObject.translation, .rotation = cameraObject.rotation});
     }
     else if (_experimentName == cuda::Simulation::Parameters::TestCase::PoiseuilleFlow)
     {
-        // For Poiseuille flow, position camera to see channel cross-section
-        auto cameraObject = panda::gfx::vulkan::Transform {};
         cameraObject.translation = {2.5, 0, -3};
         // Rotate to get a good view of the flow profile
         cameraObject.rotation = {glm::radians(0.F), glm::radians(-30.F), 0.0f};
-        _scene->getCamera().setViewYXZ(
+        camera.setViewYXZ(
             panda::gfx::view::YXZ {.position = cameraObject.translation, .rotation = cameraObject.rotation});
     }
     else if (_experimentName == cuda::Simulation::Parameters::TestCase::TaylorGreenVortex)
     {
-        auto cameraObject = panda::gfx::vulkan::Transform {};
         cameraObject.translation = {6.28, -3.14, -8};
         // Rotate to get a good view of the flow profile
         cameraObject.rotation = {glm::radians(0.F), glm::radians(-30.F), 0.0f};
-        _scene->getCamera().setViewYXZ(
+        camera.setViewYXZ(
             panda::gfx::view::YXZ {.position = cameraObject.translation, .rotation = cameraObject.rotation});
     }
     else
     {
-        // Default camera position for other experiments
         camera.setViewYXZ(panda::gfx::view::YXZ {
             .position = {0.0f, 0.0f, -5.0f},
             .rotation = {0.0f, 0.0f, 0.0f }

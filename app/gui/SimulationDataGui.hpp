@@ -22,11 +22,11 @@ public:
 
     explicit SimulationDataGui(const Window& window);
 
-    auto setAverageNeighbourCount(float neighbourCount) -> void;
+    void setAverageNeighbourCount(float neighbourCount);
     void setDensityDeviation(DensityDeviation densityDeviation);
 
 private:
-    auto render() -> void;
+    void render();
 
     static void displayAverageNeighborCount(float averageNeighbors);
     static void displayDensityStatistics(const std::vector<glm::vec4>& densityDeviations,

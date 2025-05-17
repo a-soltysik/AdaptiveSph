@@ -281,12 +281,26 @@ auto App::registerSignalHandlers() -> void
     panda::shouldNotBe(std::signal(SIGTERM, signalHandler), SIG_ERR, "Failed to register signal handler");
 }
 
-//NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void App::setDefaultScene()
 {
     auto redTexture = panda::gfx::vulkan::Texture::getDefaultTexture(*_api, {1, 0, 0, 1});
     auto blueTexture = panda::gfx::vulkan::Texture::getDefaultTexture(*_api, {0, 0, 1, 1});
     auto sphereMesh = mesh::uv_sphere::create(*_api, "Sphere", {.radius = 1, .stacks = 5, .slices = 10});
+    auto invertedCubeMesh = mesh::inverted_cube::create(*_api, "InvertedCube");
+
+    createDomainBoundaries();
+    createParticleDistribution();
+    setupLighting();
+
+    _api->registerMesh(std::move(sphereMesh));
+    _api->registerMesh(std::move(invertedCubeMesh));
+    _api->registerTexture(std::move(redTexture));
+    _api->registerTexture(std::move(blueTexture));
+}
+
+void App::createDomainBoundaries()
+{
+    auto blueTexture = panda::gfx::vulkan::Texture::getDefaultTexture(*_api, {0, 0, 1, 0.3f});
     auto invertedCubeMesh = mesh::inverted_cube::create(*_api, "InvertedCube");
 
     const auto domain = _simulationParameters.domain;
@@ -298,6 +312,12 @@ void App::setDefaultScene()
     object.transform.translation = domain.getTranslation();
     object.transform.scale = domain.getScale();
 
+    _api->registerMesh(std::move(invertedCubeMesh));
+    _api->registerTexture(std::move(blueTexture));
+}
+
+void App::createParticleDistribution()
+{
     const glm::uvec3 simulationSize = _initialParameters.particleCount;
 
     panda::log::Info("Creating particle distribution with grid size: {}x{}x{}",
@@ -310,34 +330,45 @@ void App::setDefaultScene()
     const glm::vec3 domainSize = domainMax - domainMin;
     const glm::uvec3 gridSize = _initialParameters.particleCount;
 
+    glm::vec3 particleSpacing = calculateParticleSpacing(domainSize, gridSize);
+    panda::log::Info("Particle spacing: {}", glm::to_string(particleSpacing));
+
+    const glm::vec3 startPos = domainMin + particleSpacing;
+    createParticlesInGrid(startPos, gridSize, particleSpacing);
+}
+
+glm::vec3 App::calculateParticleSpacing(const glm::vec3& domainSize, const glm::uvec3& gridSize)
+{
     glm::vec3 particleSpacing;
     particleSpacing.x = gridSize.x > 1 ? domainSize.x / static_cast<float>(gridSize.x + 1) : domainSize.x / 2.0F;
     particleSpacing.y = gridSize.y > 1 ? domainSize.y / static_cast<float>(gridSize.y + 1) : domainSize.y / 2.0F;
     particleSpacing.z = gridSize.z > 1 ? domainSize.z / static_cast<float>(gridSize.z + 1) : domainSize.z / 2.0F;
 
-    panda::log::Info("Particle spacing: {}", glm::to_string(particleSpacing));
+    return particleSpacing;
+}
 
-    const glm::vec3 startPos = domainMin + particleSpacing;
+void App::createParticlesInGrid(const glm::vec3& startPos, const glm::uvec3& gridSize, const glm::vec3& spacing)
+{
+    _particles.clear();
+    _particles.reserve(gridSize.x * gridSize.y * gridSize.z);
     for (uint32_t i = 0; i < gridSize.x; i++)
     {
         for (uint32_t j = 0; j < gridSize.y; j++)
         {
             for (uint32_t k = 0; k < gridSize.z; k++)
             {
-                const auto position = startPos + glm::vec3(particleSpacing.x * static_cast<float>(i),
-                                                           particleSpacing.y * static_cast<float>(j),
-                                                           particleSpacing.z * static_cast<float>(k));
+                const auto position = startPos + glm::vec3(spacing.x * static_cast<float>(i),
+                                                           spacing.y * static_cast<float>(j),
+                                                           spacing.z * static_cast<float>(k));
 
                 _particles.emplace_back(position, 0.F);
             }
         }
     }
+}
 
-    _api->registerMesh(std::move(sphereMesh));
-    _api->registerMesh(std::move(invertedCubeMesh));
-    _api->registerTexture(std::move(redTexture));
-    _api->registerTexture(std::move(blueTexture));
-
+void App::setupLighting() const
+{
     auto directionalLight = _scene->addLight<panda::gfx::DirectionalLight>("DirectionalLight");
 
     if (directionalLight.has_value())
