@@ -1,4 +1,3 @@
-// ExperimentBase.hpp
 #pragma once
 #include <cuda/Simulation.cuh>
 #include <memory>
@@ -20,10 +19,11 @@ public:
 
     // Initialize and run a benchmark experiment
     virtual BenchmarkResult runBenchmark(const BenchmarkParameters& params,
+                                         const cuda::Simulation::Parameters& simulationParameters,
                                          BenchmarkResult::SimulationType simulationType,
                                          panda::gfx::vulkan::Context& api,
                                          bool visualize = true,
-                                         Window* window = nullptr);  // Add visualization flag
+                                         Window* window = nullptr);
 
     // Get the name of the experiment
     cuda::Simulation::Parameters::TestCase getName() const
@@ -33,8 +33,10 @@ public:
 
 protected:
     // Create simulation parameters for the experiment
-    virtual cuda::Simulation::Parameters createSimulationParameters(const BenchmarkParameters& params,
-                                                                    BenchmarkResult::SimulationType simulationType) = 0;
+    virtual cuda::Simulation::Parameters createSimulationParameters(
+        const BenchmarkParameters& params,
+        const cuda::Simulation::Parameters& simulationParameters,
+        BenchmarkResult::SimulationType simulationType) = 0;
 
     // Initialize particles for the experiment
     virtual void initializeParticles(std::vector<glm::vec4>& particles,
@@ -46,6 +48,7 @@ protected:
                                MetricsCollector& metricsCollector,
                                int totalFrames,
                                int measureInterval,
+                               float timestep,
                                BenchmarkVisualizer* visualizer = nullptr,
                                Window* window = nullptr);
 

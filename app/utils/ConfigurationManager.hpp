@@ -3,13 +3,10 @@
 #include <cstdint>
 #include <cuda/Simulation.cuh>
 #include <cuda/refinement/RefinementParameters.cuh>
-#include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_uint3.hpp>
 #include <nlohmann/json_fwd.hpp>
 #include <optional>
 #include <string>
-
-#include "cuda/Simulation.cuh"
 
 namespace sph
 {
@@ -20,38 +17,43 @@ struct InitialParameters
     glm::uvec3 particleCount = {40, 40, 25};
 };
 
+// Common parameters for each simulation resolution
+struct SimulationResolutionConfig
+{
+    float baseParticleRadius = 0.025F;
+    float baseParticleMass = 1.2F;
+    float baseSmoothingRadius = 0.22F;
+    float pressureConstant = 0.5F;
+    float nearPressureConstant = 0.1F;
+    float viscosityConstant = 0.001F;
+};
+
 struct BenchmarkParameters
 {
     bool enabled = false;
     cuda::Simulation::Parameters::TestCase testCase = cuda::Simulation::Parameters::TestCase::LidDrivenCavity;
     std::string outputPath = "benchmarks/";
 
-    struct SimulationConfig
-    {
-        float particleSize = 0.05F;
-    };
+    // Resolution-specific configurations
+    SimulationResolutionConfig coarse;
+    SimulationResolutionConfig fine;
+    SimulationResolutionConfig adaptive;
 
-    struct AdaptiveConfig
-    {
-        float minParticleSize = 0.025F;
-        float maxParticleSize = 0.05F;
-    };
-
-    SimulationConfig coarse;
-    SimulationConfig fine;
-    AdaptiveConfig adaptive;
     uint32_t measurementInterval = 20;
     uint32_t totalSimulationFrames = 1000;
+    float timestep = 0.0001F;  // Simulation time step
     // Test case specific parameters
     float reynoldsNumber = 100.0F;
     // Poiseuille flow parameters
     float channelHeight = 0.1F;
     float channelLength = 0.5F;
     float channelWidth = 0.1F;
+    float forceMagnitude = 10.0F;  // Added for Poiseuille flow
+
     // Taylor-Green parameters
     float domainSize = 6.28F;
 
-    // Dam break parameters
+    // Dam break parameters (kept for backward compatibility)
     float tankLength = 4.0F;
     float tankHeight = 2.0F;
     float tankWidth = 1.0F;
@@ -60,6 +62,10 @@ struct BenchmarkParameters
 
     // Lid-driven cavity parameters
     float cavitySize = 1.0F;
+    float lidVelocity = 5.0F;  // Added for Lid-Driven Cavity
+
+    // Refinement parameters (reference to the global refinement parameters)
+    cuda::refinement::RefinementParameters refinement;
 };
 
 class ConfigurationManager

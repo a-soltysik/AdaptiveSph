@@ -105,7 +105,7 @@ public:
 
     virtual ~Simulation() = default;
 
-    virtual void update(const Parameters& parameters, float deltaTime) = 0;
+    virtual void update(float deltaTime) = 0;
     [[nodiscard]] virtual uint32_t getParticlesCount() const = 0;
     [[nodiscard]] virtual auto calculateAverageNeighborCount() const -> float = 0;
     [[nodiscard]] virtual std::vector<glm::vec4> updateDensityDeviations() const = 0;

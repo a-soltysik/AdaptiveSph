@@ -1,4 +1,3 @@
-// TaylorGreenVortex.cpp
 #include "TaylorGreenVortex.hpp"
 
 #include <panda/Logger.h>
@@ -14,19 +13,22 @@ TaylorGreenVortex::TaylorGreenVortex()
 }
 
 BenchmarkResult TaylorGreenVortex::runBenchmark(const BenchmarkParameters& params,
+                                                const cuda::Simulation::Parameters& simulationParameters,
                                                 BenchmarkResult::SimulationType simulationType,
                                                 panda::gfx::vulkan::Context& api,
                                                 bool visualize,
                                                 Window* window)
 {
     // Call the base class implementation with visualization enabled
-    return ExperimentBase::runBenchmark(params, simulationType, api, visualize, window);
+    return ExperimentBase::runBenchmark(params, simulationParameters, simulationType, api, visualize, window);
 }
 
 cuda::Simulation::Parameters TaylorGreenVortex::createSimulationParameters(
-    const BenchmarkParameters& params, BenchmarkResult::SimulationType simulationType)
+    const BenchmarkParameters& params,
+    const cuda::Simulation::Parameters& simulationParameters,
+    BenchmarkResult::SimulationType simulationType)
 {
-    cuda::Simulation::Parameters simulationParams;
+    cuda::Simulation::Parameters simulationParams = simulationParameters;
 
     // Set up the domain for Taylor-Green vortex
     // Using a cubic domain with size 2π as specified in the paper
@@ -37,54 +39,34 @@ cuda::Simulation::Parameters TaylorGreenVortex::createSimulationParameters(
     // In Taylor-Green vortex, gravity is not typically used
     simulationParams.gravity = glm::vec3(0.0f, 0.0f, 0.0f);
 
-    // Set basic simulation parameters
-    simulationParams.restDensity = 1000.0f;
-    simulationParams.threadsPerBlock = 256;
-    simulationParams.restitution = 0.0f;  // No bounce for this type of flow
-
     // Set particle size and fluid properties based on simulation type
     if (simulationType == BenchmarkResult::SimulationType::Coarse)
     {
-        simulationParams.baseParticleRadius = 0.05F * 1.26F;
-        simulationParams.baseParticleMass = 1.2F * 2.F * 1.3F;
-        simulationParams.baseSmoothingRadius = 0.22F * 1.26F * 1.1;
-
-        simulationParams.pressureConstant = .5f;
-        simulationParams.nearPressureConstant = 0.02f;
-        simulationParams.viscosityConstant = 0.002f;
+        simulationParams.baseParticleRadius = params.coarse.baseParticleRadius;
+        simulationParams.baseParticleMass = params.coarse.baseParticleMass;
+        simulationParams.baseSmoothingRadius = params.coarse.baseSmoothingRadius;
+        simulationParams.pressureConstant = params.coarse.pressureConstant;
+        simulationParams.nearPressureConstant = params.coarse.nearPressureConstant;
+        simulationParams.viscosityConstant = params.coarse.viscosityConstant;
     }
     else if (simulationType == BenchmarkResult::SimulationType::Fine)
     {
-        simulationParams.baseParticleRadius = params.fine.particleSize / 2.0f;
-        simulationParams.baseParticleMass =
-            simulationParams.restDensity * std::pow(simulationParams.baseParticleRadius * 2.0f, 3) * 0.8f;
-        simulationParams.baseSmoothingRadius = simulationParams.baseParticleRadius * 4.0f;
-
-        simulationParams.pressureConstant = 0.1f;
-        simulationParams.nearPressureConstant = 0.005f;
-        simulationParams.viscosityConstant = 0.005f;
+        simulationParams.baseParticleRadius = params.fine.baseParticleRadius;
+        simulationParams.baseParticleMass = params.fine.baseParticleMass;
+        simulationParams.baseSmoothingRadius = params.fine.baseSmoothingRadius;
+        simulationParams.pressureConstant = params.fine.pressureConstant;
+        simulationParams.nearPressureConstant = params.fine.nearPressureConstant;
+        simulationParams.viscosityConstant = params.fine.viscosityConstant;
     }
-    else
-    {  // adaptive
-        simulationParams.baseParticleRadius =
-            (params.adaptive.minParticleSize + params.adaptive.maxParticleSize) / 4.0f;
-        simulationParams.baseParticleMass =
-            simulationParams.restDensity * std::pow(simulationParams.baseParticleRadius * 2.0f, 3) * 0.8f;
-        simulationParams.baseSmoothingRadius = simulationParams.baseParticleRadius * 4.0f;
-
-        simulationParams.pressureConstant = 0.3f;
-        simulationParams.nearPressureConstant = 0.008f;
-        simulationParams.viscosityConstant = 0.008f;
+    else  // adaptive
+    {
+        simulationParams.baseParticleRadius = params.adaptive.baseParticleRadius;
+        simulationParams.baseParticleMass = params.adaptive.baseParticleMass;
+        simulationParams.baseSmoothingRadius = params.adaptive.baseSmoothingRadius;
+        simulationParams.pressureConstant = params.adaptive.pressureConstant;
+        simulationParams.nearPressureConstant = params.adaptive.nearPressureConstant;
+        simulationParams.viscosityConstant = params.adaptive.viscosityConstant;
     }
-
-    // Calculate required viscosity based on Reynolds number
-    float characteristicLength = domainSize;
-    float characteristicVelocity = 1.0f;  // Unit velocity for Taylor-Green
-    float kinematicViscosity = (characteristicVelocity * characteristicLength) / params.reynoldsNumber;
-    // Update viscosity constant based on Reynolds number
-    simulationParams.viscosityConstant = kinematicViscosity;
-    // Limit maximum velocity to avoid instability
-    simulationParams.maxVelocity = 5.0f;
 
     // Set test case type
     simulationParams.testCase = cuda::Simulation::Parameters::TestCase::TaylorGreenVortex;
@@ -150,60 +132,6 @@ void TaylorGreenVortex::initializeParticles(std::vector<glm::vec4>& particles,
                      domainMin.x + offset.x,
                      domainMin.y + offset.y,
                      domainMin.z + offset.z);
-    panda::log::Info("Last particle at: {}, {}, {}",
-                     domainMin.x + (gridSize.x - 1) * actualSpacing.x + offset.x,
-                     domainMin.y + (gridSize.y - 1) * actualSpacing.y + offset.y,
-                     domainMin.z + (gridSize.z - 1) * actualSpacing.z + offset.z);
-}
-
-cuda::refinement::RefinementParameters TaylorGreenVortex::createRefinementParameters(
-    const BenchmarkParameters& params,
-    BenchmarkResult::SimulationType simulationType,
-    const cuda::Simulation::Parameters& simulationParams)
-{
-    cuda::refinement::RefinementParameters refinementParams;
-
-    // Enable refinement only for adaptive simulation
-    refinementParams.enabled = (simulationType == BenchmarkResult::SimulationType::Adaptive);
-
-    // Set refinement parameters
-    if (refinementParams.enabled)
-    {
-        // Calculate mass ratios based on particle sizes
-        float minRadius = params.adaptive.minParticleSize / 2.0f;
-        float maxRadius = params.adaptive.maxParticleSize / 2.0f;
-        float avgRadius = simulationParams.baseParticleRadius;
-
-        // Mass scales with radius^3
-        refinementParams.minMassRatio = std::pow(minRadius / avgRadius, 3.0f);
-        refinementParams.maxMassRatio = std::pow(maxRadius / avgRadius, 3.0f);
-
-        // For Taylor-Green vortex, vorticity criterion is ideal
-        refinementParams.criterionType = "vorticity";
-
-        // Set other refinement parameters
-        refinementParams.maxParticleCount = 5000000;
-        refinementParams.maxBatchRatio = 0.1f;
-        refinementParams.initialCooldown = 100;
-        refinementParams.cooldown = 10;
-
-        // Set vorticity thresholds suitable for Taylor-Green vortex
-        refinementParams.vorticity.split.minimalVorticityThreshold = 1.0f;
-        refinementParams.vorticity.merge.maximalVorticityThreshold = 0.2f;
-
-        // Splitting parameters
-        refinementParams.splitting.epsilon = 0.65f;
-        refinementParams.splitting.alpha = 0.85f;
-        refinementParams.splitting.centerMassRatio = 0.2f;
-        refinementParams.splitting.vertexMassRatio = 0.067f;
-    }
-    else
-    {
-        // Set a high max particle count for non-adaptive cases
-        refinementParams.maxParticleCount = 5000000;
-    }
-
-    return refinementParams;
 }
 
 }  // namespace sph::benchmark

@@ -205,7 +205,7 @@ auto App::runBenchmarks() -> void
 
     // Create and run the benchmark manager
     benchmark::BenchmarkManager benchmarkManager;
-    benchmarkManager.runBenchmarks(_benchmarkParams.value(), *_api, *_window);
+    benchmarkManager.runBenchmarks(_benchmarkParams.value(), _simulationParameters, *_api, *_window);
 
     panda::log::Info("Benchmarks completed.");
 }
@@ -218,7 +218,7 @@ auto App::mainLoop() const -> void
     _scene->getCamera().setViewYXZ(
         panda::gfx::view::YXZ {.position = cameraObject.translation, .rotation = cameraObject.rotation});
 
-    auto gui = SimulationDataGui {*_window, _simulationParameters};
+    auto gui = SimulationDataGui {*_window};
 
     auto timeManager = FrameTimeManager {};
     const std::vector densityDeviations(_simulation->getParticlesCount(), 0.F);
@@ -230,9 +230,7 @@ auto App::mainLoop() const -> void
             _window->processInput();
 
             timeManager.update();
-            const auto guiUpdate = gui.getParameters();
-            _scene->getDomain().transform.translation = (guiUpdate.domain.max + guiUpdate.domain.min) / 2.F;
-            _simulation->update(guiUpdate, 0.001F);
+            _simulation->update(timeManager.getDelta());
             gui.setAverageNeighbourCount(_simulation->calculateAverageNeighborCount());
             gui.setDensityDeviation({.densityDeviations = _simulation->updateDensityDeviations(),
                                      .particleCount = _simulation->getParticlesCount(),

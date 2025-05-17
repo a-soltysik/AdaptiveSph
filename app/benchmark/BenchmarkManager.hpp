@@ -15,7 +15,10 @@ class BenchmarkManager
 public:
     BenchmarkManager();
     // Run all configured benchmark experiments
-    void runBenchmarks(const BenchmarkParameters& params, panda::gfx::vulkan::Context& api, Window& window);
+    void runBenchmarks(const BenchmarkParameters& params,
+                       const cuda::Simulation::Parameters& simulationParameters,
+                       panda::gfx::vulkan::Context& api,
+                       Window& window) const;
     // Register a new experiment
     void registerExperiment(std::unique_ptr<ExperimentBase> experiment);
 

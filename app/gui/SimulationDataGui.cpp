@@ -20,9 +20,8 @@
 namespace sph
 {
 
-SimulationDataGui::SimulationDataGui(const Window& window, const cuda::Simulation::Parameters& simulationData)
-    : _simulationData {simulationData},
-      _window {window}
+SimulationDataGui::SimulationDataGui(const Window& window)
+    : _window {window}
 {
     _beginGuiReceiver = panda::utils::signals::beginGuiRender.connect([this](auto data) {
         ImGui_ImplVulkan_NewFrame();
@@ -39,28 +38,6 @@ SimulationDataGui::SimulationDataGui(const Window& window, const cuda::Simulatio
 
 auto SimulationDataGui::render() -> void
 {
-    const auto windowSize =
-        ImVec2 {static_cast<float>(_window.getSize().x) / 3, static_cast<float>(_window.getSize().y)};
-    ImGui::SetNextWindowPos({static_cast<float>(_window.getSize().x) * 2.F / 3.F, 0}, ImGuiCond_Once);
-    ImGui::SetNextWindowSize(windowSize, ImGuiCond_Once);
-    ImGui::SetNextWindowCollapsed(true, ImGuiCond_Once);
-
-    ImGui::Begin("Simulation Parameters", nullptr);
-
-    auto translation = _simulationData.domain.getTranslation();
-    auto scale = _simulationData.domain.getScale();
-
-    ImGui::DragFloat("Smoothing radius", &_simulationData.baseSmoothingRadius, 0.001F, 0.001F, 1.F);
-    ImGui::DragFloat("Rest density", &_simulationData.restDensity, 1.F, 1.F, 3000.F);
-    ImGui::DragFloat("Pressure constant", &_simulationData.pressureConstant, .001F, .001F, 10.F);
-    ImGui::DragFloat("Near Pressure constant", &_simulationData.nearPressureConstant, .001F, .001F, 10.F);
-    ImGui::DragFloat("Viscosity constant", &_simulationData.viscosityConstant, 0.001F, 0.001F, 1.F);
-    ImGui::DragFloat("Max speed", &_simulationData.maxVelocity, 0.1F, 0.1F, 10.F);
-    ImGui::DragFloat3("Translation", &translation[0], 0.1F, -5.F, 5.F);
-
-    _simulationData.domain = cuda::Simulation::Parameters::Domain {}.fromTransform(translation, scale);
-    ImGui::End();
-
     static float lastFps = 0.0F;
     static auto lastUpdate = std::chrono::steady_clock::now();
 
@@ -91,7 +68,7 @@ auto SimulationDataGui::render() -> void
     displayAverageNeighborCount(_averageNeighbourCount);
     displayDensityStatistics(_densityDeviation.densityDeviations,
                              _densityDeviation.particleCount,
-                             _simulationData.restDensity);
+                             _densityDeviation.restDensity);
 }
 
 void SimulationDataGui::displayAverageNeighborCount(float averageNeighbors)
@@ -160,11 +137,6 @@ void SimulationDataGui::displayDensityStatistics(const std::vector<glm::vec4>& d
     //NOLINTEND(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
 
     ImGui::End();
-}
-
-auto SimulationDataGui::getParameters() const -> const cuda::Simulation::Parameters&
-{
-    return _simulationData;
 }
 
 auto SimulationDataGui::setAverageNeighbourCount(float neighbourCount) -> void

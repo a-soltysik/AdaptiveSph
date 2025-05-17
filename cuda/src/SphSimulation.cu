@@ -93,10 +93,8 @@ auto SphSimulation::toInternalBuffer(const ParticlesDataBuffer& memory) -> Parti
             .refinementLevels = dynamic_cast<const ImportedParticleMemory&>(memory.refinementLevels)};
 }
 
-void SphSimulation::update(const Parameters& parameters, float deltaTime)
+void SphSimulation::update(float deltaTime)
 {
-    _simulationData = parameters;
-
     computeExternalForces(deltaTime);
     resetGrid();
     assignParticlesToCells();

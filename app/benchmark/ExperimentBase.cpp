@@ -1,4 +1,3 @@
-// ExperimentBase.cpp
 #include "ExperimentBase.hpp"
 
 #include <panda/Logger.h>
@@ -16,31 +15,21 @@ ExperimentBase::ExperimentBase(cuda::Simulation::Parameters::TestCase name)
 }
 
 BenchmarkResult ExperimentBase::runBenchmark(const BenchmarkParameters& params,
+                                             const cuda::Simulation::Parameters& simulationParameters,
                                              BenchmarkResult::SimulationType simulationType,
                                              panda::gfx::vulkan::Context& api,
                                              bool visualize,
                                              Window* window)
 {
     // Create simulation parameters based on configuration
-    auto simulationParams = createSimulationParameters(params, simulationType);
+    auto simulationParams = createSimulationParameters(params, simulationParameters, simulationType);
     // Initialize particles
     std::vector<glm::vec4> particles;
     initializeParticles(particles, simulationParams);
-    // Create refinement parameters
-    cuda::refinement::RefinementParameters refinementParams;
+    // Create refinement parameters based on global config
+    cuda::refinement::RefinementParameters refinementParams = params.refinement;
+    // Only enable refinement for adaptive simulation type
     refinementParams.enabled = (simulationType == BenchmarkResult::SimulationType::Adaptive);
-    refinementParams.maxParticleCount = 1000000;
-    refinementParams.initialCooldown = 10000;
-    refinementParams.cooldown = 1000;
-    refinementParams.maxMassRatio = 1.1;
-    refinementParams.minMassRatio = 0.9;
-    refinementParams.criterionType = "velocity";
-    refinementParams.velocity.merge.maximalSpeedThreshold = 2.F;
-    refinementParams.velocity.split.minimalSpeedThreshold = 4.F;
-    refinementParams.splitting.alpha = 0.55;
-    refinementParams.splitting.epsilon = 0.65;
-    refinementParams.splitting.centerMassRatio = 0.2;
-    refinementParams.splitting.vertexMassRatio = 0.067;
     auto simulation = cuda::createSimulation(simulationParams,
                                              particles,
                                              api.initializeParticleSystem(refinementParams.maxParticleCount),
@@ -54,14 +43,17 @@ BenchmarkResult ExperimentBase::runBenchmark(const BenchmarkParameters& params,
         visualizer = std::make_unique<BenchmarkVisualizer>(api, _name, simulationType);
         visualizer->initialize(simulationParams);
     }
+
     // Run simulation and collect metrics
     runSimulation(*simulation,
                   simulationParams,
                   metricsCollector,
                   params.totalSimulationFrames,
                   params.measurementInterval,
+                  params.timestep,
                   visualize ? visualizer.get() : nullptr,
                   window);
+
     // Calculate and return results
     return metricsCollector.calculateResults(_name, simulationType, params.reynoldsNumber);
 }
@@ -71,6 +63,7 @@ void ExperimentBase::runSimulation(cuda::Simulation& simulation,
                                    MetricsCollector& metricsCollector,
                                    int totalFrames,
                                    int measureInterval,
+                                   float timestep,
                                    BenchmarkVisualizer* visualizer,
                                    Window* window)
 {
@@ -79,7 +72,7 @@ void ExperimentBase::runSimulation(cuda::Simulation& simulation,
     metricsCollector.initialize(simulation, simulationParams.restDensity);
     panda::log::Info("Running simulation for {} frames, measuring every {} frames", totalFrames, measureInterval);
     // Run simulation for specified frames
-    SimulationDataGui gui {*window, {}};
+    SimulationDataGui gui {*window};
     for (int frame = 0; frame < totalFrames; ++frame)
     {
         timeManager.update();
@@ -89,12 +82,12 @@ void ExperimentBase::runSimulation(cuda::Simulation& simulation,
         {
             window->processInput();  // This processes GLFW events
         }
-        // Run one simulation step (use fixed time step for consistent physics)
-        simulation.update(simulationParams, 0.0001f);
+        // Run one simulation step with configurable time step
+        simulation.update(timestep);
         gui.setAverageNeighbourCount(simulation.calculateAverageNeighborCount());
         gui.setDensityDeviation({.densityDeviations = simulation.updateDensityDeviations(),
                                  .particleCount = simulation.getParticlesCount(),
-                                 .restDensity = 1000.F});
+                                 .restDensity = simulationParams.restDensity});
         // Collect metrics at specified intervals
         if (frame % measureInterval == 0)
         {

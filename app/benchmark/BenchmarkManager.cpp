@@ -1,4 +1,3 @@
-// BenchmarkManager.cpp
 #include "BenchmarkManager.hpp"
 
 #include <panda/Logger.h>
@@ -21,8 +20,9 @@ BenchmarkManager::BenchmarkManager()
 }
 
 void BenchmarkManager::runBenchmarks(const BenchmarkParameters& params,
+                                     const cuda::Simulation::Parameters& simulationParameters,
                                      panda::gfx::vulkan::Context& api,
-                                     Window& window)
+                                     Window& window) const
 {
     if (!params.enabled)
     {
@@ -46,18 +46,30 @@ void BenchmarkManager::runBenchmarks(const BenchmarkParameters& params,
             MetricsCollector metricsCollector;
             // Run coarse simulation
             panda::log::Info("Running coarse simulation");
-            auto coarseResult =
-                experiment->runBenchmark(params, BenchmarkResult::SimulationType::Coarse, api, true, &window);
+            auto coarseResult = experiment->runBenchmark(params,
+                                                         simulationParameters,
+                                                         BenchmarkResult::SimulationType::Coarse,
+                                                         api,
+                                                         true,
+                                                         &window);
             metricsCollector.saveToFile(coarseResult, params.outputPath);
             // Run fine simulation
             panda::log::Info("Running fine simulation");
-            auto fineResult =
-                experiment->runBenchmark(params, BenchmarkResult::SimulationType::Fine, api, true, &window);
+            auto fineResult = experiment->runBenchmark(params,
+                                                       simulationParameters,
+                                                       BenchmarkResult::SimulationType::Fine,
+                                                       api,
+                                                       true,
+                                                       &window);
             metricsCollector.saveToFile(fineResult, params.outputPath);
             // Run adaptive simulation
             panda::log::Info("Running adaptive simulation");
-            auto adaptiveResult =
-                experiment->runBenchmark(params, BenchmarkResult::SimulationType::Adaptive, api, true, &window);
+            auto adaptiveResult = experiment->runBenchmark(params,
+                                                           simulationParameters,
+                                                           BenchmarkResult::SimulationType::Adaptive,
+                                                           api,
+                                                           true,
+                                                           &window);
             metricsCollector.saveToFile(adaptiveResult, params.outputPath);
             panda::log::Info("Benchmark completed for {}", std::to_underlying(experiment->getName()));
             return;
