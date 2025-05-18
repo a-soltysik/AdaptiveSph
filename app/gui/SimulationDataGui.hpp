@@ -1,9 +1,6 @@
 #pragma once
 #include <panda/utils/Signals.h>
 
-#include <cstdint>
-#include <cuda/Simulation.cuh>
-#include <glm/ext/vector_float4.hpp>
 #include <vector>
 
 namespace sph
@@ -15,7 +12,7 @@ class SimulationDataGui
 public:
     struct DensityDeviation
     {
-        std::vector<glm::vec4> densityDeviations;
+        std::vector<float> densityDeviations;
         uint32_t particleCount;
         float restDensity;
     };
@@ -28,8 +25,8 @@ public:
 private:
     void render();
 
-    static void displayAverageNeighborCount(float averageNeighbors);
-    static void displayDensityStatistics(const std::vector<glm::vec4>& densityDeviations,
+    void displayAverageNeighborCount(float averageNeighbors) const;
+    static void displayDensityStatistics(const std::vector<float>& densityDeviations,
                                          uint32_t particleCount,
                                          float restDensity);
 

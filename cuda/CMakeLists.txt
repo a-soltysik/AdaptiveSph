@@ -9,13 +9,14 @@ add_library(
         src/ImportedParticleMemory.cu
         src/device/Kernel.cu
         src/refinement/ParticleOperations.cu
-        src/refinement/VelocityCriterion.cu
+
         src/AdaptiveSphSimulation.cu
         src/SimulationFactory.cu
         src/common/Utils.cu
-        src/refinement/VorticityCriterion.cu
-        src/refinement/CurvatureCriterion.cu
-        src/refinement/InterfaceCriterion.cu
+        src/refinement/criteria/VelocityCriterion.cu
+        src/refinement/criteria/VorticityCriterion.cu
+        src/refinement/criteria/CurvatureCriterion.cu
+        src/refinement/criteria/InterfaceCriterion.cu
         src/common/Iteration.cu)
 target_compile_features(AdaptiveSphCuda PRIVATE cxx_std_20)
 target_compile_definitions(AdaptiveSphCuda PRIVATE EXPORTING_CUDA_LIB)

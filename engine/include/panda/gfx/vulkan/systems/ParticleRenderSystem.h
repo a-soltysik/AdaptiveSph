@@ -53,14 +53,13 @@ private:
         SharedBuffer positions;
         SharedBuffer predictedPositions;
         SharedBuffer velocities;
-        SharedBuffer forces;
         SharedBuffer densities;
         SharedBuffer nearDensities;
         SharedBuffer pressures;
         SharedBuffer radiuses;
         SharedBuffer smoothingRadiuses;
         SharedBuffer masses;
-        SharedBuffer refinementLevels;
+        SharedBuffer densityDeviations;
     };
 
     const Device& _device;

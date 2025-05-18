@@ -1,13 +1,19 @@
+#include <cstdint>
+#include <glm/common.hpp>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_float4.hpp>
 #include <glm/glm.hpp>
 
+#include "../../SphSimulation.cuh"
 #include "InterfaceCriterion.cuh"
+#include "cuda/Simulation.cuh"
 #include "glm/gtx/component_wise.hpp"
 
 namespace sph::cuda::refinement::interfaceCriterion
 {
 
-__device__ glm::vec3 calculateMinSurfaceDistance(const glm::vec4& position,
-                                                 const Simulation::Parameters::Domain& domain)
+__device__ auto calculateMinSurfaceDistance(const glm::vec4& position, const Simulation::Parameters::Domain& domain)
+    -> glm::vec3
 {
     const auto distToMinX = position.x - domain.min.x;
     const auto distToMaxX = domain.max.x - position.x;
@@ -20,21 +26,17 @@ __device__ glm::vec3 calculateMinSurfaceDistance(const glm::vec4& position,
     const auto minDistY = glm::min(distToMinY, distToMaxY);
     const auto minDistZ = glm::min(distToMinZ, distToMaxZ);
 
-    return glm::vec3(glm::max(0.0f, minDistX), glm::max(0.0f, minDistY), glm::max(0.0f, minDistZ));
-}
-
-__device__ float SplitCriterionGenerator::computePriorityScore(float distance) const
-{
-    return fmaxf(0.F, 1.F - distance / glm::length(_splitThreshold));
+    return {glm::max(0.0F, minDistX), glm::max(0.0F, minDistY), glm::max(0.0F, minDistZ)};
 }
 
 __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles,
                                                     uint32_t id,
+                                                    const SphSimulation::Grid& grid,
                                                     const Simulation::Parameters& simulationData) const -> float
 {
     if (particles.masses[id] < _minimalMass)
     {
-        return -1.0f;
+        return -1.0F;
     }
 
     const auto position = particles.positions[id];
@@ -44,21 +46,17 @@ __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles,
     const auto normalizedDistances = minDistances / splitThresholds;
     const auto minNormalizedDistance = glm::compMin(normalizedDistances);
 
-    return 1.0f - minNormalizedDistance;
-}
-
-__device__ float MergeCriterionGenerator::computePriorityScore(float distance) const
-{
-    return distance / glm::length(_mergeThreshold);
+    return 1.0F - minNormalizedDistance;
 }
 
 __device__ auto MergeCriterionGenerator::operator()(ParticlesData particles,
                                                     uint32_t id,
+                                                    const SphSimulation::Grid& grid,
                                                     const Simulation::Parameters& simulationData) const -> float
 {
     if (particles.masses[id] > _maximalMass)
     {
-        return -1.0f;
+        return -1.0F;
     }
 
     const auto position = particles.positions[id];
@@ -68,7 +66,7 @@ __device__ auto MergeCriterionGenerator::operator()(ParticlesData particles,
     const auto normalizedDistances = minDistances / mergeThresholds;
     const auto minNormalizedDistance = glm::compMin(normalizedDistances);
 
-    return minNormalizedDistance - 1.0f;
+    return minNormalizedDistance - 1.0F;
 }
 
 }

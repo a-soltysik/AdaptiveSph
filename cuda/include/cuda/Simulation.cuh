@@ -19,14 +19,13 @@ struct ParticlesData
     glm::vec4* positions;
     glm::vec4* predictedPositions;
     glm::vec4* velocities;
-    glm::vec4* forces;
     float* densities;
     float* nearDensities;
     float* pressures;
     float* radiuses;
     float* smoothingRadiuses;
     float* masses;
-    uint32_t* refinementLevels;
+    float* densityDeviations;
 
     uint32_t particleCount;
 };
@@ -36,14 +35,13 @@ struct ParticlesDataBuffer
     const ImportedMemory& positions;
     const ImportedMemory& predictedPositions;
     const ImportedMemory& velocities;
-    const ImportedMemory& forces;
     const ImportedMemory& densities;
     const ImportedMemory& nearDensities;
     const ImportedMemory& pressures;
     const ImportedMemory& radiuses;
     const ImportedMemory& smoothingRadiuses;
     const ImportedMemory& masses;
-    const ImportedMemory& refinementLevels;
+    const ImportedMemory& densityDeviations;
 };
 
 class SPH_CUDA_API Simulation
@@ -78,9 +76,9 @@ public:
             }
         };
 
-        enum class TestCase
+        enum class TestCase : uint32_t
         {
-            None,
+            None_,
             LidDrivenCavity,
             PoiseuilleFlow,
             TaylorGreenVortex
@@ -98,7 +96,7 @@ public:
         float baseParticleRadius;
         float baseParticleMass;
         float lidVelocity = 0.F;
-        TestCase testCase = TestCase::None;
+        TestCase testCase = TestCase::None_;
 
         uint32_t threadsPerBlock;
     };
@@ -106,15 +104,16 @@ public:
     virtual ~Simulation() = default;
 
     virtual void update(float deltaTime) = 0;
-    [[nodiscard]] virtual uint32_t getParticlesCount() const = 0;
+    [[nodiscard]] virtual auto getParticlesCount() const -> uint32_t = 0;
     [[nodiscard]] virtual auto calculateAverageNeighborCount() const -> float = 0;
-    [[nodiscard]] virtual std::vector<glm::vec4> updateDensityDeviations() const = 0;
+    [[nodiscard]] virtual auto updateDensityDeviations() const -> std::vector<float> = 0;
     virtual void setParticleVelocity(uint32_t particleIndex, const glm::vec4& velocity) = 0;
 };
 
-SPH_CUDA_API std::unique_ptr<Simulation> createSimulation(const Simulation::Parameters& parameters,
-                                                          const std::vector<glm::vec4>& positions,
-                                                          const ParticlesDataBuffer& memory,
-                                                          const refinement::RefinementParameters& refinementParams);
+SPH_CUDA_API auto createSimulation(const Simulation::Parameters& parameters,
+                                   const std::vector<glm::vec4>& positions,
+                                   const ParticlesDataBuffer& memory,
+                                   const refinement::RefinementParameters& refinementParams)
+    -> std::unique_ptr<Simulation>;
 
 }

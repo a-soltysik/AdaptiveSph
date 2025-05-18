@@ -4,7 +4,9 @@
 #include <panda/gfx/vulkan/Scene.h>
 
 #include <cuda/Simulation.cuh>
+#include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
+#include <glm/ext/vector_uint3.hpp>
 #include <memory>
 #include <optional>
 #include <string>
@@ -27,7 +29,7 @@ public:
 private:
     static auto initializeLogger() -> void;
     static auto registerSignalHandlers() -> void;
-    static glm::vec3 calculateParticleSpacing(const glm::vec3& domainSize, const glm::uvec3& gridSize);
+    static auto calculateParticleSpacing(const glm::vec3& domainSize, const glm::uvec3& gridSize) -> glm::vec3;
 
     auto loadConfigurationFromFile(const std::string& configPath) -> bool;
 

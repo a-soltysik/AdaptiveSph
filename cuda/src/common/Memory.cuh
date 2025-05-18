@@ -1,7 +1,8 @@
-// CudaMemory.hpp
 #pragma once
 
 #include <cuda_runtime.h>
+
+#include <cstddef>
 
 namespace sph::cuda
 {

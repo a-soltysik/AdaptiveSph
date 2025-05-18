@@ -1,5 +1,6 @@
 #include "panda/Logger.h"
 
+#include <fmt/base.h>
 #include <fmt/chrono.h>  // NOLINT(misc-include-cleaner)
 #include <fmt/format.h>
 #include <fmt/os.h>

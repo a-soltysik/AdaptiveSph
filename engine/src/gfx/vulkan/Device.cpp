@@ -51,7 +51,7 @@ auto Device::pickPhysicalDevice(const vk::Instance& instance,
         return isDeviceSuitable(currentDevice, surface, requiredExtensions);
     });
 
-    expectNot(it, devices.cend(), "None of physical devices is suitable");
+    expectNot(it, devices.cend(), "None_ of physical devices is suitable");
     return *it;
 }
 

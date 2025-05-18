@@ -18,7 +18,6 @@
 #include <filesystem>
 #include <glm/common.hpp>
 #include <glm/ext/vector_float3.hpp>
-#include <glm/ext/vector_float4.hpp>
 #include <glm/ext/vector_uint2.hpp>
 #include <glm/ext/vector_uint3.hpp>
 #include <glm/geometric.hpp>
@@ -36,7 +35,6 @@
 #include "input_handler/MouseHandler.hpp"
 #include "internal/config.hpp"
 #include "mesh/InvertedCube.hpp"
-#include "mesh/UvSphere.hpp"
 #include "movement_handler/MovementHandler.hpp"
 #include "movement_handler/RotationHandler.hpp"
 #include "utils/FrameTimeManager.hpp"
@@ -139,13 +137,13 @@ auto App::run() -> int
 
     _api->registerTexture(std::move(redTexture));
 
-    setDefaultScene();
-
     if (_benchmarkParams.has_value() && _benchmarkParams.value().enabled)
     {
         runBenchmarks();
         return 0;
     }
+
+    setDefaultScene();
 
     _simulation = createSimulation(_simulationParameters,
                                    _particles,
@@ -203,9 +201,7 @@ auto App::runBenchmarks() -> void
         _api = std::make_unique<panda::gfx::vulkan::Context>(*_window);
     }
 
-    // Create and run the benchmark manager
-    benchmark::BenchmarkManager benchmarkManager;
-    benchmarkManager.runBenchmarks(_benchmarkParams.value(), _simulationParameters, *_api, *_window);
+    benchmark::BenchmarkManager {}.runBenchmarks(_benchmarkParams.value(), _simulationParameters, *_api, *_window);
 
     panda::log::Info("Benchmarks completed.");
 }
@@ -230,12 +226,11 @@ auto App::mainLoop() const -> void
             _window->processInput();
 
             timeManager.update();
-            _simulation->update(timeManager.getDelta());
+            _simulation->update(0.0001F);
             gui.setAverageNeighbourCount(_simulation->calculateAverageNeighborCount());
             gui.setDensityDeviation({.densityDeviations = _simulation->updateDensityDeviations(),
                                      .particleCount = _simulation->getParticlesCount(),
                                      .restDensity = _simulationParameters.restDensity});
-
             _scene->setParticleCount(_simulation->getParticlesCount());
             _scene->getCamera().setPerspectiveProjection(
                 panda::gfx::projection::Perspective {.fovY = glm::radians(50.F),
@@ -244,7 +239,7 @@ auto App::mainLoop() const -> void
                                                      .zFar = 100});
             processCamera(timeManager.getDelta(), *_window, cameraObject, _scene->getCamera());
 
-            _api->makeFrame(timeManager.getDelta(), *_scene);
+            _api->makeFrame(*_scene);
         }
         else [[unlikely]]
         {
@@ -283,24 +278,14 @@ auto App::registerSignalHandlers() -> void
 
 void App::setDefaultScene()
 {
-    auto redTexture = panda::gfx::vulkan::Texture::getDefaultTexture(*_api, {1, 0, 0, 1});
-    auto blueTexture = panda::gfx::vulkan::Texture::getDefaultTexture(*_api, {0, 0, 1, 1});
-    auto sphereMesh = mesh::uv_sphere::create(*_api, "Sphere", {.radius = 1, .stacks = 5, .slices = 10});
-    auto invertedCubeMesh = mesh::inverted_cube::create(*_api, "InvertedCube");
-
     createDomainBoundaries();
     createParticleDistribution();
     setupLighting();
-
-    _api->registerMesh(std::move(sphereMesh));
-    _api->registerMesh(std::move(invertedCubeMesh));
-    _api->registerTexture(std::move(redTexture));
-    _api->registerTexture(std::move(blueTexture));
 }
 
 void App::createDomainBoundaries()
 {
-    auto blueTexture = panda::gfx::vulkan::Texture::getDefaultTexture(*_api, {0, 0, 1, 0.3f});
+    auto blueTexture = panda::gfx::vulkan::Texture::getDefaultTexture(*_api, {0, 0, 1, 0.3F});
     auto invertedCubeMesh = mesh::inverted_cube::create(*_api, "InvertedCube");
 
     const auto domain = _simulationParameters.domain;
@@ -318,39 +303,36 @@ void App::createDomainBoundaries()
 
 void App::createParticleDistribution()
 {
-    const glm::uvec3 simulationSize = _initialParameters.particleCount;
+    const auto simulationSize = _initialParameters.particleCount;
 
     panda::log::Info("Creating particle distribution with grid size: {}x{}x{}",
                      simulationSize.x,
                      simulationSize.y,
                      simulationSize.z);
 
-    const glm::vec3 domainMin = _simulationParameters.domain.min;
-    const glm::vec3 domainMax = _simulationParameters.domain.max;
-    const glm::vec3 domainSize = domainMax - domainMin;
-    const glm::uvec3 gridSize = _initialParameters.particleCount;
+    const auto domainMin = _simulationParameters.domain.min;
+    const auto domainMax = _simulationParameters.domain.max;
+    const auto domainSize = domainMax - domainMin;
+    const auto gridSize = _initialParameters.particleCount;
 
-    glm::vec3 particleSpacing = calculateParticleSpacing(domainSize, gridSize);
+    const auto particleSpacing = calculateParticleSpacing(domainSize, gridSize);
     panda::log::Info("Particle spacing: {}", glm::to_string(particleSpacing));
 
-    const glm::vec3 startPos = domainMin + particleSpacing;
+    const auto startPos = domainMin + particleSpacing;
     createParticlesInGrid(startPos, gridSize, particleSpacing);
 }
 
-glm::vec3 App::calculateParticleSpacing(const glm::vec3& domainSize, const glm::uvec3& gridSize)
+auto App::calculateParticleSpacing(const glm::vec3& domainSize, const glm::uvec3& gridSize) -> glm::vec3
 {
-    glm::vec3 particleSpacing;
-    particleSpacing.x = gridSize.x > 1 ? domainSize.x / static_cast<float>(gridSize.x + 1) : domainSize.x / 2.0F;
-    particleSpacing.y = gridSize.y > 1 ? domainSize.y / static_cast<float>(gridSize.y + 1) : domainSize.y / 2.0F;
-    particleSpacing.z = gridSize.z > 1 ? domainSize.z / static_cast<float>(gridSize.z + 1) : domainSize.z / 2.0F;
-
-    return particleSpacing;
+    return {gridSize.x > 1 ? domainSize.x / static_cast<float>(gridSize.x + 1) : domainSize.x / 2.0F,
+            gridSize.y > 1 ? domainSize.y / static_cast<float>(gridSize.y + 1) : domainSize.y / 2.0F,
+            gridSize.z > 1 ? domainSize.z / static_cast<float>(gridSize.z + 1) : domainSize.z / 2.0F};
 }
 
 void App::createParticlesInGrid(const glm::vec3& startPos, const glm::uvec3& gridSize, const glm::vec3& spacing)
 {
     _particles.clear();
-    _particles.reserve(gridSize.x * gridSize.y * gridSize.z);
+    _particles.reserve(static_cast<size_t>(gridSize.x) * gridSize.y * gridSize.z);
     for (uint32_t i = 0; i < gridSize.x; i++)
     {
         for (uint32_t j = 0; j < gridSize.y; j++)

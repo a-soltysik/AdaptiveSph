@@ -1,6 +1,14 @@
 #pragma once
 
+#include <driver_types.h>
+#include <vector_types.h>
+
+#include <cstddef>
+#include <cstdint>
 #include <glm/ext/vector_float4.hpp>
+#include <glm/ext/vector_uint3.hpp>
+#include <utility>
+#include <vector>
 
 #include "../SphSimulation.cuh"
 #include "cuda/Simulation.cuh"

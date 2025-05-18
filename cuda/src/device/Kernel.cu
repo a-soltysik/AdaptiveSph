@@ -4,33 +4,64 @@
 
 namespace sph::cuda::device
 {
-__device__ auto densityKernel(float distance, float smoothingRadius) -> float
+
+__device__ auto wendlandLaplacianKernel(float distance, float smoothingRadius) -> float
+{
+    if (distance < smoothingRadius)
+    {
+        const float q = distance / smoothingRadius;
+        const float h = smoothingRadius;
+
+        const float factor = 105.0F / (16.0F * glm::pi<float>() * glm::pow(h, 5.0F));
+        const float oneMq = 1.0F - q;
+
+        return factor * oneMq * oneMq * (1.0F - 5.0F * q);
+    }
+    return 0.F;
+}
+
+__device__ auto wendlandKernel(float distance, float smoothingRadius) -> float
 {
     const float q = distance / smoothingRadius;
-    if (q > 2.0f)
+    if (q > 2.0F)
     {
-        return 0.0f;
+        return 0.0F;
     }
 
-    const float normalization = 21.0f / (16.0f * glm::pi<float>());
-    const float volumeFactor = 1.0f / (smoothingRadius * smoothingRadius * smoothingRadius);
-    const float tmp = 1.0f - 0.5f * q;
-    return normalization * volumeFactor * tmp * tmp * tmp * tmp * (2.0f * q + 1.0f);
+    const float normalization = 21.0F / (16.0F * glm::pi<float>());
+    const float volumeFactor = 1.0F / (smoothingRadius * smoothingRadius * smoothingRadius);
+    const float tmp = 1.0F - (0.5F * q);
+    return normalization * volumeFactor * tmp * tmp * tmp * tmp * (2.0F * q + 1.0F);
+}
+
+__device__ auto wendlandDerivativeKernel(float distance, float smoothingRadius) -> float
+{
+    const float q = distance / smoothingRadius;
+    if (q > 2.0F || distance < 1e-6F)
+    {
+        return 0.0F;
+    }
+
+    const float normalization = 21.0F / (16.0F * glm::pi<float>());
+    const float volumeFactor = 1.0F / (smoothingRadius * smoothingRadius * smoothingRadius);
+    const float tmp = 1.0F - (0.5f * q);
+
+    return normalization * volumeFactor * (-5.0F * q * tmp * tmp * tmp) / smoothingRadius;
+}
+
+__device__ auto densityKernel(float distance, float smoothingRadius) -> float
+{
+    return wendlandKernel(distance, smoothingRadius);
 }
 
 __device__ auto densityDerivativeKernel(float distance, float smoothingRadius) -> float
 {
-    const float q = distance / smoothingRadius;
-    if (q > 2.0f || distance < 1e-6f)
-    {
-        return 0.0f;
-    }
+    return wendlandDerivativeKernel(distance, smoothingRadius);
+}
 
-    const float normalization = 21.0f / (16.0f * glm::pi<float>());
-    const float volumeFactor = 1.0f / (smoothingRadius * smoothingRadius * smoothingRadius);
-    const float tmp = 1.0f - 0.5f * q;
-
-    return normalization * volumeFactor * (-5.0f * q * tmp * tmp * tmp) / smoothingRadius;
+__device__ auto densityLaplacianKernel(float distance, float smoothingRadius) -> float
+{
+    return wendlandLaplacianKernel(distance, smoothingRadius);
 }
 
 __device__ auto nearDensityKernel(float distance, float smoothingRadius) -> float
@@ -74,18 +105,4 @@ __device__ auto viscosityLaplacianKernel(float distance, float smoothingRadius) 
     return 45.F / (glm::pi<float>() * glm::pow(smoothingRadius, 6.F)) * (smoothingRadius - distance);
 }
 
-__device__ auto wendlandLaplacianKernel(float distance, float smoothingRadius) -> float
-{
-    if (distance < smoothingRadius)
-    {
-        const float q = distance / smoothingRadius;
-        const float h = smoothingRadius;
-
-        const float factor = 105.0f / (16.0f * glm::pi<float>() * glm::pow(h, 5.0f));
-        const float oneMq = 1.0f - q;
-
-        return factor * oneMq * oneMq * (1.0f - 5.0f * q);
-    }
-    return 0.F;
-}
 }

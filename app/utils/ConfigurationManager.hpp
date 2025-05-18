@@ -16,7 +16,6 @@ struct InitialParameters
     glm::uvec3 particleCount = {40, 40, 25};
 };
 
-// Common parameters for each simulation resolution
 struct SimulationResolutionConfig
 {
     float baseParticleRadius = 0.025F;
@@ -32,8 +31,6 @@ struct BenchmarkParameters
     bool enabled = false;
     cuda::Simulation::Parameters::TestCase testCase = cuda::Simulation::Parameters::TestCase::LidDrivenCavity;
     std::string outputPath = "benchmarks/";
-
-    // Resolution-specific configurations
     SimulationResolutionConfig coarse;
     SimulationResolutionConfig fine;
     SimulationResolutionConfig adaptive;

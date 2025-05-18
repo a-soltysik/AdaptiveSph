@@ -38,7 +38,7 @@ public:
     static constexpr auto maxFramesInFlight = size_t {2};
 
     auto initializeParticleSystem(size_t particleCount) -> sph::cuda::ParticlesDataBuffer;
-    auto makeFrame(float deltaTime, Scene& scene) const -> void;
+    auto makeFrame(Scene& scene) const -> void;
     [[nodiscard]] auto getDevice() const noexcept -> const Device&;
     [[nodiscard]] auto getRenderer() const noexcept -> const Renderer&;
     auto registerTexture(std::unique_ptr<Texture> texture) -> void;

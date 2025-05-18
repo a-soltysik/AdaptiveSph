@@ -1,10 +1,14 @@
-#include <cfloat>
+#include <cstdint>
+#include <glm/common.hpp>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_float4.hpp>
 #include <glm/geometric.hpp>
 
-#include "../common/Iteration.hpp"
-#include "../common/Utils.cuh"
-#include "../device/Kernel.cuh"
+#include "../../SphSimulation.cuh"
+#include "../../common/Iteration.cuh"
+#include "../../device/Kernel.cuh"
 #include "CurvatureCriterion.cuh"
+#include "cuda/Simulation.cuh"
 
 namespace sph::cuda::refinement::curvature
 {
@@ -18,13 +22,13 @@ __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles,
     {
         return -1;
     }
-    const glm::vec4 position = particles.positions[id];
-    const float h = particles.smoothingRadiuses[id];
-    const float density = particles.densities[id];
+    const auto position = particles.positions[id];
+    const auto smoothingRadius = particles.smoothingRadiuses[id];
+    const auto density = particles.densities[id];
 
-    float densityLaplacian = 0.0f;
-    float totalWeight = 0.0f;
-    int validNeighbors = 0;
+    auto densityLaplacian = 0.F;
+    auto totalWeight = 0.F;
+    auto validNeighbors = uint32_t {};
 
     forEachNeighbour(position,
                      particles,
@@ -36,15 +40,14 @@ __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles,
                              return;
                          }
 
-                         const glm::vec3 r = glm::vec3(adjustedPos - position);
-                         const float dist = glm::length(r);
-                         if (dist < h && dist > 1e-5f)
+                         const auto r = glm::vec3(adjustedPos - position);
+                         const auto dist = glm::length(r);
+                         if (dist < smoothingRadius)
                          {
-                             const float neighborDensity = particles.densities[neighbourIdx];
-                             const float densityDiff = neighborDensity - density;
-                             // Use proper Laplacian kernel
-                             const float lapW = device::wendlandLaplacianKernel(dist, h);
-                             const float weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
+                             const auto neighborDensity = particles.densities[neighbourIdx];
+                             const auto densityDiff = neighborDensity - density;
+                             const auto lapW = device::densityLaplacianKernel(dist, smoothingRadius);
+                             const auto weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
                              densityLaplacian += weight * densityDiff * lapW;
                              totalWeight += weight * lapW;
                              validNeighbors++;
@@ -55,12 +58,12 @@ __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles,
         return -1;
     }
 
-    if (totalWeight > 0.0f)
+    if (totalWeight > 0.0F)
     {
         densityLaplacian /= totalWeight;
     }
 
-    float curvatureMagnitude = fabsf(densityLaplacian);
+    const auto curvatureMagnitude = glm::abs(densityLaplacian);
     if (curvatureMagnitude > _curvature.split.minimalCurvatureThreshold)
     {
         return curvatureMagnitude;
@@ -79,13 +82,13 @@ __device__ auto MergeCriterionGenerator::operator()(ParticlesData particles,
         return -1;
     }
 
-    const glm::vec4 position = particles.positions[id];
-    const float h = particles.smoothingRadiuses[id];
-    const float density = particles.densities[id];
+    const auto position = particles.positions[id];
+    const auto smoothingRadius = particles.smoothingRadiuses[id];
+    const auto density = particles.densities[id];
 
-    float densityLaplacian = 0.0f;
-    float totalWeight = 0.0f;
-    int validNeighbors = 0;
+    auto densityLaplacian = 0.F;
+    auto totalWeight = 0.F;
+    auto validNeighbors = uint32_t {};
     forEachNeighbour(position,
                      particles,
                      simulationData,
@@ -96,17 +99,17 @@ __device__ auto MergeCriterionGenerator::operator()(ParticlesData particles,
                              return;
                          }
 
-                         const glm::vec3 r = glm::vec3(adjustedPos - position);
-                         const float dist = glm::length(r);
-                         if (dist < h && dist > 1e-5f)
+                         const auto r = glm::vec3(adjustedPos - position);
+                         const auto dist = glm::length(r);
+                         if (dist < smoothingRadius)
                          {
-                             const float neighborDensity = particles.densities[neighbourIdx];
-                             const float densityDiff = neighborDensity - density;
+                             const auto neighborDensity = particles.densities[neighbourIdx];
+                             const auto densityDiff = neighborDensity - density;
 
-                             const float lapW = device::wendlandLaplacianKernel(dist, h);
-                             const float weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
+                             const auto lapW = device::densityLaplacianKernel(dist, smoothingRadius);
+                             const auto weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
                              densityLaplacian += weight * densityDiff * lapW;
-                             totalWeight += weight * fabsf(lapW);
+                             totalWeight += weight * glm::abs(lapW);
                              validNeighbors++;
                          }
                      });
@@ -116,12 +119,12 @@ __device__ auto MergeCriterionGenerator::operator()(ParticlesData particles,
         return -1;
     }
 
-    if (totalWeight > 0.0f)
+    if (totalWeight > 0.0F)
     {
         densityLaplacian /= totalWeight;
     }
 
-    float curvatureMagnitude = fabsf(densityLaplacian);
+    const auto curvatureMagnitude = glm::abs(densityLaplacian);
 
     if (curvatureMagnitude < _curvature.merge.maximalCurvatureThreshold)
     {

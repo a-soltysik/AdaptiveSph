@@ -1,6 +1,13 @@
 #include "LidDrivenCavity.hpp"
 
-#include <panda/Logger.h>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_float4.hpp>
+#include <vector>
+
+#include "benchmark/ExperimentBase.hpp"
+#include "benchmark/MetricsCollector.hpp"
+#include "cuda/Simulation.cuh"
+#include "utils/ConfigurationManager.hpp"
 
 namespace sph::benchmark
 {
@@ -10,33 +17,16 @@ LidDrivenCavity::LidDrivenCavity()
 {
 }
 
-BenchmarkResult LidDrivenCavity::runBenchmark(const BenchmarkParameters& params,
-                                              const cuda::Simulation::Parameters& simulationParameters,
-                                              BenchmarkResult::SimulationType simulationType,
-                                              panda::gfx::vulkan::Context& api,
-                                              bool visualize,
-                                              Window* window)
-{
-    // Call the base class implementation with visualization enabled
-    return ExperimentBase::runBenchmark(params, simulationParameters, simulationType, api, visualize, window);
-}
-
-cuda::Simulation::Parameters LidDrivenCavity::createSimulationParameters(
-    const BenchmarkParameters& params,
-    const cuda::Simulation::Parameters& simulationParameters,
-    BenchmarkResult::SimulationType simulationType)
+auto LidDrivenCavity::createSimulationParameters(const BenchmarkParameters& params,
+                                                 const cuda::Simulation::Parameters& simulationParameters,
+                                                 BenchmarkResult::SimulationType simulationType)
+    -> cuda::Simulation::Parameters
 {
     cuda::Simulation::Parameters simulationParams = simulationParameters;
-
-    // Set up the domain for lid-driven cavity
-    float cavitySize = params.cavitySize;
+    const auto cavitySize = params.cavitySize;
     simulationParams.domain.min = glm::vec3(-cavitySize / 2, -cavitySize / 2, -cavitySize / 2);
     simulationParams.domain.max = glm::vec3(cavitySize / 2, cavitySize / 2, cavitySize / 2);
-
-    // Zero gravity for lid-driven cavity
-    simulationParams.gravity = glm::vec3(0.0f, 0.f, 0.0f);
-
-    // Set particle size and fluid properties based on simulation type
+    simulationParams.gravity = glm::vec3(0.0F, 0.F, 0.0F);
     if (simulationType == BenchmarkResult::SimulationType::Coarse)
     {
         simulationParams.baseParticleRadius = params.coarse.baseParticleRadius;
@@ -64,20 +54,16 @@ cuda::Simulation::Parameters LidDrivenCavity::createSimulationParameters(
         simulationParams.nearPressureConstant = params.adaptive.nearPressureConstant;
         simulationParams.viscosityConstant = params.adaptive.viscosityConstant;
     }
-
-    // Set lid velocity from config
     simulationParams.lidVelocity = params.lidVelocity;
-
-    // Set test case type for custom collision handling
     simulationParams.testCase = cuda::Simulation::Parameters::TestCase::LidDrivenCavity;
 
     return simulationParams;
 }
 
-void LidDrivenCavity::initializeParticles(std::vector<glm::vec4>& particles,
-                                          const cuda::Simulation::Parameters& simulationParams)
+auto LidDrivenCavity::initializeParticles(const cuda::Simulation::Parameters& simulationParams)
+    -> std::vector<glm::vec4>
 {
-    initializeParticlesGrid(particles, simulationParams, "Lid-Driven Cavity");
+    return initializeParticlesGrid(simulationParams, "Lid-Driven Cavity");
 }
 
-}  // namespace sph::benchmark
+}
