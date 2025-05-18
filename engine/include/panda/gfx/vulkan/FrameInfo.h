@@ -27,7 +27,6 @@ struct FrameInfo
     vk::CommandBuffer commandBuffer;
 
     uint32_t frameIndex;
-    float deltaTime;
 };
 
 struct VertUbo

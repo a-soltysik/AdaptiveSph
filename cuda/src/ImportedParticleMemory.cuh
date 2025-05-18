@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cuda_runtime.h>
+#include <driver_types.h>
 
 #include <cstddef>
 #include <cuda/ImportedMemory.cuh>
@@ -14,7 +15,7 @@ public:
     ImportedParticleMemory(const ImportedParticleMemory&) = delete;
     auto operator=(const ImportedParticleMemory&) -> ImportedParticleMemory& = delete;
     ImportedParticleMemory(ImportedParticleMemory&&) = delete;
-    ImportedParticleMemory& operator=(ImportedParticleMemory&&) = delete;
+    auto operator=(ImportedParticleMemory&&) -> ImportedParticleMemory& = delete;
     ~ImportedParticleMemory() override;
 
 #if defined(WIN32)

@@ -1,17 +1,17 @@
 #pragma once
-#include "../SphSimulation.cuh"
+#include "../../SphSimulation.cuh"
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
 
-namespace sph::cuda::refinement::vorticity
+namespace sph::cuda::refinement::interfaceCriterion
 {
 
 class SplitCriterionGenerator
 {
 public:
-    __host__ __device__ SplitCriterionGenerator(float minimalMass, VorticityParameters vorticity)
+    __host__ __device__ SplitCriterionGenerator(float minimalMass, InterfaceParameters interfaceParameters)
         : _minimalMass(minimalMass),
-          _vorticity(vorticity)
+          _interface(interfaceParameters)
     {
     }
 
@@ -22,15 +22,15 @@ public:
 
 private:
     float _minimalMass;
-    VorticityParameters _vorticity;
+    InterfaceParameters _interface;
 };
 
 class MergeCriterionGenerator
 {
 public:
-    __host__ __device__ MergeCriterionGenerator(float maximalMass, VorticityParameters vorticity)
+    __host__ __device__ MergeCriterionGenerator(float maximalMass, InterfaceParameters interfaceParameters)
         : _maximalMass(maximalMass),
-          _vorticity(vorticity)
+          _interface(interfaceParameters)
     {
     }
 
@@ -41,7 +41,7 @@ public:
 
 private:
     float _maximalMass;
-    VorticityParameters _vorticity;
+    InterfaceParameters _interface;
 };
 
 }

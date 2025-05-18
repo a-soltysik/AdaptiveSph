@@ -1,5 +1,7 @@
 #pragma once
-#include "../SphSimulation.cuh"
+#include <cstdint>
+
+#include "../../SphSimulation.cuh"
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
 

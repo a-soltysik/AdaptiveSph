@@ -1,6 +1,9 @@
 #pragma once
+#include <cstdint>
 #include <cuda/Simulation.cuh>
-#include <memory>
+#include <glm/ext/vector_float4.hpp>
+#include <string>
+#include <vector>
 
 #include "BenchmarkVisualizer.hpp"
 #include "MetricsCollector.hpp"
@@ -14,49 +17,43 @@ namespace sph::benchmark
 class ExperimentBase
 {
 public:
-    ExperimentBase(cuda::Simulation::Parameters::TestCase name);
+    explicit ExperimentBase(cuda::Simulation::Parameters::TestCase name);
     virtual ~ExperimentBase() = default;
+    auto runBenchmark(const BenchmarkParameters& params,
+                      const cuda::Simulation::Parameters& simulationParameters,
+                      BenchmarkResult::SimulationType simulationType,
+                      panda::gfx::vulkan::Context& api,
+                      bool visualize = true,
+                      Window* window = nullptr) -> BenchmarkResult;
 
-    // Initialize and run a benchmark experiment
-    virtual BenchmarkResult runBenchmark(const BenchmarkParameters& params,
-                                         const cuda::Simulation::Parameters& simulationParameters,
-                                         BenchmarkResult::SimulationType simulationType,
-                                         panda::gfx::vulkan::Context& api,
-                                         bool visualize = true,
-                                         Window* window = nullptr);
-
-    // Get the name of the experiment
-    cuda::Simulation::Parameters::TestCase getName() const
+    [[nodiscard]] auto getName() const -> cuda::Simulation::Parameters::TestCase
     {
         return _name;
     }
 
 protected:
-    // Create simulation parameters for the experiment
-    virtual cuda::Simulation::Parameters createSimulationParameters(
-        const BenchmarkParameters& params,
-        const cuda::Simulation::Parameters& simulationParameters,
-        BenchmarkResult::SimulationType simulationType) = 0;
+    virtual auto createSimulationParameters(const BenchmarkParameters& params,
+                                            const cuda::Simulation::Parameters& simulationParameters,
+                                            BenchmarkResult::SimulationType simulationType)
+        -> cuda::Simulation::Parameters = 0;
 
-    // Initialize particles for the experiment
-    virtual void initializeParticles(std::vector<glm::vec4>& particles,
-                                     const cuda::Simulation::Parameters& simulationParams) = 0;
+    virtual auto initializeParticles(const cuda::Simulation::Parameters& simulationParams)
+        -> std::vector<glm::vec4> = 0;
 
-    // Run simulation for specified frames and collect metrics
     virtual void runSimulation(cuda::Simulation& simulation,
                                const cuda::Simulation::Parameters& simulationParams,
                                MetricsCollector& metricsCollector,
-                               int totalFrames,
-                               int measureInterval,
+                               uint32_t totalFrames,
+                               uint32_t measureInterval,
                                float timestep,
                                BenchmarkVisualizer* visualizer = nullptr,
                                Window* window = nullptr);
 
-    static void initializeParticlesGrid(std::vector<glm::vec4>& particles,
-                                        const cuda::Simulation::Parameters& simulationParams,
-                                        const std::string& experimentName);
+    static auto initializeParticlesGrid(const cuda::Simulation::Parameters& simulationParams,
+                                        const std::string& experimentName) -> std::vector<glm::vec4>;
 
+private:
     cuda::Simulation::Parameters::TestCase _name;
 };
 
-}  // namespace sph::benchmark
+}

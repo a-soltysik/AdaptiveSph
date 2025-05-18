@@ -1,6 +1,13 @@
 #include "PoiseuilleFlow.hpp"
 
-#include <panda/Logger.h>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_float4.hpp>
+#include <vector>
+
+#include "benchmark/ExperimentBase.hpp"
+#include "benchmark/MetricsCollector.hpp"
+#include "cuda/Simulation.cuh"
+#include "utils/ConfigurationManager.hpp"
 
 namespace sph::benchmark
 {
@@ -10,36 +17,18 @@ PoiseuilleFlow::PoiseuilleFlow()
 {
 }
 
-BenchmarkResult PoiseuilleFlow::runBenchmark(const BenchmarkParameters& params,
-                                             const cuda::Simulation::Parameters& simulationParameters,
-                                             BenchmarkResult::SimulationType simulationType,
-                                             panda::gfx::vulkan::Context& api,
-                                             bool visualize,
-                                             Window* window)
-{
-    // Call the base class implementation with visualization enabled
-    return ExperimentBase::runBenchmark(params, simulationParameters, simulationType, api, visualize, window);
-}
-
-cuda::Simulation::Parameters PoiseuilleFlow::createSimulationParameters(
-    const BenchmarkParameters& params,
-    const cuda::Simulation::Parameters& simulationParameters,
-    BenchmarkResult::SimulationType simulationType)
+auto PoiseuilleFlow::createSimulationParameters(const BenchmarkParameters& params,
+                                                const cuda::Simulation::Parameters& simulationParameters,
+                                                BenchmarkResult::SimulationType simulationType)
+    -> cuda::Simulation::Parameters
 {
     cuda::Simulation::Parameters simulationParams = simulationParameters;
-
-    // Set up the domain for Poiseuille flow
-    float halfHeight = params.channelHeight / 2.0f;
-    float halfWidth = params.channelWidth / 2.0f;
-    float halfLength = params.channelLength / 2.0f;
+    const auto halfHeight = params.channelHeight / 2.0F;
+    const auto halfWidth = params.channelWidth / 2.0F;
+    const auto halfLength = params.channelLength / 2.0F;
     simulationParams.domain.min = glm::vec3(-halfLength, -halfHeight, -halfWidth);
     simulationParams.domain.max = glm::vec3(halfLength, halfHeight, halfWidth);
-
-    // Set gravity as a driving force along the channel length (x-axis)
-    // For Poiseuille flow, we use gravity as a proxy for pressure gradient
-    simulationParams.gravity = glm::vec3(params.forceMagnitude, 0.0f, 0.0f);
-
-    // Set particle size and fluid properties based on simulation type
+    simulationParams.gravity = glm::vec3(params.forceMagnitude, 0.0F, 0.0F);
     if (simulationType == BenchmarkResult::SimulationType::Coarse)
     {
         simulationParams.baseParticleRadius = params.coarse.baseParticleRadius;
@@ -68,16 +57,14 @@ cuda::Simulation::Parameters PoiseuilleFlow::createSimulationParameters(
         simulationParams.viscosityConstant = params.adaptive.viscosityConstant;
     }
 
-    // Set test case type for custom collision handling
     simulationParams.testCase = cuda::Simulation::Parameters::TestCase::PoiseuilleFlow;
 
     return simulationParams;
 }
 
-void PoiseuilleFlow::initializeParticles(std::vector<glm::vec4>& particles,
-                                         const cuda::Simulation::Parameters& simulationParams)
+auto PoiseuilleFlow::initializeParticles(const cuda::Simulation::Parameters& simulationParams) -> std::vector<glm::vec4>
 {
-    initializeParticlesGrid(particles, simulationParams, "Poiseuille Flow");
+    return initializeParticlesGrid(simulationParams, "Poiseuille Flow");
 }
 
-}  // namespace sph::benchmark
+}

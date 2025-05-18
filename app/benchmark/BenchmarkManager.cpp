@@ -2,11 +2,23 @@
 
 #include <panda/Logger.h>
 
+#include <algorithm>
+#include <array>
 #include <filesystem>
+#include <memory>
+#include <ranges>
+#include <string>
+#include <utility>
 
-#include "LidDrivenCavity.hpp"
-#include "PoiseuilleFlow.hpp"
-#include "TaylorGreenVortex.hpp"
+#include "Window.hpp"
+#include "benchmark/ExperimentBase.hpp"
+#include "benchmark/LidDrivenCavity.hpp"
+#include "benchmark/MetricsCollector.hpp"
+#include "benchmark/PoiseuilleFlow.hpp"
+#include "benchmark/TaylorGreenVortex.hpp"
+#include "cuda/Simulation.cuh"
+#include "panda/gfx/vulkan/Context.h"
+#include "utils/ConfigurationManager.hpp"
 
 namespace sph::benchmark
 {
@@ -31,15 +43,14 @@ void BenchmarkManager::runBenchmarks(const BenchmarkParameters& params,
     panda::log::Info("Starting benchmark suite with {} experiments", _experiments.size());
     ensureOutputDirectoryExists(params.outputPath);
     auto* experiment = findExperimentByName(params.testCase);
-    if (!experiment)
+    if (experiment == nullptr)
     {
         panda::log::Error("No experiment found with name: {}", std::to_underlying(params.testCase));
         return;
     }
     panda::log::Info("Running {} benchmark", std::to_underlying(experiment->getName()));
-    MetricsCollector metricsCollector;
-    static constexpr auto simulationTypes = std::array {//BenchmarkResult::SimulationType::Coarse,
-                                                        //BenchmarkResult::SimulationType::Fine,
+    static constexpr auto simulationTypes = std::array {BenchmarkResult::SimulationType::Coarse,
+                                                        BenchmarkResult::SimulationType::Fine,
                                                         BenchmarkResult::SimulationType::Adaptive};
     for (const auto& simulationType : simulationTypes)
     {
@@ -47,7 +58,7 @@ void BenchmarkManager::runBenchmarks(const BenchmarkParameters& params,
 
         auto result = experiment->runBenchmark(params, simulationParameters, simulationType, api, true, &window);
 
-        metricsCollector.saveToFile(result, params.outputPath);
+        sph::benchmark::MetricsCollector::saveToFile(result, params.outputPath);
     }
 
     panda::log::Info("Benchmark completed for {}", std::to_underlying(experiment->getName()));
@@ -55,7 +66,7 @@ void BenchmarkManager::runBenchmarks(const BenchmarkParameters& params,
 
 void BenchmarkManager::ensureOutputDirectoryExists(const std::string& outputPath)
 {
-    std::filesystem::path path(outputPath);
+    const auto path = std::filesystem::path {outputPath};
     if (!std::filesystem::exists(path))
     {
         std::filesystem::create_directories(path);
@@ -63,16 +74,14 @@ void BenchmarkManager::ensureOutputDirectoryExists(const std::string& outputPath
     }
 }
 
-ExperimentBase* BenchmarkManager::findExperimentByName(cuda::Simulation::Parameters::TestCase testCase) const
+auto BenchmarkManager::findExperimentByName(cuda::Simulation::Parameters::TestCase testCase) const -> ExperimentBase*
 {
-    for (const auto& experiment : _experiments)
+    const auto it = std::ranges::find(_experiments, testCase, &ExperimentBase::getName);
+    if (it == std::ranges::end(_experiments))
     {
-        if (experiment->getName() == testCase)
-        {
-            return experiment.get();
-        }
+        return nullptr;
     }
-    return nullptr;
+    return it->get();
 }
 
 void BenchmarkManager::registerExperiment(std::unique_ptr<ExperimentBase> experiment)
@@ -81,4 +90,4 @@ void BenchmarkManager::registerExperiment(std::unique_ptr<ExperimentBase> experi
     _experiments.push_back(std::move(experiment));
 }
 
-}  // namespace sph::benchmark
+}

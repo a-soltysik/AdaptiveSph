@@ -1,25 +1,26 @@
-// MetricsCollector.cpp
 #include "MetricsCollector.hpp"
 
+#include <fmt/format.h>
 #include <panda/Logger.h>
 
 #include <cmath>
+#include <cstdint>
 #include <fstream>
+#include <nlohmann/json.hpp>
+#include <nlohmann/json_fwd.hpp>
 #include <numeric>
+#include <string>
+#include <utility>
+
+#include "cuda/Simulation.cuh"
 
 namespace sph::benchmark
 {
 
-MetricsCollector::MetricsCollector()
-    : _initialTotalMass(0.0f),
-      _restDensity(0.0f)
-{
-}
-
 void MetricsCollector::reset()
 {
-    _initialTotalMass = 0.0f;
-    _restDensity = 0.0f;
+    _initialTotalMass = 0.F;
+    _restDensity = 0.F;
     _frameTimes.clear();
     _l2DensityErrors.clear();
     _totalMasses.clear();
@@ -29,58 +30,49 @@ void MetricsCollector::initialize(const cuda::Simulation& simulation, float rest
 {
     _restDensity = restDensity;
 
-    // Calculate initial total mass (for mass conservation tracking)
-    // For a proper implementation, we would need access to particle masses
     auto particleCount = simulation.getParticlesCount();
     if (particleCount > 0)
     {
-        // This is a placeholder - ideally we would sum all particle masses
-        _initialTotalMass = particleCount * restDensity;
+        _initialTotalMass = static_cast<float>(particleCount) * restDensity;
     }
 }
 
 void MetricsCollector::collectFrameMetrics(const cuda::Simulation& simulation, float frameTime)
 {
-    // Store frame time
     _frameTimes.push_back(frameTime);
 
-    // Calculate L2 density error norm
     auto densityDeviations = simulation.updateDensityDeviations();
     auto particleCount = simulation.getParticlesCount();
 
     if (particleCount > 0)
     {
-        // Calculate L2 norm of density errors
-        float sumErrorSquared = 0.0f;
+        auto sumErrorSquared = 0.F;
         for (uint32_t i = 0; i < particleCount; ++i)
         {
-            float error = densityDeviations[i].x;  // x component has normalized density deviation
+            const auto error = densityDeviations[i];
             sumErrorSquared += error * error;
         }
-        float l2Norm = std::sqrt(sumErrorSquared / particleCount);
+        const auto l2Norm = std::sqrt(sumErrorSquared / static_cast<float>(particleCount));
         _l2DensityErrors.push_back(l2Norm);
 
-        // Calculate total mass (simplified - would need actual masses)
-        float currentTotalMass = particleCount * _restDensity;
+        const auto currentTotalMass = static_cast<float>(particleCount) * _restDensity;
         _totalMasses.push_back(currentTotalMass);
     }
 }
 
-BenchmarkResult MetricsCollector::calculateResults(cuda::Simulation::Parameters::TestCase experimentType,
-                                                   BenchmarkResult::SimulationType simulationType) const
+auto MetricsCollector::calculateResults(cuda::Simulation::Parameters::TestCase experimentType,
+                                        BenchmarkResult::SimulationType simulationType) const -> BenchmarkResult
 {
     BenchmarkResult result;
     result.experimentType = experimentType;
     result.simulationType = simulationType;
 
-    // Calculate metrics
     result.l2DensityErrorNorm = calculateL2DensityErrorNorm();
     result.pressureFieldSmoothness = calculatePressureFieldSmoothness();
     result.massConservationError = calculateMassConservationError();
     result.averageFrameTime = calculateAverageFrameTime();
     result.particleClusteringIndex = calculateParticleClusteringIndex();
 
-    // Store time series data
     result.frameTimes = _frameTimes;
     result.l2DensityErrors = _l2DensityErrors;
     result.totalMasses = _totalMasses;
@@ -88,7 +80,7 @@ BenchmarkResult MetricsCollector::calculateResults(cuda::Simulation::Parameters:
     return result;
 }
 
-void MetricsCollector::saveToFile(const BenchmarkResult& result, const std::string& outputPath) const
+void MetricsCollector::saveToFile(const BenchmarkResult& result, const std::string& outputPath)
 {
     using json = nlohmann::json;
 
@@ -102,22 +94,19 @@ void MetricsCollector::saveToFile(const BenchmarkResult& result, const std::stri
     resultJson["metrics"]["averageFrameTime"] = result.averageFrameTime;
     resultJson["metrics"]["particleClusteringIndex"] = result.particleClusteringIndex;
 
-    // Store time series data
     resultJson["timeSeries"]["frameTimes"] = result.frameTimes;
     resultJson["timeSeries"]["l2DensityErrors"] = result.l2DensityErrors;
     resultJson["timeSeries"]["totalMasses"] = result.totalMasses;
 
-    // Create filename
     const auto filename = fmt::format("{}/{}.json",
                                       outputPath,
                                       std::to_underlying(result.experimentType),
                                       std::to_underlying(result.simulationType));
 
-    // Write to file
     std::ofstream file(filename);
     if (file.is_open())
     {
-        file << resultJson.dump(4);  // Pretty-print with 4-space indentation
+        file << resultJson.dump(4);
         file.close();
         panda::log::Info("Saved benchmark results to: {}", filename);
     }
@@ -127,58 +116,46 @@ void MetricsCollector::saveToFile(const BenchmarkResult& result, const std::stri
     }
 }
 
-float MetricsCollector::calculateL2DensityErrorNorm() const
+auto MetricsCollector::calculateL2DensityErrorNorm() const -> float
 {
     if (_l2DensityErrors.empty())
     {
-        return 0.0f;
+        return 0.0F;
     }
 
-    // Return average L2 error over all frames (excluding initial frames)
-    size_t startIndex = std::min(size_t(10), _l2DensityErrors.size() - 1);
-    if (startIndex >= _l2DensityErrors.size())
-    {
-        return 0.0f;
-    }
-
-    return std::accumulate(_l2DensityErrors.begin() + startIndex, _l2DensityErrors.end(), 0.0f) /
-           (_l2DensityErrors.size() - startIndex);
+    return std::accumulate(_l2DensityErrors.begin(), _l2DensityErrors.end(), 0.0F) /
+           static_cast<float>(_l2DensityErrors.size());
 }
 
-float MetricsCollector::calculatePressureFieldSmoothness() const
+auto MetricsCollector::calculatePressureFieldSmoothness() -> float
 {
-    // This would require more detailed pressure field data
-    // Placeholder implementation
-    return 0.0f;
+    return 0.F;
 }
 
-float MetricsCollector::calculateMassConservationError() const
+auto MetricsCollector::calculateMassConservationError() const -> float
 {
-    if (_totalMasses.empty() || _initialTotalMass <= 0.0f)
+    if (_totalMasses.empty() || _initialTotalMass <= 0.0F)
     {
-        return 0.0f;
+        return 0.0F;
     }
 
-    // Calculate the relative error in total mass
-    float finalTotalMass = _totalMasses.back();
+    const auto finalTotalMass = _totalMasses.back();
     return std::abs(finalTotalMass - _initialTotalMass) / _initialTotalMass;
 }
 
-float MetricsCollector::calculateParticleClusteringIndex() const
+auto MetricsCollector::calculateParticleClusteringIndex() -> float
 {
-    // This would require spatial distribution data of particles
-    // Placeholder implementation
-    return 0.0f;
+    return 0.0F;
 }
 
-float MetricsCollector::calculateAverageFrameTime() const
+auto MetricsCollector::calculateAverageFrameTime() const -> float
 {
     if (_frameTimes.empty())
     {
-        return 0.0f;
+        return 0.0F;
     }
 
-    return std::accumulate(_frameTimes.begin(), _frameTimes.end(), 0.0f) / _frameTimes.size();
+    return std::accumulate(_frameTimes.begin(), _frameTimes.end(), 0.0F) / static_cast<float>(_frameTimes.size());
 }
 
-}  // namespace sph::benchmark
+}

@@ -2,7 +2,6 @@
 
 #include <panda/Logger.h>
 
-#include <cmath>
 #include <cstdint>
 #include <cuda/refinement/RefinementParameters.cuh>
 #include <exception>
@@ -114,21 +113,40 @@ void ConfigurationManager::parseRefinementParameters(const json& jsonFile)
     cuda::refinement::RefinementParameters params;
 
     params.enabled = parseScalarProperty(jsonFile, "enabled", false);
-    params.maxParticleCount = parseScalarProperty(jsonFile, "maxParticleCount", 1000000);
-    params.maxBatchRatio = parseScalarProperty(jsonFile, "maxBatchRatio", 0.5f);
-    params.minMassRatio = parseScalarProperty(jsonFile, "minMassRatio", 0.01f);
-    params.maxMassRatio = parseScalarProperty(jsonFile, "maxMassRatio", 100.0f);
-    params.initialCooldown = parseScalarProperty(jsonFile, "initialCooldown", 1000);
-    params.cooldown = parseScalarProperty(jsonFile, "cooldown", 1000);
-    params.criterionType = parseScalarProperty(jsonFile, "criterionType", std::string {"interface"});
+    params.maxParticleCount = parseScalarProperty(jsonFile, "maxParticleCount", uint32_t {1000000});
+    params.maxBatchRatio = parseScalarProperty(jsonFile, "maxBatchRatio", 0.5F);
+    params.minMassRatio = parseScalarProperty(jsonFile, "minMassRatio", 0.01F);
+    params.maxMassRatio = parseScalarProperty(jsonFile, "maxMassRatio", 100.0F);
+    params.initialCooldown = parseScalarProperty(jsonFile, "initialCooldown", uint32_t {1000});
+    params.cooldown = parseScalarProperty(jsonFile, "cooldown", uint32_t {1000});
+
+    if (jsonFile.contains("criterionType"))
+    {
+        if (jsonFile["criterionType"].get<std::string>() == "velocity")
+        {
+            params.criterionType = cuda::refinement::RefinementParameters::Criterion::Velocity;
+        }
+        if (jsonFile["criterionType"].get<std::string>() == "vorticity")
+        {
+            params.criterionType = cuda::refinement::RefinementParameters::Criterion::Vorticity;
+        }
+        if (jsonFile["criterionType"].get<std::string>() == "curvature")
+        {
+            params.criterionType = cuda::refinement::RefinementParameters::Criterion::Curvature;
+        }
+        if (jsonFile["criterionType"].get<std::string>() == "interface")
+        {
+            params.criterionType = cuda::refinement::RefinementParameters::Criterion::Interface;
+        }
+    }
 
     if (jsonFile.contains("splitting"))
     {
         const auto& splitting = jsonFile["splitting"];
-        params.splitting.epsilon = parseScalarProperty(splitting, "epsilon", 0.6f);
-        params.splitting.alpha = parseScalarProperty(splitting, "alpha", 0.6f);
-        params.splitting.centerMassRatio = parseScalarProperty(splitting, "centerMassRatio", 0.2f);
-        params.splitting.vertexMassRatio = parseScalarProperty(splitting, "vertexMassRatio", 0.067f);
+        params.splitting.epsilon = parseScalarProperty(splitting, "epsilon", 0.6F);
+        params.splitting.alpha = parseScalarProperty(splitting, "alpha", 0.6F);
+        params.splitting.centerMassRatio = parseScalarProperty(splitting, "centerMassRatio", 0.2F);
+        params.splitting.vertexMassRatio = parseScalarProperty(splitting, "vertexMassRatio", 0.067F);
     }
 
     if (jsonFile.contains("velocity"))
@@ -136,9 +154,9 @@ void ConfigurationManager::parseRefinementParameters(const json& jsonFile)
         const auto& velocity = jsonFile["velocity"];
 
         params.velocity.split.minimalSpeedThreshold =
-            parseScalarProperty(velocity["split"], "minimalSpeedThreshold", 0.5f);
+            parseScalarProperty(velocity["split"], "minimalSpeedThreshold", 0.5F);
         params.velocity.merge.maximalSpeedThreshold =
-            parseScalarProperty(velocity["merge"], "maximalSpeedThreshold", 4.0f);
+            parseScalarProperty(velocity["merge"], "maximalSpeedThreshold", 4.0F);
     }
 
     if (jsonFile.contains("interface"))
@@ -146,9 +164,9 @@ void ConfigurationManager::parseRefinementParameters(const json& jsonFile)
         const auto& interface = jsonFile["interface"];
 
         params.interfaceParameters.split.distanceRatioThreshold =
-            parseScalarProperty(interface["split"], "distanceRatioThreshold", 0.07f);
+            parseScalarProperty(interface["split"], "distanceRatioThreshold", 0.07F);
         params.interfaceParameters.merge.distanceRatioThreshold =
-            parseScalarProperty(interface["merge"], "distanceRatioThreshold", 0.18f);
+            parseScalarProperty(interface["merge"], "distanceRatioThreshold", 0.18F);
     }
 
     if (jsonFile.contains("vorticity"))
@@ -156,7 +174,7 @@ void ConfigurationManager::parseRefinementParameters(const json& jsonFile)
         const auto& vorticity = jsonFile["vorticity"];
 
         params.vorticity.split.minimalVorticityThreshold =
-            parseScalarProperty(vorticity["split"], "minimalVorticityThreshold", 34.f);
+            parseScalarProperty(vorticity["split"], "minimalVorticityThreshold", 34.F);
         params.vorticity.merge.maximalVorticityThreshold =
             parseScalarProperty(vorticity["merge"], "maximalVorticityThreshold", 3.4F);
     }
@@ -207,12 +225,10 @@ void ConfigurationManager::parseBenchmarkParameters(const json& jsonFile)
 
     params.outputPath = parseScalarProperty(jsonFile, "outputPath", std::string {"output"});
 
-    // Parse resolution-specific parameters
     if (jsonFile.contains("resolutions"))
     {
         const auto& resolutions = jsonFile["resolutions"];
 
-        // Parse Coarse simulation parameters
         if (resolutions.contains("coarse"))
         {
             const auto& coarse = resolutions["coarse"];
@@ -223,7 +239,6 @@ void ConfigurationManager::parseBenchmarkParameters(const json& jsonFile)
             params.coarse.nearPressureConstant = parseScalarProperty(coarse, "nearPressureConstant", 0.01F);
             params.coarse.viscosityConstant = parseScalarProperty(coarse, "viscosityConstant", 0.001F);
         }
-        // Parse Fine simulation parameters
         if (resolutions.contains("fine"))
         {
             const auto& fine = resolutions["fine"];
@@ -234,7 +249,6 @@ void ConfigurationManager::parseBenchmarkParameters(const json& jsonFile)
             params.fine.nearPressureConstant = parseScalarProperty(fine, "nearPressureConstant", 0.01F);
             params.fine.viscosityConstant = parseScalarProperty(fine, "viscosityConstant", 0.001F);
         }
-        // Parse Adaptive simulation parameters
         if (resolutions.contains("adaptive"))
         {
             const auto& adaptive = resolutions["adaptive"];
@@ -247,8 +261,8 @@ void ConfigurationManager::parseBenchmarkParameters(const json& jsonFile)
         }
     }
 
-    params.measurementInterval = parseScalarProperty(jsonFile, "measurementInterval", 1000);
-    params.totalSimulationFrames = parseScalarProperty(jsonFile, "totalSimulationFrames", 100000);
+    params.measurementInterval = parseScalarProperty(jsonFile, "measurementInterval", uint32_t {1000});
+    params.totalSimulationFrames = parseScalarProperty(jsonFile, "totalSimulationFrames", uint32_t {100000});
     params.timestep = parseScalarProperty(jsonFile, "timestep", 0.001F);
 
     if (jsonFile.contains("poiseuille"))
@@ -318,26 +332,26 @@ void ConfigurationManager::parseDomainParameters(const json& jsonFile, cuda::Sim
     }
 
     const auto& domain = jsonFile["domain"];
-    params.domain.min = parseVec3Property(domain, "min", glm::vec3(0.0f));
-    params.domain.max = parseVec3Property(domain, "max", glm::vec3(1.0f));
+    params.domain.min = parseVec3Property(domain, "min", glm::vec3 {});
+    params.domain.max = parseVec3Property(domain, "max", glm::vec3 {1.0F});
 }
 
 void ConfigurationManager::parseFluidParameters(const json& jsonFile, cuda::Simulation::Parameters& params)
 {
-    params.restDensity = parseScalarProperty(jsonFile, "restDensity", 1000.0f);
-    params.pressureConstant = parseScalarProperty(jsonFile, "pressureConstant", 100.0f);
-    params.nearPressureConstant = parseScalarProperty(jsonFile, "nearPressureConstant", 100.0f);
-    params.viscosityConstant = parseScalarProperty(jsonFile, "viscosityConstant", 0.01f);
+    params.restDensity = parseScalarProperty(jsonFile, "restDensity", 1000.0F);
+    params.pressureConstant = parseScalarProperty(jsonFile, "pressureConstant", 100.0F);
+    params.nearPressureConstant = parseScalarProperty(jsonFile, "nearPressureConstant", 100.0F);
+    params.viscosityConstant = parseScalarProperty(jsonFile, "viscosityConstant", 0.01F);
 }
 
 void ConfigurationManager::parseSimulationControlParameters(const json& jsonFile, cuda::Simulation::Parameters& params)
 {
-    params.gravity = parseVec3Property(jsonFile, "gravity", glm::vec3(0.0f, -9.81f, 0.0f));
-    params.restitution = parseScalarProperty(jsonFile, "restitution", 0.5f);
-    params.maxVelocity = parseScalarProperty(jsonFile, "maxVelocity", 100.0f);
-    params.baseParticleRadius = parseScalarProperty(jsonFile, "baseParticleRadius", 0.01f);
-    params.baseParticleMass = parseScalarProperty(jsonFile, "baseParticleMass", 1.0f);
-    params.baseSmoothingRadius = parseScalarProperty(jsonFile, "baseSmoothingRadius", 0.02f);
+    params.gravity = parseVec3Property(jsonFile, "gravity", glm::vec3(0.0F, 9.81F, 0.0F));
+    params.restitution = parseScalarProperty(jsonFile, "restitution", 0.5F);
+    params.maxVelocity = parseScalarProperty(jsonFile, "maxVelocity", 100.0F);
+    params.baseParticleRadius = parseScalarProperty(jsonFile, "baseParticleRadius", 0.01F);
+    params.baseParticleMass = parseScalarProperty(jsonFile, "baseParticleMass", 1.0F);
+    params.baseSmoothingRadius = parseScalarProperty(jsonFile, "baseSmoothingRadius", 0.02F);
     params.threadsPerBlock = parseScalarProperty<uint32_t>(jsonFile, "threadsPerBlock", 256);
 }
 

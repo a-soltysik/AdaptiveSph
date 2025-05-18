@@ -1,3 +1,11 @@
+#include <vector_types.h>
+
+#include <cstdint>
+#include <glm/common.hpp>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_float4.hpp>
+#include <utility>
+
 #include "../SphSimulation.cuh"
 #include "Utils.cuh"
 #include "cuda/Simulation.cuh"
@@ -63,7 +71,7 @@ __device__ auto getStartEndIndices(glm::uvec3 cellIndex, const SphSimulation::Gr
 
     const auto neighbourCellId = flattenCellIndex(cellIndex, grid.gridSize);
 
-    return {grid.cellStartIndices.data[neighbourCellId], grid.cellEndIndices.data[neighbourCellId]};
+    return {grid.cellStartIndices[neighbourCellId], grid.cellEndIndices[neighbourCellId]};
 }
 
 }

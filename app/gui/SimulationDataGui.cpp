@@ -10,8 +10,6 @@
 #include <cfloat>
 #include <chrono>
 #include <cstdint>
-#include <cuda/Simulation.cuh>
-#include <glm/ext/vector_float4.hpp>
 #include <utility>
 #include <vector>
 
@@ -71,16 +69,18 @@ auto SimulationDataGui::render() -> void
                              _densityDeviation.restDensity);
 }
 
-void SimulationDataGui::displayAverageNeighborCount(float averageNeighbors)
+void SimulationDataGui::displayAverageNeighborCount(float averageNeighbors) const
 {
     ImGui::Begin("Simulation Debug Info");
-    //NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
+    //NOLINTBEGIN(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
     ImGui::Text("Average Neighbors: %.2f", static_cast<double>(averageNeighbors));
+    ImGui::Text("Particle count: %u", _densityDeviation.particleCount);
+    //NOLINTEND(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
     ImGui::End();
 }
 
 //NOLINTBEGIN(bugprone-easily-swappable-parameters)
-void SimulationDataGui::displayDensityStatistics(const std::vector<glm::vec4>& densityDeviations,
+void SimulationDataGui::displayDensityStatistics(const std::vector<float>& densityDeviations,
                                                  uint32_t particleCount,
                                                  float restDensity)
 //NOLINTEND(bugprone-easily-swappable-parameters)
@@ -100,7 +100,7 @@ void SimulationDataGui::displayDensityStatistics(const std::vector<glm::vec4>& d
 
     for (uint32_t i = 0; i < particleCount; i++)
     {
-        const auto deviation = static_cast<double>(densityDeviations[i].x);
+        const auto deviation = static_cast<double>(densityDeviations[i]);
         minDeviation = std::min(minDeviation, deviation);
         maxDeviation = std::max(maxDeviation, deviation);
         avgDeviation += deviation;
@@ -122,8 +122,6 @@ void SimulationDataGui::displayDensityStatistics(const std::vector<glm::vec4>& d
     ImGui::Text("Min: %.2f%% (%.1f)", minDeviation * 100.0, static_cast<double>(restDensity) * (1.0 + minDeviation));
     ImGui::Text("Max: %.2f%% (%.1f)", maxDeviation * 100.0, static_cast<double>(restDensity) * (1.0 + maxDeviation));
     ImGui::Text("Avg: %.2f%% (%.1f)", avgDeviation * 100.0, static_cast<double>(restDensity) * (1.0 + avgDeviation));
-
-    // Display histogram
     ImGui::Text("Deviation Distribution:");
     ImGui::Text("Under Density (<-10%%): %u particles (%.1f%%)",
                 underDensityCount,
@@ -148,4 +146,5 @@ void SimulationDataGui::setDensityDeviation(DensityDeviation densityDeviation)
 {
     _densityDeviation = std::move(densityDeviation);
 }
+
 }

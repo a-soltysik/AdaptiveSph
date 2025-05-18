@@ -1,11 +1,13 @@
+#include <cmath>
 #include <cstdint>
 #include <cuda/Simulation.cuh>
-#include <glm/ext/vector_uint3.hpp>
+#include <glm/exponential.hpp>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_float4.hpp>
 
 #include "Algorithm.cuh"
-#include "Span.cuh"
 #include "SphSimulation.cuh"
-#include "common/Iteration.hpp"
+#include "common/Iteration.cuh"
 #include "common/Utils.cuh"
 #include "device/Kernel.cuh"
 #include "glm/ext/scalar_constants.hpp"
@@ -52,10 +54,10 @@ __global__ void handleCollisions(ParticlesData particles, Simulation::Parameters
 __global__ void resetGrid(SphSimulation::Grid grid)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx < grid.cellStartIndices.size)
+    if (idx < grid.cellStartIndices.size())
     {
-        grid.cellStartIndices.data[idx] = -1;
-        grid.cellEndIndices.data[idx] = -1;
+        grid.cellStartIndices[idx] = -1;
+        grid.cellEndIndices[idx] = -1;
     }
 }
 
@@ -66,10 +68,10 @@ __global__ void assignParticlesToCells(ParticlesData particles,
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx < particles.particleCount)
     {
-        state.grid.particleArrayIndices.data[idx] = idx;
+        state.grid.particleArrayIndices[idx] = idx;
         const auto cellPosition = calculateCellIndex(particles.positions[idx], simulationData, state.grid);
         const auto cellIndex = flattenCellIndex(cellPosition, state.grid.gridSize);
-        state.grid.particleGridIndices.data[idx] = cellIndex;
+        state.grid.particleGridIndices[idx] = cellIndex;
     }
 }
 
@@ -81,15 +83,15 @@ __global__ void calculateCellStartAndEndIndices(SphSimulation::Grid grid, uint32
         return;
     }
 
-    const auto cellIdx = grid.particleGridIndices.data[idx];
+    const auto cellIdx = grid.particleGridIndices[idx];
 
-    if (idx == 0 || grid.particleGridIndices.data[idx - 1] != cellIdx)
+    if (idx == 0 || grid.particleGridIndices[idx - 1] != cellIdx)
     {
-        grid.cellStartIndices.data[cellIdx] = idx;
+        grid.cellStartIndices[cellIdx] = idx;
     }
-    if (idx == grid.particleArrayIndices.size - 1 || grid.particleGridIndices.data[idx + 1] != cellIdx)
+    if (idx == grid.particleArrayIndices.size() - 1 || grid.particleGridIndices[idx + 1] != cellIdx)
     {
-        grid.cellEndIndices.data[cellIdx] = idx;
+        grid.cellEndIndices[cellIdx] = idx;
     }
 }
 
@@ -112,7 +114,6 @@ __global__ void computeDensities(ParticlesData particles,
                      simulationData,
                      state.grid,
                      [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
-                         // Use the adjustedPos for distance calculation
                          const auto offsetToNeighbour = adjustedPos - position;
                          const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
 
@@ -163,7 +164,6 @@ __global__ void computePressureForce(ParticlesData particles,
                              return;
                          }
 
-                         // Use the adjustedPos for distance and direction calculations
                          const auto offsetToNeighbour = adjustedPos - position;
                          const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
                          const auto neighbourSmoothingRadius = particles.smoothingRadiuses[neighbourIdx];
@@ -229,7 +229,6 @@ __global__ void computeViscosityForce(ParticlesData particles,
                              return;
                          }
 
-                         // Use the adjustedPos for distance calculation
                          const auto offsetToNeighbour = adjustedPos - position;
                          const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
 
@@ -302,7 +301,7 @@ __device__ void handleLidDrivenCavityCollision(ParticlesData particles,
             if (i == 1)
             {
                 // Top wall moves at lid velocity
-                particles.velocities[id] = glm::vec4(simulationData.lidVelocity, 0.5f, 0.0f, 0.0f);
+                particles.velocities[id] = glm::vec4(simulationData.lidVelocity, 0.5F, 0.0F, 0.0F);
             }
             else
             {
@@ -336,9 +335,9 @@ __device__ void handleTaylorGreenVortexCollision(ParticlesData particles,
                                                  uint32_t id,
                                                  const Simulation::Parameters& simulationData)
 {
-    const glm::vec3 domainMin = simulationData.domain.min;
-    const glm::vec3 domainMax = simulationData.domain.max;
-    const glm::vec3 domainSize = domainMax - domainMin;
+    const auto domainMin = simulationData.domain.min;
+    const auto domainMax = simulationData.domain.max;
+    const auto domainSize = domainMax - domainMin;
 
     // Handle periodic boundaries in all directions
     for (int i = 0; i < 3; i++)
@@ -377,16 +376,14 @@ __device__ void handleNoSlipBoundaries(ParticlesData particles,
     if (particles.positions[id][axis] < minBoundary)
     {
         particles.positions[id][axis] = minBoundary;
-        // No-slip condition: zero velocity at the wall
-        particles.velocities[id] = glm::vec4(0.0f);
+        particles.velocities[id] = glm::vec4 {};
     }
 
     if (particles.positions[id][axis] > maxBoundary)
     {
         particles.positions[id][axis] = maxBoundary;
-        // No-slip condition: zero velocity at the wall
-        particles.velocities[id] = glm::vec4(0.0f);
-    }
+        particles.velocities[id] = glm::vec4 {};
+    };
 }
 
 __device__ void handleStandardBoundariesForAxis(ParticlesData particles,
@@ -418,7 +415,7 @@ __device__ void handlePeriodicBoundariesForAxis(ParticlesData particles,
     const auto minBoundary = simulationData.domain.min[axis] + particles.radiuses[id];
     const auto maxBoundary = simulationData.domain.max[axis] - particles.radiuses[id];
     const auto domainLength =
-        simulationData.domain.max[axis] - simulationData.domain.min[axis] - 2 * particles.radiuses[id];
+        simulationData.domain.max[axis] - simulationData.domain.min[axis] - (2.F * particles.radiuses[id]);
 
     if (particles.positions[id][axis] < minBoundary)
     {
@@ -447,22 +444,22 @@ __global__ void computeExternalForces(ParticlesData particles, Simulation::Param
     if (simulationData.testCase == cuda::Simulation::Parameters::TestCase::TaylorGreenVortex)
     {
         // Only set velocity at the first time step - check if velocity is zero
-        if (glm::length(glm::vec3(particles.velocities[idx])) < 1e-6f)
+        if (glm::length(glm::vec3(particles.velocities[idx])) < 1e-6F)
         {
-            const glm::vec3 pos = particles.positions[idx];
-            const glm::vec3 domainMin = simulationData.domain.min;
-            const glm::vec3 domainSize = simulationData.domain.max - domainMin;
-            // Map position to [0, 2π] range for Taylor-Green equations
-            float x = ((pos.x - domainMin.x) / domainSize.x) * 2.0f * glm::pi<float>();
-            float y = ((pos.y - domainMin.y) / domainSize.y) * 2.0f * glm::pi<float>();
-            float z = ((pos.z - domainMin.z) / domainSize.z) * 2.0f * glm::pi<float>();
+            const auto pos = particles.positions[idx];
+            const auto domainMin = simulationData.domain.min;
+            const auto domainSize = simulationData.domain.max - domainMin;
+            // Map position to [0, 2pi] range for Taylor-Green equations
+            const auto x = ((pos.x - domainMin.x) / domainSize.x) * 2.0F * glm::pi<float>();
+            const auto y = ((pos.y - domainMin.y) / domainSize.y) * 2.0F * glm::pi<float>();
+            const auto z = ((pos.z - domainMin.z) / domainSize.z) * 2.0F * glm::pi<float>();
             // Calculate Taylor-Green velocity field
-            float u = std::cos(x) * std::sin(y) * std::cos(z);
-            float v = -std::sin(x) * std::cos(y) * std::cos(z);
-            float w = 0.0f;
+            const auto u = std::cos(x) * std::sin(y) * std::cos(z);
+            const auto v = -std::sin(x) * std::cos(y) * std::cos(z);
+            const auto w = 0.0F;
 
             // Set the velocity
-            particles.velocities[idx] = glm::vec4(u, v, w, 0.0f);
+            particles.velocities[idx] = glm::vec4(u, v, w, 0.0F);
         }
     }
 
@@ -515,7 +512,7 @@ __global__ void calculateDensityDeviations(ParticlesData particles, float restDe
         return;
     }
 
-    const float deviation = (particles.densities[idx] - restDensity) / restDensity;
-    particles.forces[idx] = glm::vec4 {deviation};
+    const auto deviation = (particles.densities[idx] - restDensity) / restDensity;
+    particles.densityDeviations[idx] = deviation;
 }
 }

@@ -35,7 +35,7 @@ layout (set = 0, binding = 4) readonly buffer RadiusBuffer {
 };
 
 layout (set = 0, binding = 5) readonly buffer DensityBuffer {
-    vec4 densityDeviations[];
+    float densityDeviations[];
 };
 
 void main() {

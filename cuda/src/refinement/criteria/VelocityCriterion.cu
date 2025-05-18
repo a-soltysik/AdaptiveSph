@@ -1,13 +1,20 @@
 #include <cfloat>
+#include <cstdint>
 #include <glm/ext/quaternion_geometric.hpp>
 #include <glm/ext/vector_float3.hpp>
+#include <glm/geometric.hpp>
 
+#include "../../SphSimulation.cuh"
 #include "VelocityCriterion.cuh"
+#include "cuda/Simulation.cuh"
 
 namespace sph::cuda::refinement::velocity
 {
 
-__device__ auto SplitCriterionGenerator::operator()(ParticlesData particles, uint32_t id) const -> float
+__device__ auto SplitCriterionGenerator::operator()(ParticlesData particles,
+                                                    uint32_t id,
+                                                    const SphSimulation::Grid& grid,
+                                                    const Simulation::Parameters& simulationData) const -> float
 {
     if (particles.masses[id] < _minimalMass)
     {
@@ -22,7 +29,10 @@ __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles, uin
     return velocityMagnitude;
 }
 
-__device__ auto MergeCriterionGenerator::operator()(ParticlesData particles, uint32_t id) const -> float
+__device__ auto MergeCriterionGenerator::operator()(ParticlesData particles,
+                                                    uint32_t id,
+                                                    const SphSimulation::Grid& grid,
+                                                    const Simulation::Parameters& simulationData) const -> float
 {
     if (particles.masses[id] > _maximalMass)
     {

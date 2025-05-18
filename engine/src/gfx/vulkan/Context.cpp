@@ -299,7 +299,7 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE  // cppcheck-suppress unknown
         return true;
     }
 
-    auto Context::makeFrame(float deltaTime, Scene& scene) const -> void
+    auto Context::makeFrame(Scene & scene) const -> void
     {
         const auto commandBuffer = _renderer->beginFrame();
         if (!commandBuffer)
@@ -349,8 +349,7 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE  // cppcheck-suppress unknown
                                              .fragUbo = *_uboFragBuffers[frameIndex],
                                              .vertUbo = *_uboVertBuffers[frameIndex],
                                              .commandBuffer = commandBuffer,
-                                             .frameIndex = frameIndex,
-                                             .deltaTime = deltaTime});
+                                             .frameIndex = frameIndex});
         }
 
         if (_particleRenderSystem != nullptr) [[likely]]
@@ -359,8 +358,7 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE  // cppcheck-suppress unknown
                                                      .fragUbo = *_uboFragBuffers[frameIndex],
                                                      .vertUbo = *_uboVertBuffers[frameIndex],
                                                      .commandBuffer = commandBuffer,
-                                                     .frameIndex = frameIndex,
-                                                     .deltaTime = deltaTime});
+                                                     .frameIndex = frameIndex});
         }
 
         utils::signals::beginGuiRender.registerSender()(

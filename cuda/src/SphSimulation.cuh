@@ -6,12 +6,13 @@
 #include <cstdint>
 #include <cuda/Simulation.cuh>
 #include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_float4.hpp>
 #include <glm/ext/vector_uint3.hpp>
 #include <glm/glm.hpp>
+#include <span>
 #include <vector>
 
 #include "ImportedParticleMemory.cuh"
-#include "Span.cuh"
 
 namespace sph::cuda
 {
@@ -23,10 +24,10 @@ public:
     {
         glm::uvec3 gridSize;
         glm::vec3 cellSize;
-        Span<int32_t> cellStartIndices;
-        Span<int32_t> cellEndIndices;
-        Span<int32_t> particleGridIndices;
-        Span<int32_t> particleArrayIndices;
+        std::span<int32_t> cellStartIndices;
+        std::span<int32_t> cellEndIndices;
+        std::span<int32_t> particleGridIndices;
+        std::span<int32_t> particleArrayIndices;
     };
 
     struct State
@@ -54,8 +55,11 @@ public:
     }
 
     [[nodiscard]] auto calculateAverageNeighborCount() const -> float override;
-    std::vector<glm::vec4> updateDensityDeviations() const override;
+    [[nodiscard]] auto updateDensityDeviations() const -> std::vector<float> override;
     void setParticleVelocity(uint32_t particleIndex, const glm::vec4& velocity) override;
+
+    //0 1 0 1
+    //0 0 1 1
 
 protected:
     struct ParticlesInternalDataBuffer
@@ -63,14 +67,13 @@ protected:
         const ImportedParticleMemory& positions;
         const ImportedParticleMemory& predictedPositions;
         const ImportedParticleMemory& velocities;
-        const ImportedParticleMemory& densityDeviation;
         const ImportedParticleMemory& densities;
         const ImportedParticleMemory& nearDensities;
         const ImportedParticleMemory& pressures;
         const ImportedParticleMemory& radiuses;
         const ImportedParticleMemory& smoothingRadiuses;
         const ImportedParticleMemory& masses;
-        const ImportedParticleMemory& refinementLevels;
+        const ImportedParticleMemory& densityDeviations;
     };
 
     static auto createGrid(const Parameters& data, size_t particleCapacity) -> Grid;

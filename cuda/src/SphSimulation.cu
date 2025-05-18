@@ -12,12 +12,12 @@
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
 #include <glm/ext/vector_uint3.hpp>
+#include <span>
 #include <type_traits>
 #include <vector>
 
 #include "Algorithm.cuh"
 #include "ImportedParticleMemory.cuh"
-#include "Span.cuh"
 #include "SphSimulation.cuh"
 #include "common/Utils.cuh"
 
@@ -72,10 +72,10 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
 
 SphSimulation::~SphSimulation()
 {
-    cudaFree(_state.grid.particleGridIndices.data);
-    cudaFree(_state.grid.particleArrayIndices.data);
-    cudaFree(_state.grid.cellStartIndices.data);
-    cudaFree(_state.grid.cellEndIndices.data);
+    cudaFree(_state.grid.particleGridIndices.data());
+    cudaFree(_state.grid.particleArrayIndices.data());
+    cudaFree(_state.grid.cellStartIndices.data());
+    cudaFree(_state.grid.cellEndIndices.data());
 }
 
 auto SphSimulation::toInternalBuffer(const ParticlesDataBuffer& memory) -> ParticlesInternalDataBuffer
@@ -83,14 +83,13 @@ auto SphSimulation::toInternalBuffer(const ParticlesDataBuffer& memory) -> Parti
     return {.positions = dynamic_cast<const ImportedParticleMemory&>(memory.positions),
             .predictedPositions = dynamic_cast<const ImportedParticleMemory&>(memory.predictedPositions),
             .velocities = dynamic_cast<const ImportedParticleMemory&>(memory.velocities),
-            .densityDeviation = dynamic_cast<const ImportedParticleMemory&>(memory.forces),
             .densities = dynamic_cast<const ImportedParticleMemory&>(memory.densities),
             .nearDensities = dynamic_cast<const ImportedParticleMemory&>(memory.nearDensities),
             .pressures = dynamic_cast<const ImportedParticleMemory&>(memory.pressures),
             .radiuses = dynamic_cast<const ImportedParticleMemory&>(memory.radiuses),
             .smoothingRadiuses = dynamic_cast<const ImportedParticleMemory&>(memory.smoothingRadiuses),
             .masses = dynamic_cast<const ImportedParticleMemory&>(memory.masses),
-            .refinementLevels = dynamic_cast<const ImportedParticleMemory&>(memory.refinementLevels)};
+            .densityDeviations = dynamic_cast<const ImportedParticleMemory&>(memory.densityDeviations)};
 }
 
 void SphSimulation::update(float deltaTime)
@@ -129,12 +128,12 @@ auto SphSimulation::createGrid(const Parameters& data, size_t particleCapacity) 
     return Grid {
         .gridSize = gridCellCount,
         .cellSize = glm::vec3 {gridCellWidth},
-        .cellStartIndices = Span {.data = cellStartIndices,
-                               .size = static_cast<size_t>(gridCellCount.x * gridCellCount.y * gridCellCount.z)},
-        .cellEndIndices = Span {.data = cellEndIndices,
-                               .size = static_cast<size_t>(gridCellCount.x * gridCellCount.y * gridCellCount.z)},
-        .particleGridIndices = Span {.data = particleIndices, .size = particleCapacity},
-        .particleArrayIndices = Span {.data = particleArrayIndices, .size = particleCapacity}
+        .cellStartIndices =
+            std::span {cellStartIndices, static_cast<size_t>(gridCellCount.x * gridCellCount.y * gridCellCount.z)},
+        .cellEndIndices =
+            std::span {cellEndIndices, static_cast<size_t>(gridCellCount.x * gridCellCount.y * gridCellCount.z)},
+        .particleGridIndices = std::span {particleIndices, particleCapacity},
+        .particleArrayIndices = std::span {particleArrayIndices, particleCapacity}
     };
 }
 
@@ -157,7 +156,6 @@ auto SphSimulation::getParticles() const -> ParticlesData
         .predictedPositions = _particleBuffer.predictedPositions
                                   .getData<std::remove_pointer_t<decltype(ParticlesData::predictedPositions)>>(),
         .velocities = _particleBuffer.velocities.getData<std::remove_pointer_t<decltype(ParticlesData::velocities)>>(),
-        .forces = _particleBuffer.densityDeviation.getData<std::remove_pointer_t<decltype(ParticlesData::forces)>>(),
         .densities = _particleBuffer.densities.getData<std::remove_pointer_t<decltype(ParticlesData::densities)>>(),
         .nearDensities =
             _particleBuffer.nearDensities.getData<std::remove_pointer_t<decltype(ParticlesData::nearDensities)>>(),
@@ -166,8 +164,8 @@ auto SphSimulation::getParticles() const -> ParticlesData
         .smoothingRadiuses = _particleBuffer.smoothingRadiuses
                                  .getData<std::remove_pointer_t<decltype(ParticlesData::smoothingRadiuses)>>(),
         .masses = _particleBuffer.masses.getData<std::remove_pointer_t<decltype(ParticlesData::masses)>>(),
-        .refinementLevels = _particleBuffer.refinementLevels
-                                .getData<std::remove_pointer_t<decltype(ParticlesData::refinementLevels)>>(),
+        .densityDeviations = _particleBuffer.densityDeviations
+                                 .getData<std::remove_pointer_t<decltype(ParticlesData::densityDeviations)>>(),
         .particleCount = _particleCount};
 }
 
@@ -194,9 +192,9 @@ void SphSimulation::assignParticlesToCells() const
 void SphSimulation::sortParticles() const
 {
     thrust::sort_by_key(thrust::device,
-                        _state.grid.particleGridIndices.data,
-                        _state.grid.particleGridIndices.data + getParticlesCount(),
-                        _state.grid.particleArrayIndices.data);
+                        _state.grid.particleGridIndices.data(),
+                        _state.grid.particleGridIndices.data() + getParticlesCount(),
+                        _state.grid.particleArrayIndices.data());
 }
 
 void SphSimulation::calculateCellStartAndEndIndices() const
@@ -248,7 +246,6 @@ auto SphSimulation::calculateAverageNeighborCount() const -> float
     uint32_t* d_neighborCounts = nullptr;
     cudaMalloc(&d_neighborCounts, _particleCount * sizeof(uint32_t));
     cudaMemcpy(d_neighborCounts, neighborCounts.data(), _particleCount * sizeof(uint32_t), cudaMemcpyHostToDevice);
-    // Launch kernel to count neighbors for each particle
     kernel::countNeighbors<<<getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(getParticles(),
                                                                                      _state,
                                                                                      _simulationData,
@@ -256,17 +253,16 @@ auto SphSimulation::calculateAverageNeighborCount() const -> float
     cudaMemcpy(neighborCounts.data(), d_neighborCounts, _particleCount * sizeof(uint32_t), cudaMemcpyDeviceToHost);
     cudaFree(d_neighborCounts);
 
-    // Calculate average
     uint32_t totalNeighbors = 0;
     for (uint32_t i = 0; i < _particleCount; i++)
     {
         totalNeighbors += neighborCounts[i];
     }
 
-    return _particleCount > 0 ? static_cast<float>(totalNeighbors) / static_cast<float>(_particleCount) : 0.0f;
+    return _particleCount > 0 ? static_cast<float>(totalNeighbors) / static_cast<float>(_particleCount) : 0.F;
 }
 
-std::vector<glm::vec4> SphSimulation::updateDensityDeviations() const
+std::vector<float> SphSimulation::updateDensityDeviations() const
 {
     if (_particleCount == 0)
     {
@@ -277,7 +273,7 @@ std::vector<glm::vec4> SphSimulation::updateDensityDeviations() const
         getParticles(),
         _simulationData.restDensity);
 
-    return fromGpu(getParticles().forces, getParticlesCount());
+    return fromGpu(getParticles().densityDeviations, getParticlesCount());
 }
 
 void SphSimulation::setParticleVelocity(uint32_t particleIndex, const glm::vec4& velocity)
