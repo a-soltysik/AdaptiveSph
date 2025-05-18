@@ -5,8 +5,8 @@
 
 #include <string_view>
 
-#include "input_handler/KeyboardHandler.hpp"
-#include "input_handler/MouseHandler.hpp"
+#include "input/KeyboardHandler.hpp"
+#include "input/MouseHandler.hpp"
 
 template <>
 struct fmt::formatter<sph::KeyboardHandler::State> : formatter<std::string_view>

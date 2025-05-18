@@ -31,12 +31,12 @@
 
 #include "benchmark/BenchmarkManager.hpp"
 #include "glm/gtx/string_cast.hpp"
-#include "gui/SimulationDataGui.hpp"
-#include "input_handler/MouseHandler.hpp"
+#include "input/MouseHandler.hpp"
 #include "internal/config.hpp"
 #include "mesh/InvertedCube.hpp"
-#include "movement_handler/MovementHandler.hpp"
-#include "movement_handler/RotationHandler.hpp"
+#include "movement/MovementHandler.hpp"
+#include "movement/RotationHandler.hpp"
+#include "ui/SimulationDataGui.hpp"
 #include "utils/FrameTimeManager.hpp"
 
 namespace
@@ -214,7 +214,7 @@ auto App::mainLoop() const -> void
     _scene->getCamera().setViewYXZ(
         panda::gfx::view::YXZ {.position = cameraObject.translation, .rotation = cameraObject.rotation});
 
-    auto gui = SimulationDataGui {*_window};
+    auto gui = SimulationDataGui {};
 
     auto timeManager = FrameTimeManager {};
     const std::vector densityDeviations(_simulation->getParticlesCount(), 0.F);

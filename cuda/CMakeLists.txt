@@ -4,23 +4,24 @@ set(CMAKE_CUDA_STANDARD 20)
 
 add_library(
         AdaptiveSphCuda SHARED
-        src/Algorithm.cu
-        src/SphSimulation.cu
-        src/ImportedParticleMemory.cu
-        src/device/Kernel.cu
-        src/refinement/ParticleOperations.cu
+        src/algorithm/Algorithm.cu
+        src/simulation/SphSimulation.cu
+        src/memory/ImportedParticleMemory.cu
+        src/algorithm/kernels/Kernel.cu
+        src/algorithm/adaptive/AdaptiveAlgorithm.cu
 
-        src/AdaptiveSphSimulation.cu
-        src/SimulationFactory.cu
-        src/common/Utils.cu
-        src/refinement/criteria/VelocityCriterion.cu
-        src/refinement/criteria/VorticityCriterion.cu
-        src/refinement/criteria/CurvatureCriterion.cu
-        src/refinement/criteria/InterfaceCriterion.cu
-        src/common/Iteration.cu)
+        src/simulation/adaptive/AdaptiveSphSimulation.cu
+        src/simulation/SimulationFactory.cu
+        src/utils/Utils.cu
+        src/simulation/adaptive/refinement/criteria/VelocityCriterion.cu
+        src/simulation/adaptive/refinement/criteria/VorticityCriterion.cu
+        src/simulation/adaptive/refinement/criteria/CurvatureCriterion.cu
+        src/simulation/adaptive/refinement/criteria/InterfaceCriterion.cu
+        src/utils/Iteration.cu)
 target_compile_features(AdaptiveSphCuda PRIVATE cxx_std_20)
 target_compile_definitions(AdaptiveSphCuda PRIVATE EXPORTING_CUDA_LIB)
 target_include_directories(AdaptiveSphCuda PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(AdaptiveSphCuda PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(AdaptiveSphCuda PRIVATE sph_options sph_warnings)
 sph_target_link_cuda(AdaptiveSphCuda)
 

@@ -5,9 +5,9 @@
 #include <string>
 #include <vector>
 
-#include "ExperimentBase.hpp"
-#include "Window.hpp"
+#include "../ui/Window.hpp"
 #include "cuda/Simulation.cuh"
+#include "experiments/ExperimentBase.hpp"
 #include "utils/ConfigurationManager.hpp"
 
 namespace sph::benchmark

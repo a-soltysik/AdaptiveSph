@@ -1,30 +1,30 @@
 add_executable(AdaptiveSph
         benchmark/BenchmarkManager.cpp
         benchmark/BenchmarkManager.hpp
-        benchmark/ExperimentBase.cpp
-        benchmark/ExperimentBase.hpp
-        benchmark/LidDrivenCavity.cpp
-        benchmark/LidDrivenCavity.hpp
+        benchmark/experiments/ExperimentBase.cpp
+        benchmark/experiments/ExperimentBase.hpp
+        benchmark/experiments/LidDrivenCavity.cpp
+        benchmark/experiments/LidDrivenCavity.hpp
         benchmark/MetricsCollector.cpp
         benchmark/MetricsCollector.hpp
         benchmark/BenchmarkVisualizer.cpp
         benchmark/BenchmarkVisualizer.hpp
-        benchmark/PoiseuilleFlow.cpp
-        benchmark/PoiseuilleFlow.hpp
-        benchmark/TaylorGreenVortex.cpp
-        benchmark/TaylorGreenVortex.hpp)
+        benchmark/experiments/PoiseuilleFlow.cpp
+        benchmark/experiments/PoiseuilleFlow.hpp
+        benchmark/experiments/TaylorGreenVortex.cpp
+        benchmark/experiments/TaylorGreenVortex.hpp)
 
 target_sources(
         AdaptiveSph
         PRIVATE main.cpp
-        Window.cpp
+        ui/Window.cpp
         mesh/UvSphere.cpp
         mesh/InvertedCube.cpp
-        input_handler/KeyboardHandler.cpp
-        input_handler/MouseHandler.cpp
-        movement_handler/MovementHandler.cpp
-        movement_handler/RotationHandler.cpp
-        gui/SimulationDataGui.cpp
+        input/KeyboardHandler.cpp
+        input/MouseHandler.cpp
+        movement/MovementHandler.cpp
+        movement/RotationHandler.cpp
+        ui/SimulationDataGui.cpp
         utils/FrameTimeManager.cpp
         utils/ConfigurationManager.cpp
         App.cpp)
