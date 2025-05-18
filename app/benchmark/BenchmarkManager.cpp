@@ -10,13 +10,13 @@
 #include <string>
 #include <utility>
 
-#include "Window.hpp"
-#include "benchmark/ExperimentBase.hpp"
-#include "benchmark/LidDrivenCavity.hpp"
+#include "../ui/Window.hpp"
 #include "benchmark/MetricsCollector.hpp"
-#include "benchmark/PoiseuilleFlow.hpp"
-#include "benchmark/TaylorGreenVortex.hpp"
 #include "cuda/Simulation.cuh"
+#include "experiments/ExperimentBase.hpp"
+#include "experiments/LidDrivenCavity.hpp"
+#include "experiments/PoiseuilleFlow.hpp"
+#include "experiments/TaylorGreenVortex.hpp"
 #include "panda/gfx/vulkan/Context.h"
 #include "utils/ConfigurationManager.hpp"
 
@@ -56,9 +56,9 @@ void BenchmarkManager::runBenchmarks(const BenchmarkParameters& params,
     {
         panda::log::Info("Running {} simulation", std::to_underlying(simulationType));
 
-        auto result = experiment->runBenchmark(params, simulationParameters, simulationType, api, true, &window);
+        auto result = experiment->runBenchmark(params, simulationParameters, simulationType, api, window, true);
 
-        sph::benchmark::MetricsCollector::saveToFile(result, params.outputPath);
+        MetricsCollector::saveToFile(result, params.outputPath);
     }
 
     panda::log::Info("Benchmark completed for {}", std::to_underlying(experiment->getName()));

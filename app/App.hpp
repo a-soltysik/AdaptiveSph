@@ -12,8 +12,8 @@
 #include <string>
 #include <vector>
 
-#include "Window.hpp"
 #include "cuda/refinement/RefinementParameters.cuh"
+#include "ui/Window.hpp"
 #include "utils/ConfigurationManager.hpp"
 
 namespace sph
