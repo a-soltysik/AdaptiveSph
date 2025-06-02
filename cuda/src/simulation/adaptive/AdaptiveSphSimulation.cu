@@ -12,7 +12,6 @@
 #include "algorithm/adaptive/AdaptiveAlgorithm.cuh"
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
-#include "refinement/criteria/CurvatureCriterion.cuh"
 #include "refinement/criteria/InterfaceCriterion.cuh"
 #include "refinement/criteria/VelocityCriterion.cuh"
 #include "refinement/criteria/VorticityCriterion.cuh"
@@ -26,15 +25,14 @@ AdaptiveSphSimulation::AdaptiveSphSimulation(const Parameters& initialParameters
                                              const ParticlesDataBuffer& memory,
                                              const refinement::RefinementParameters& refinementParams)
     : SphSimulation(initialParameters, positions, memory, refinementParams.maxParticleCount),
-      _refinementParams(refinementParams),
-      // Initialize CudaMemory objects with RAII
       _criterionValuesSplit(refinementParams.maxParticleCount),
+      // Initialize CudaMemory objects with RAII
       _particlesIdsToSplit(static_cast<size_t>(refinementParams.maxParticleCount * refinementParams.maxBatchRatio)),
       _particlesSplitCount(1),
       _particlesIds(refinementParams.maxParticleCount),
       _particlesCount(1),
-      // Initialize enhanced merge data
       _mergeCriterionValues(refinementParams.maxParticleCount),
+      // Initialize enhanced merge data
       _mergeEligibleParticles(refinementParams.maxParticleCount),
       _mergeEligibleCount(1),
       _mergeCandidates(refinementParams.maxParticleCount),
@@ -42,6 +40,7 @@ AdaptiveSphSimulation::AdaptiveSphSimulation(const Parameters& initialParameters
       _mergeCount(1),
       _mergeRemovalFlags(refinementParams.maxParticleCount),
       _mergePrefixSums(refinementParams.maxParticleCount),
+      _refinementParams(refinementParams),
       // Create wrapped data structures
       _refinementData {
           .split {.criterionValues {_criterionValuesSplit.get(), _criterionValuesSplit.size()},
@@ -72,8 +71,8 @@ void AdaptiveSphSimulation::update(float deltaTime)
     sortParticles();
     calculateCellStartAndEndIndices();
     computeDensities();
-    computePressureForce(deltaTime);
     computeViscosityForce(deltaTime);
+    computePressureForce(deltaTime);
     integrateMotion(deltaTime);
 
     if (_frameCounter == _refinementParams.initialCooldown ||
@@ -107,6 +106,7 @@ void AdaptiveSphSimulation::performAdaptiveRefinement()
 
     if (particlesRemovedInLastMerge > 0)
     {
+        rebuildGridAfterMerge();
         identifyAndSplitParticles(particlesRemovedInLastMerge);
     }
 }
@@ -174,15 +174,6 @@ void AdaptiveSphSimulation::identifyAndSplitParticles(uint32_t removedParticles)
             getParticles(),
             _refinementData.split.criterionValues,
             refinement::vorticity::SplitCriterionGenerator(minMass, _refinementParams.vorticity),
-            getState().grid,
-            getParameters());
-    }
-    else if (_refinementParams.criterionType == refinement::RefinementParameters::Criterion::Curvature)
-    {
-        refinement::getCriterionValues<<<SphSimulation::getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(
-            getParticles(),
-            _refinementData.split.criterionValues,
-            refinement::curvature::SplitCriterionGenerator(minMass, _refinementParams.curvature),
             getState().grid,
             getParameters());
     }
@@ -292,15 +283,6 @@ void AdaptiveSphSimulation::calculateMergeCriteria(std::span<float> criterionVal
             getState().grid,
             getParameters());
     }
-    else if (_refinementParams.criterionType == refinement::RefinementParameters::Criterion::Curvature)
-    {
-        refinement::getCriterionValues<<<SphSimulation::getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(
-            getParticles(),
-            criterionValues,
-            refinement::curvature::MergeCriterionGenerator(maxMass, _refinementParams.curvature),
-            getState().grid,
-            getParameters());
-    }
     else
     {
         refinement::getCriterionValues<<<SphSimulation::getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(
@@ -310,6 +292,14 @@ void AdaptiveSphSimulation::calculateMergeCriteria(std::span<float> criterionVal
             getState().grid,
             getParameters());
     }
+}
+
+void AdaptiveSphSimulation::rebuildGridAfterMerge()
+{
+    resetGrid();
+    assignParticlesToCells();
+    sortParticles();
+    calculateCellStartAndEndIndices();
 }
 
 }

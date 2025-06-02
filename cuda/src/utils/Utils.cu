@@ -44,17 +44,50 @@ __constant__ int3 offsets[27] = {
     {1,  1,  1 }
 };
 
+//__device__ auto calculateCellIndex(glm::vec4 position,
+//                                   const Simulation::Parameters& simulationData,
+//                                   const SphSimulation::Grid& grid) -> glm::uvec3
+//{
+//    const auto relativePosition = glm::vec3 {position} - simulationData.domain.min;
+//    const auto clampedPosition =
+//        glm::clamp(relativePosition, glm::vec3(0.F), simulationData.domain.max - simulationData.domain.min);
+//
+//    return glm::uvec3 {clampedPosition.x / grid.cellSize.x,
+//                       clampedPosition.y / grid.cellSize.y,
+//                       clampedPosition.z / grid.cellSize.z};
+//}
+
 __device__ auto calculateCellIndex(glm::vec4 position,
                                    const Simulation::Parameters& simulationData,
                                    const SphSimulation::Grid& grid) -> glm::uvec3
 {
     const auto relativePosition = glm::vec3 {position} - simulationData.domain.min;
-    const auto clampedPosition =
-        glm::clamp(relativePosition, glm::vec3(0.F), simulationData.domain.max - simulationData.domain.min);
+    const auto domainSize = simulationData.domain.max - simulationData.domain.min;
+    auto wrappedPosition = relativePosition;
+    // Dla Poiseuille flow - tylko X jest periodic
+    if (simulationData.testCase == Simulation::Parameters::TestCase::PoiseuilleFlow)
+    {
+        // Wrap X coordinate
+        wrappedPosition.x = fmod(wrappedPosition.x, domainSize.x);
+        if (wrappedPosition.x < 0)
+        {
+            wrappedPosition.x += domainSize.x;
+        }
 
-    return glm::uvec3 {clampedPosition.x / grid.cellSize.x,
-                       clampedPosition.y / grid.cellSize.y,
-                       clampedPosition.z / grid.cellSize.z};
+        // Clamp Y i Z
+        wrappedPosition.y = glm::clamp(wrappedPosition.y, 0.0f, domainSize.y);
+        wrappedPosition.z = glm::clamp(wrappedPosition.z, 0.0f, domainSize.z);
+    }
+    auto cellIndex = glm::uvec3 {static_cast<uint32_t>(wrappedPosition.x / grid.cellSize.x),
+                                 static_cast<uint32_t>(wrappedPosition.y / grid.cellSize.y),
+                                 static_cast<uint32_t>(wrappedPosition.z / grid.cellSize.z)};
+
+    // Zabezpieczenie przed out-of-bounds
+    cellIndex.x = glm::min(cellIndex.x, grid.gridSize.x - 1u);
+    cellIndex.y = glm::min(cellIndex.y, grid.gridSize.y - 1u);
+    cellIndex.z = glm::min(cellIndex.z, grid.gridSize.z - 1u);
+
+    return cellIndex;
 }
 
 __device__ auto flattenCellIndex(glm::uvec3 cellIndex, glm::uvec3 gridSize) -> uint32_t

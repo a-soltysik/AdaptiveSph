@@ -37,14 +37,14 @@ __device__ auto wendlandKernel(float distance, float smoothingRadius) -> float
 __device__ auto wendlandDerivativeKernel(float distance, float smoothingRadius) -> float
 {
     const float q = distance / smoothingRadius;
-    if (q > 2.0F || distance < 1e-6F)
+    if (q > 2.0F)
     {
         return 0.0F;
     }
 
     const float normalization = 21.0F / (16.0F * glm::pi<float>());
     const float volumeFactor = 1.0F / (smoothingRadius * smoothingRadius * smoothingRadius);
-    const float tmp = 1.0F - (0.5f * q);
+    const float tmp = 1.0F - (0.5F * q);
 
     return normalization * volumeFactor * (-5.0F * q * tmp * tmp * tmp) / smoothingRadius;
 }
@@ -102,7 +102,11 @@ __device__ auto viscosityKernel(float distance, float smoothingRadius) -> float
 
 __device__ auto viscosityLaplacianKernel(float distance, float smoothingRadius) -> float
 {
-    return 45.F / (glm::pi<float>() * glm::pow(smoothingRadius, 6.F)) * (smoothingRadius - distance);
+    if (distance < smoothingRadius)
+    {
+        return 45.F / (glm::pi<float>() * glm::pow(smoothingRadius, 6.F)) * (smoothingRadius - distance);
+    }
+    return 0.F;
 }
 
 }

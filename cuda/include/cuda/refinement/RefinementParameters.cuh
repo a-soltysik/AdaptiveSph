@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
 
 namespace sph::cuda::refinement
 {
@@ -38,22 +37,6 @@ struct VorticityParameters
     Merge merge;
 };
 
-struct CurvatureParameters
-{
-    struct Split
-    {
-        float minimalCurvatureThreshold = 2.0F;
-    };
-
-    struct Merge
-    {
-        float maximalCurvatureThreshold = 0.6F;
-    };
-
-    Split split;
-    Merge merge;
-};
-
 struct InterfaceParameters
 {
     struct Split
@@ -84,7 +67,6 @@ struct RefinementParameters
     {
         Velocity,
         Interface,
-        Curvature,
         Vorticity
     };
 
@@ -99,9 +81,7 @@ struct RefinementParameters
 
     SplittingParameters splitting;
     VelocityParameters velocity;
-
     VorticityParameters vorticity;
-    CurvatureParameters curvature;
     InterfaceParameters interfaceParameters;
 };
 

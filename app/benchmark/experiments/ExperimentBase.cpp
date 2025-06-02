@@ -91,11 +91,11 @@ void ExperimentBase::runSimulation(cuda::Simulation& simulation,
         timeManager.update();
         const auto deltaTime = timeManager.getDelta();
 
-        if (window.shouldClose())
-        {
-            panda::log::Warning("Simulation has been stopped");
-            return;
-        }
+        //if (window.shouldClose())
+        //{
+        //    panda::log::Warning("Simulation has been stopped");
+        //    return;
+        //}
         window.processInput();
 
         simulation.update(timestep);

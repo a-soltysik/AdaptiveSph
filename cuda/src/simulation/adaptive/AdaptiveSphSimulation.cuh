@@ -34,6 +34,7 @@ private:
     void resetRefinementCounters() const;
     void identifyAndSplitParticles(uint32_t removedParticles);
     void identifyAndMergeParticles();
+    void rebuildGridAfterMerge();
 
     Memory<float> _criterionValuesSplit;
     Memory<uint32_t> _particlesIdsToSplit;

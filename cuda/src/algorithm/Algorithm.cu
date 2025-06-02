@@ -69,7 +69,7 @@ __global__ void assignParticlesToCells(ParticlesData particles,
     if (idx < particles.particleCount)
     {
         state.grid.particleArrayIndices[idx] = idx;
-        const auto cellPosition = calculateCellIndex(particles.positions[idx], simulationData, state.grid);
+        const auto cellPosition = calculateCellIndex(particles.predictedPositions[idx], simulationData, state.grid);
         const auto cellIndex = flattenCellIndex(cellPosition, state.grid.gridSize);
         state.grid.particleGridIndices[idx] = cellIndex;
     }
@@ -114,11 +114,15 @@ __global__ void computeDensities(ParticlesData particles,
                      simulationData,
                      state.grid,
                      [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
+                         //if (neighbourIdx == idx)
+                         //{
+                         //    return;
+                         //}
                          const auto offsetToNeighbour = adjustedPos - position;
                          const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
 
                          const auto neighbourSmoothingRadius = particles.smoothingRadiuses[neighbourIdx];
-                         const auto radiusSquared = neighbourSmoothingRadius * neighbourSmoothingRadius;
+                         const auto radiusSquared = 4 * neighbourSmoothingRadius * neighbourSmoothingRadius;
 
                          if (distanceSquared > radiusSquared)
                          {
@@ -154,50 +158,59 @@ __global__ void computePressureForce(ParticlesData particles,
 
     auto pressureForce = glm::vec4 {};
 
-    forEachNeighbour(position,
-                     particles,
-                     simulationData,
-                     state.grid,
-                     [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
-                         if (neighbourIdx == idx)
-                         {
-                             return;
-                         }
+    forEachNeighbour(
+        position,
+        particles,
+        simulationData,
+        state.grid,
+        [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
+            if (neighbourIdx == idx)
+            {
+                return;
+            }
 
-                         const auto offsetToNeighbour = adjustedPos - position;
-                         const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
-                         const auto neighbourSmoothingRadius = particles.smoothingRadiuses[neighbourIdx];
-                         const auto radiusSquared = neighbourSmoothingRadius * neighbourSmoothingRadius;
+            const auto offsetToNeighbour = adjustedPos - position;
+            const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
+            const auto neighbourSmoothingRadius = particles.smoothingRadiuses[neighbourIdx];
+            const auto radiusSquared = 4 * neighbourSmoothingRadius * neighbourSmoothingRadius;
 
-                         if (distanceSquared > radiusSquared)
-                         {
-                             return;
-                         }
-                         const auto densityNeighbour = particles.densities[neighbourIdx];
-                         const auto nearDensityNeighbour = particles.nearDensities[neighbourIdx];
-                         const auto pressureNeighbour =
-                             (densityNeighbour - simulationData.restDensity) * simulationData.pressureConstant;
-                         const auto nearPressureNeighbour = nearDensityNeighbour * simulationData.nearPressureConstant;
+            if (distanceSquared > radiusSquared)
+            {
+                return;
+            }
+            const auto densityNeighbour = particles.densities[neighbourIdx];
+            const auto nearDensityNeighbour = particles.nearDensities[neighbourIdx];
+            const auto pressureNeighbour =
+                (densityNeighbour - simulationData.restDensity) * simulationData.pressureConstant;
+            const auto nearPressureNeighbour = nearDensityNeighbour * simulationData.nearPressureConstant;
 
-                         const auto sharedPressure = (pressure + pressureNeighbour) / 2.F;
-                         const auto sharedNearPressure = (nearPressure + nearPressureNeighbour) / 2.F;
+            const auto sharedPressure = (pressure + pressureNeighbour) / 2.F;
+            const auto sharedNearPressure = (nearPressure + nearPressureNeighbour) / 2.F;
 
-                         const auto distance = glm::sqrt(distanceSquared);
-                         const auto direction =
-                             distance > 0.F ? offsetToNeighbour / distance : glm::vec4(0.F, 1.F, 0.F, 0.F);
+            const auto distance = glm::sqrt(distanceSquared);
+            const auto direction = distance > 0.F ? offsetToNeighbour / distance : glm::vec4(0.F, 1.F, 0.F, 0.F);
 
-                         const auto neighbourMass = particles.masses[neighbourIdx];
+            const auto neighbourMass = particles.masses[neighbourIdx];
 
-                         pressureForce += neighbourMass * direction *
-                                          device::densityDerivativeKernel(distance, neighbourSmoothingRadius) *
-                                          sharedPressure / densityNeighbour;
-                         pressureForce += neighbourMass * direction *
-                                          device::nearDensityDerivativeKernel(distance, neighbourSmoothingRadius) *
-                                          sharedNearPressure / nearDensityNeighbour;
-                     });
+            pressureForce += neighbourMass * direction *
+                             device::densityDerivativeKernel(distance, neighbourSmoothingRadius) * sharedPressure /
+                             densityNeighbour;
+            pressureForce += neighbourMass * direction *
+                             device::nearDensityDerivativeKernel(distance, neighbourSmoothingRadius) *
+                             sharedNearPressure / nearDensityNeighbour;
+            //pressureForce +=
+            //    direction * neighbourMass *
+            //    (pressure / (density * density) + pressureNeighbour / (densityNeighbour * densityNeighbour)) *
+            //    device::densityDerivativeKernel(distance, neighbourSmoothingRadius);
+            //
+            //pressureForce += direction * neighbourMass *
+            //                 (nearPressure / (nearDensity * nearDensity) +
+            //                  nearPressureNeighbour / (nearDensityNeighbour * nearDensityNeighbour)) *
+            //                 device::nearDensityDerivativeKernel(distance, neighbourSmoothingRadius);
+        });
 
     const auto particleMass = particles.masses[idx];
-    const auto acceleration = (pressureForce / particleMass) / particles.densities[idx];
+    const auto acceleration = pressureForce / particleMass;
 
     particles.velocities[idx] += acceleration * dt;
 }
@@ -217,7 +230,6 @@ __global__ void computeViscosityForce(ParticlesData particles,
     const auto velocity = particles.velocities[idx];
 
     auto viscosityForce = glm::vec4 {};
-    const auto radiusSquared = particles.smoothingRadiuses[idx] * particles.smoothingRadiuses[idx];
 
     forEachNeighbour(position,
                      particles,
@@ -231,6 +243,8 @@ __global__ void computeViscosityForce(ParticlesData particles,
 
                          const auto offsetToNeighbour = adjustedPos - position;
                          const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
+                         const auto smoothingRadius = particles.smoothingRadiuses[neighbourIdx];
+                         const auto radiusSquared = smoothingRadius * smoothingRadius;
 
                          if (distanceSquared > radiusSquared)
                          {
@@ -243,7 +257,7 @@ __global__ void computeViscosityForce(ParticlesData particles,
                          const auto neighbourDensity = particles.densities[neighbourIdx];
 
                          viscosityForce += neighbourMass * (neighbourVelocity - velocity) / neighbourDensity *
-                                           device::viscosityLaplacianKernel(distance, particles.smoothingRadiuses[idx]);
+                                           device::viscosityLaplacianKernel(distance, smoothingRadius);
                      });
 
     const auto particleMass = particles.masses[idx];
@@ -376,13 +390,13 @@ __device__ void handleNoSlipBoundaries(ParticlesData particles,
     if (particles.positions[id][axis] < minBoundary)
     {
         particles.positions[id][axis] = minBoundary;
-        particles.velocities[id] = glm::vec4 {};
+        particles.velocities[id] = -particles.velocities[id] * 0.2F;
     }
 
     if (particles.positions[id][axis] > maxBoundary)
     {
         particles.positions[id][axis] = maxBoundary;
-        particles.velocities[id] = glm::vec4 {};
+        particles.velocities[id] = -particles.velocities[id] * 0.2F;
     };
 }
 

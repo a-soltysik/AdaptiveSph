@@ -100,8 +100,8 @@ void SphSimulation::update(float deltaTime)
     sortParticles();
     calculateCellStartAndEndIndices();
     computeDensities();
-    computePressureForce(deltaTime);
     computeViscosityForce(deltaTime);
+    computePressureForce(deltaTime);
     integrateMotion(deltaTime);
     handleCollisions();
 
@@ -115,7 +115,7 @@ auto SphSimulation::createGrid(const Parameters& data, size_t particleCapacity) 
     int32_t* cellStartIndices {};
     int32_t* cellEndIndices {};
 
-    const auto gridCellWidth = 2 * data.baseSmoothingRadius;
+    const auto gridCellWidth = 4 * data.baseSmoothingRadius;
     const auto gridCellCount = glm::uvec3 {glm::ceil((data.domain.max - data.domain.min) / gridCellWidth)};
 
     cudaMalloc(&particleIndices, particleCapacity * sizeof(int32_t));

@@ -40,6 +40,17 @@ __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles,
     }
 
     const auto position = particles.positions[id];
+    // Poiseuille flow type simulation: Check distance from X-axis boundaries
+    const auto distToMinX = position.x - simulationData.domain.min.x;
+    const auto distToMaxX = simulationData.domain.max.x - position.x;
+    const auto minDistanceFromXBoundary = glm::min(distToMinX, distToMaxX);
+
+    // If distance from X-axis boundary is less than 1, return 1 for splitting
+    if (minDistanceFromXBoundary < 1.0F)
+    {
+        return -1.0F;
+    }
+
     const auto minDistances = calculateMinSurfaceDistance(position, simulationData.domain);
     const auto domainSize = simulationData.domain.max - simulationData.domain.min;
     const auto splitThresholds = _interface.split.distanceRatioThreshold * domainSize;

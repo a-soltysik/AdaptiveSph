@@ -124,6 +124,59 @@ vec4 getDensityDeviationColor(float deviation)
     return vec4(color, 1.0);
 }
 
+vec4 getSpeedTurbo(float speed, float minSpeed, float maxSpeed)
+{
+    float t = clamp((speed - minSpeed) / (maxSpeed - minSpeed), 0.0, 1.0);
+
+    // Aproksymacja Turbo colormap
+    const vec4 kRedVec4 = vec4(0.55305649, 3.00913185, -5.46192616, -11.11819092);
+    const vec4 kGreenVec4 = vec4(0.16207513, 0.17712472, 15.24091500, -36.50657960);
+    const vec4 kBlueVec4 = vec4(-0.05195877, 5.18000081, -30.94853351, 81.96403246);
+    const vec2 kRedVec2 = vec2(27.81927491, -14.87899417);
+    const vec2 kGreenVec2 = vec2(25.95549545, -5.02738237);
+    const vec2 kBlueVec2 = vec2(-86.53476570, 30.23299484);
+
+    // Obliczenia dla każdego kanału
+    float r = kRedVec4.x + kRedVec4.y * t + kRedVec4.z * t * t + kRedVec4.w * t * t * t + kRedVec2.x * t * t * t * t + kRedVec2.y * t * t * t * t * t;
+    float g = kGreenVec4.x + kGreenVec4.y * t + kGreenVec4.z * t * t + kGreenVec4.w * t * t * t + kGreenVec2.x * t * t * t * t + kGreenVec2.y * t * t * t * t * t;
+    float b = kBlueVec4.x + kBlueVec4.y * t + kBlueVec4.z * t * t + kBlueVec4.w * t * t * t + kBlueVec2.x * t * t * t * t + kBlueVec2.y * t * t * t * t * t;
+
+    return vec4(clamp(r, 0.0, 1.0), clamp(g, 0.0, 1.0), clamp(b, 0.0, 1.0), 1.0);
+}
+
+vec4 getSpeedNeon(float speed, float minSpeed, float maxSpeed)
+{
+    float normalizedSpeed = clamp((speed - minSpeed) / (maxSpeed - minSpeed), 0.0, 1.0);
+
+    // Kolory neonowe
+    vec3 neonColors[5] = vec3[](
+    vec3(0.1, 0.0, 0.3), // Ciemny fiolet
+    vec3(0.0, 1.0, 1.0), // Cyjan
+    vec3(0.0, 1.0, 0.0), // Zielony
+    vec3(1.0, 1.0, 0.0), // Żółty
+    vec3(1.0, 0.0, 1.0)// Magenta
+    );
+
+    // Znajdź segment
+    float scaledSpeed = normalizedSpeed * 4.0;// 0-4 range
+    int index = int(floor(scaledSpeed));
+    float fraction = scaledSpeed - float(index);
+
+    // Clamp index
+    index = clamp(index, 0, 3);
+
+    // Interpoluj między kolorami
+    vec3 color1 = neonColors[index];
+    vec3 color2 = neonColors[index + 1];
+    vec3 finalColor = mix(color1, color2, smoothstep(0.0, 1.0, fraction));
+
+    // Dodaj neonowy glow effect
+    float glow = 1.0 + normalizedSpeed * 0.5;
+    finalColor *= glow;
+
+    return vec4(finalColor, 1.0);
+}
+
 void main() {
     vec2 _uv = uv * 2.0 - 1.0;
 
@@ -156,8 +209,8 @@ void main() {
         totalLight += calculateSpotLight(ubo.spotLights[i], normal, intersectionPoint);
     }
 
-    //outColor = vec4(getSpeedColor(length(velocity), 0.F, 5.F)) * vec4(totalLight, 1.0);
-    outColor = getDensityDeviationColor(densityDeviation) * vec4(totalLight, 1.0);
+    outColor = getSpeedNeon(length(velocity), 0.0, 10.0) * vec4(totalLight, 1.0);
+    //outColor = getDensityDeviationColor(densityDeviation) * vec4(totalLight, 1.0);
 }
 
 bool raySphereIntersection(vec3 rayOrigin, vec3 rayDir, vec3 sphereCenter, float radius, out vec3 intersectionPoint, out vec3 normal) {

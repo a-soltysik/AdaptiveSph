@@ -226,7 +226,7 @@ auto App::mainLoop() const -> void
             _window->processInput();
 
             timeManager.update();
-            _simulation->update(0.0001F);
+            _simulation->update(timeManager.getDelta() / 10.F);
             gui.setAverageNeighbourCount(_simulation->calculateAverageNeighborCount());
             gui.setDensityDeviation({.densityDeviations = _simulation->updateDensityDeviations(),
                                      .particleCount = _simulation->getParticlesCount(),

@@ -15,7 +15,6 @@ add_library(
         src/utils/Utils.cu
         src/simulation/adaptive/refinement/criteria/VelocityCriterion.cu
         src/simulation/adaptive/refinement/criteria/VorticityCriterion.cu
-        src/simulation/adaptive/refinement/criteria/CurvatureCriterion.cu
         src/simulation/adaptive/refinement/criteria/InterfaceCriterion.cu
         src/utils/Iteration.cu)
 target_compile_features(AdaptiveSphCuda PRIVATE cxx_std_20)

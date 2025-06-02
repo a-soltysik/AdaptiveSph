@@ -55,25 +55,162 @@ __device__ auto calculateMergedSmoothingLength(std::pair<glm::vec4, glm::vec4> p
                                                std::pair<float, float> smoothingRadiuses,
                                                glm::vec4 mergedPos,
                                                float mergedMass,
-                                               float weightNormal = 0.7F,
-                                               float weightNear = 0.3F) -> float
+                                               float weightNormal = 1.F,
+                                               float weightNear = 0.F) -> float
 {
+    if (masses.first <= 1e-12f || masses.second <= 1e-12f || !isfinite(masses.first) || !isfinite(masses.second) ||
+        mergedMass <= 1e-12f || !isfinite(mergedMass))
+    {
+        // Fallback to simple weighted average
+        return (smoothingRadiuses.first + smoothingRadiuses.second) * 0.5f;
+    }
+
+    // Validate smoothing radii
+    if (smoothingRadiuses.first <= 1e-12f || smoothingRadiuses.second <= 1e-12f || !isfinite(smoothingRadiuses.first) ||
+        !isfinite(smoothingRadiuses.second))
+    {
+        // Use mass-weighted average as fallback
+        const auto totalMass = masses.first + masses.second;
+        return (masses.first * smoothingRadiuses.first + masses.second * smoothingRadiuses.second) / totalMass;
+    }
+
+    // Validate positions
+    if (!isfinite(mergedPos.x) || !isfinite(mergedPos.y) || !isfinite(mergedPos.z))
+    {
+        return (smoothingRadiuses.first + smoothingRadiuses.second) * 0.5f;
+    }
+
+    // === PHASE 2: CALCULATE DISTANCES AND KERNELS ===
+
     const auto distances = std::pair {glm::length(glm::vec3 {positions.first - mergedPos}),
                                       glm::length(glm::vec3 {positions.second - mergedPos})};
+
+    // Early exit if particles are at the same position (should not happen, but safety)
+    if (distances.first < 1e-10f && distances.second < 1e-10f)
+    {
+        return (smoothingRadiuses.first + smoothingRadiuses.second) * 0.5f;
+    }
 
     const auto kernelValues = std::pair {device::densityKernel(distances.first, smoothingRadiuses.first),
                                          device::densityKernel(distances.second, smoothingRadiuses.second)};
 
-    const auto denomNormal = (masses.first * kernelValues.first) + (masses.second * kernelValues.second);
-
     const auto nearKernelValues = std::pair {device::nearDensityKernel(distances.first, smoothingRadiuses.first),
                                              device::nearDensityKernel(distances.second, smoothingRadiuses.second)};
+
+    // Validate kernel values
+    if (!isfinite(kernelValues.first) || !isfinite(kernelValues.second) || !isfinite(nearKernelValues.first) ||
+        !isfinite(nearKernelValues.second))
+    {
+        return (smoothingRadiuses.first + smoothingRadiuses.second) * 0.5f;
+    }
+
+    // === PHASE 3: CALCULATE DENOMINATORS WITH SAFETY ===
+
+    const auto denomNormal = (masses.first * kernelValues.first) + (masses.second * kernelValues.second);
     const auto denomNear = (masses.first * nearKernelValues.first) + (masses.second * nearKernelValues.second);
 
-    const auto normalSmoothingRadius = std::cbrt((16.0F * glm::pi<float>() * mergedMass) / (21.F * denomNormal));
-    const auto nearSmoothingRadius = std::cbrt((15.0F * mergedMass) / (glm::pi<float>() * denomNear));
+    // Critical safety thresholds
+    const float minDenomThreshold = 1e-15f;  // Very small but not zero
+    const float maxDenomThreshold = 1e15f;   // Prevent overflow in division
 
-    return ((weightNormal * normalSmoothingRadius) + (weightNear * nearSmoothingRadius));
+    // === PHASE 4: ROBUST SMOOTHING RADIUS CALCULATION ===
+
+    float normalSmoothingRadius = 0.0f;
+    float nearSmoothingRadius = 0.0f;
+
+    // Calculate normal smoothing radius with safety
+    if (denomNormal > minDenomThreshold && denomNormal < maxDenomThreshold && isfinite(denomNormal))
+    {
+        const auto numerator = (21.0f * mergedMass) / (16.0f * glm::pi<float>() * denomNormal);
+        if (numerator > 0.0f && numerator < 1e20f && isfinite(numerator))
+        {
+            normalSmoothingRadius = cbrtf(numerator);
+        }
+    }
+
+    // Calculate near smoothing radius with safety
+    if (denomNear > minDenomThreshold && denomNear < maxDenomThreshold && isfinite(denomNear))
+    {
+        const auto numerator = (15.0f * mergedMass) / (glm::pi<float>() * denomNear);
+        if (numerator > 0.0f && numerator < 1e20f && isfinite(numerator))
+        {
+            nearSmoothingRadius = cbrtf(numerator);
+        }
+    }
+
+    // === PHASE 5: FALLBACK STRATEGIES ===
+
+    // If both calculations succeeded, use weighted combination
+    if (normalSmoothingRadius > 1e-12f && nearSmoothingRadius > 1e-12f && isfinite(normalSmoothingRadius) &&
+        isfinite(nearSmoothingRadius))
+    {
+        // Additional safety: clamp to reasonable range relative to input smoothing radii
+        const auto minInput = fminf(smoothingRadiuses.first, smoothingRadiuses.second);
+        const auto maxInput = fmaxf(smoothingRadiuses.first, smoothingRadiuses.second);
+        const auto safeMinRadius = minInput * 0.1f;   // Allow 10x smaller
+        const auto safeMaxRadius = maxInput * 10.0f;  // Allow 10x larger
+
+        normalSmoothingRadius = fmaxf(safeMinRadius, fminf(safeMaxRadius, normalSmoothingRadius));
+        nearSmoothingRadius = fmaxf(safeMinRadius, fminf(safeMaxRadius, nearSmoothingRadius));
+
+        const auto result = (weightNormal * normalSmoothingRadius) + (weightNear * nearSmoothingRadius);
+
+        if (isfinite(result) && result > 1e-12f)
+        {
+            return fmaxf(safeMinRadius, fminf(safeMaxRadius, result));
+        }
+    }
+
+    // Fallback 1: Use only normal calculation if it succeeded
+    if (normalSmoothingRadius > 1e-12f && isfinite(normalSmoothingRadius))
+    {
+        const auto minInput = fminf(smoothingRadiuses.first, smoothingRadiuses.second);
+        const auto maxInput = fmaxf(smoothingRadiuses.first, smoothingRadiuses.second);
+        return fmaxf(minInput * 0.1f, fminf(maxInput * 10.0f, normalSmoothingRadius));
+    }
+
+    // Fallback 2: Use only near calculation if it succeeded
+    if (nearSmoothingRadius > 1e-12f && isfinite(nearSmoothingRadius))
+    {
+        const auto minInput = fminf(smoothingRadiuses.first, smoothingRadiuses.second);
+        const auto maxInput = fmaxf(smoothingRadiuses.first, smoothingRadiuses.second);
+        return fmaxf(minInput * 0.1f, fminf(maxInput * 10.0f, nearSmoothingRadius));
+    }
+
+    // Fallback 3: Mass-weighted average (what _SAFE version does)
+    const auto totalMass = masses.first + masses.second;
+    if (totalMass > 1e-12f && isfinite(totalMass))
+    {
+        const auto massWeightedAvg =
+            (masses.first * smoothingRadiuses.first + masses.second * smoothingRadiuses.second) / totalMass;
+
+        // Scale by mass ratio to account for mass conservation
+        const auto massRatio = mergedMass / totalMass;
+        if (isfinite(massRatio) && massRatio > 0.1f && massRatio < 10.0f)
+        {
+            const auto scaledResult = massWeightedAvg * cbrtf(massRatio);
+            if (isfinite(scaledResult) && scaledResult > 1e-12f)
+            {
+                return scaledResult;
+            }
+        }
+
+        // If scaling failed, just return mass-weighted average
+        if (isfinite(massWeightedAvg) && massWeightedAvg > 1e-12f)
+        {
+            return massWeightedAvg;
+        }
+    }
+
+    // Fallback 4: Simple average (last resort)
+    const auto simpleAvg = (smoothingRadiuses.first + smoothingRadiuses.second) * 0.5f;
+    if (isfinite(simpleAvg) && simpleAvg > 1e-12f)
+    {
+        return simpleAvg;
+    }
+
+    // Final safety: return a reasonable default
+    return 0.1f;  // Should never reach here, but better than NaN
 }
 
 __global__ void splitParticles(ParticlesData particles,
