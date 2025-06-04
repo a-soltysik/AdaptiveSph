@@ -66,11 +66,12 @@ auto SimulationDataGui::render() -> void
                              _densityDeviation.restDensity);
 }
 
-void SimulationDataGui::displayAverageNeighborCount(float averageNeighbors) const
+void SimulationDataGui::displayAverageNeighborCount(std::pair<float, float> averageNeighbors) const
 {
     ImGui::Begin("Simulation Debug Info");
     //NOLINTBEGIN(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
-    ImGui::Text("Average Neighbors: %.2f", static_cast<double>(averageNeighbors));
+    ImGui::Text("Average Neighbors: %.2f", static_cast<double>(averageNeighbors.first));
+    ImGui::Text("Average Far Neighbors: %.2f", static_cast<double>(averageNeighbors.second));
     ImGui::Text("Particle count: %u", _densityDeviation.particleCount);
     //NOLINTEND(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
     ImGui::End();
@@ -134,7 +135,7 @@ void SimulationDataGui::displayDensityStatistics(const std::vector<float>& densi
     ImGui::End();
 }
 
-auto SimulationDataGui::setAverageNeighbourCount(float neighbourCount) -> void
+auto SimulationDataGui::setAverageNeighbourCount(std::pair<float, float> neighbourCount) -> void
 {
     _averageNeighbourCount = neighbourCount;
 }

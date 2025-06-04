@@ -10,8 +10,8 @@
 #include <utility>
 #include <vector>
 
+#include "../simulation/SphSimulation.cuh"
 #include "cuda/Simulation.cuh"
-#include "simulation/adaptive/SphSimulation.cuh"
 
 namespace sph::cuda
 {
@@ -40,4 +40,14 @@ auto fromGpu(const T* gpuPtr, size_t elementsCount) -> std::vector<T>
     cudaMemcpy(hostData.data(), gpuPtr, elementsCount * sizeof(T), cudaMemcpyDeviceToHost);
     return hostData;
 }
+
+__device__ auto calculateMinImageDistance(const glm::vec3& pos1,
+                                          const glm::vec3& pos2,
+                                          const glm::vec3& domainSize,
+                                          Simulation::Parameters::TestCase testCase) -> glm::vec3;
+
+__device__ auto calculateMinImageDistance4(const glm::vec4& pos1,
+                                           const glm::vec4& pos2,
+                                           const glm::vec3& domainSize,
+                                           Simulation::Parameters::TestCase testCase) -> glm::vec4;
 }

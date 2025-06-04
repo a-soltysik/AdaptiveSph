@@ -7,7 +7,7 @@
 #include <span>
 #include <vector>
 
-#include "SphSimulation.cuh"
+#include "../SphSimulation.cuh"
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
 #include "refinement/Common.cuh"

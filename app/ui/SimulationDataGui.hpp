@@ -19,19 +19,19 @@ public:
 
     explicit SimulationDataGui();
 
-    void setAverageNeighbourCount(float neighbourCount);
+    void setAverageNeighbourCount(std::pair<float, float> neighbourCount);
     void setDensityDeviation(DensityDeviation densityDeviation);
 
 private:
     void render();
 
-    void displayAverageNeighborCount(float averageNeighbors) const;
+    void displayAverageNeighborCount(std::pair<float, float> averageNeighbors) const;
     static void displayDensityStatistics(const std::vector<float>& densityDeviations,
                                          uint32_t particleCount,
                                          float restDensity);
 
     panda::utils::signals::BeginGuiRender::ReceiverT _beginGuiReceiver;
-    float _averageNeighbourCount = 0.F;
+    std::pair<float, float> _averageNeighbourCount = {};
     DensityDeviation _densityDeviation {};
 };
 }

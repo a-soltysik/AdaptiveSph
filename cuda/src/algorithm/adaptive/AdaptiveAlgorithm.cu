@@ -11,12 +11,12 @@
 #include <numbers>
 #include <utility>
 
+#include "../../simulation/SphSimulation.cuh"
 #include "AdaptiveAlgorithm.cuh"
 #include "algorithm/kernels/Kernel.cuh"
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
 #include "glm/ext/scalar_constants.hpp"
-#include "simulation/adaptive/SphSimulation.cuh"
 #include "utils/Iteration.cuh"
 
 namespace sph::cuda::refinement

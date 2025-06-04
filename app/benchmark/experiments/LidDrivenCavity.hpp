@@ -7,7 +7,9 @@
 #include "benchmark/MetricsCollector.hpp"
 #include "cuda/Simulation.cuh"
 #include "panda/gfx/vulkan/Context.h"
+#include "ui/SimulationDataGui.hpp"
 #include "utils/ConfigurationManager.hpp"
+#include "utils/FrameTimeManager.hpp"
 
 namespace sph::benchmark
 {
@@ -23,6 +25,24 @@ protected:
                                                             BenchmarkResult::SimulationType simulationType) override;
 
     auto initializeParticles(const cuda::Simulation::Parameters& simulationParams) -> std::vector<glm::vec4> override;
+
+    // NEW: Create configuration for enhanced metrics
+    [[nodiscard]] auto createBenchmarkConfig(const BenchmarkParameters& params,
+                                             const cuda::Simulation::Parameters& simulationParams) const
+        -> BenchmarkResult::SimulationConfig override;
+
+    // NEW: Enable enhanced metrics for Lid Driven Cavity
+    [[nodiscard]] auto supportsEnhancedMetrics() const -> bool override;
+
+    // NEW: Override runSimulation for Cavity-specific enhanced metrics collection
+    void runSimulation(cuda::Simulation& simulation,
+                       const cuda::Simulation::Parameters& simulationParams,
+                       MetricsCollector& metricsCollector,
+                       uint32_t totalFrames,
+                       uint32_t measureInterval,
+                       float timestep,
+                       Window& window,
+                       BenchmarkVisualizer* visualizer = nullptr) override;
 };
 
 }

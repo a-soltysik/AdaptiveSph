@@ -11,8 +11,8 @@
 #include <span>
 #include <thrust/detail/sequence.inl>
 
+#include "../../simulation/SphSimulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
-#include "simulation/adaptive/SphSimulation.cuh"
 #include "simulation/adaptive/refinement/Common.cuh"
 
 namespace sph::cuda::refinement

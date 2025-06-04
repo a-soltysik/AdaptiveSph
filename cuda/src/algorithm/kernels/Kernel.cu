@@ -5,6 +5,9 @@
 namespace sph::cuda::device
 {
 
+__device__ __constant__ float PI_CONST = 3.14159265359f;
+__device__ __constant__ float WENDLAND_NORM = 21.0f / (16.0f * 3.14159265359f);
+
 __device__ auto wendlandLaplacianKernel(float distance, float smoothingRadius) -> float
 {
     if (distance < smoothingRadius)
@@ -28,10 +31,9 @@ __device__ auto wendlandKernel(float distance, float smoothingRadius) -> float
         return 0.0F;
     }
 
-    const float normalization = 21.0F / (16.0F * glm::pi<float>());
     const float volumeFactor = 1.0F / (smoothingRadius * smoothingRadius * smoothingRadius);
     const float tmp = 1.0F - (0.5F * q);
-    return normalization * volumeFactor * tmp * tmp * tmp * tmp * (2.0F * q + 1.0F);
+    return WENDLAND_NORM * volumeFactor * tmp * tmp * tmp * tmp * (2.0F * q + 1.0F);
 }
 
 __device__ auto wendlandDerivativeKernel(float distance, float smoothingRadius) -> float
@@ -42,11 +44,10 @@ __device__ auto wendlandDerivativeKernel(float distance, float smoothingRadius) 
         return 0.0F;
     }
 
-    const float normalization = 21.0F / (16.0F * glm::pi<float>());
     const float volumeFactor = 1.0F / (smoothingRadius * smoothingRadius * smoothingRadius);
     const float tmp = 1.0F - (0.5F * q);
 
-    return normalization * volumeFactor * (-5.0F * q * tmp * tmp * tmp) / smoothingRadius;
+    return WENDLAND_NORM * volumeFactor * (-5.0F * q * tmp * tmp * tmp) / smoothingRadius;
 }
 
 __device__ auto densityKernel(float distance, float smoothingRadius) -> float

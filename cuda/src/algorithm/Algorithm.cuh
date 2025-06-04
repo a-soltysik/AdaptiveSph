@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <cuda/Simulation.cuh>
 
-#include "simulation/adaptive/SphSimulation.cuh"
+#include "../simulation/SphSimulation.cuh"
 
 namespace sph::cuda::kernel
 {
@@ -30,7 +30,8 @@ __global__ void computeExternalForces(ParticlesData particles, Simulation::Param
 __global__ void countNeighbors(ParticlesData particles,
                                SphSimulation::State state,
                                Simulation::Parameters simulationData,
-                               uint32_t* neighborCounts);
+                               uint32_t* neighborCounts,
+                               uint32_t* farNeighborCount);
 
 __global__ void calculateDensityDeviations(ParticlesData particles, float restDensity);
 }

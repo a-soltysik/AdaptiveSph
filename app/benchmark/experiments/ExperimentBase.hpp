@@ -49,6 +49,27 @@ protected:
                                Window& window,
                                BenchmarkVisualizer* visualizer = nullptr);
 
+    // NEW: Virtual method for creating benchmark configuration
+    // Default implementation returns empty config, derived classes can override
+    [[nodiscard]] virtual auto createBenchmarkConfig(const BenchmarkParameters& params,
+                                                     const cuda::Simulation::Parameters& simulationParams) const
+        -> BenchmarkResult::SimulationConfig
+    {
+        // Default empty configuration
+        BenchmarkResult::SimulationConfig config;
+        config.restDensity = simulationParams.restDensity;
+        config.viscosityConstant = simulationParams.viscosityConstant;
+        config.domainMin = simulationParams.domain.min;
+        config.domainMax = simulationParams.domain.max;
+        return config;
+    }
+
+    // NEW: Check if this experiment supports enhanced metrics
+    [[nodiscard]] virtual auto supportsEnhancedMetrics() const -> bool
+    {
+        return false;  // Default: no enhanced metrics
+    }
+
     static auto initializeParticlesGrid(const cuda::Simulation::Parameters& simulationParams,
                                         const std::string& experimentName) -> std::vector<glm::vec4>;
 

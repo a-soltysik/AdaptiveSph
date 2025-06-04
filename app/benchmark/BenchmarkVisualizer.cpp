@@ -85,14 +85,15 @@ void BenchmarkVisualizer::updateCamera()
     auto cameraObject = panda::gfx::vulkan::Transform {};
     if (_experimentName == cuda::Simulation::Parameters::TestCase::LidDrivenCavity)
     {
-        cameraObject.translation = {0, 0, -7};
+        cameraObject.translation = {3, 0, -7};
+        cameraObject.rotation = {glm::radians(0.F), glm::radians(-30.F), 0.0F};
         camera.setViewYXZ(
             panda::gfx::view::YXZ {.position = cameraObject.translation, .rotation = cameraObject.rotation});
     }
     else if (_experimentName == cuda::Simulation::Parameters::TestCase::PoiseuilleFlow)
     {
-        cameraObject.translation = {5, 0, -1.5};
-        cameraObject.rotation = {glm::radians(0.F), glm::radians(-50.F), 0.0F};
+        cameraObject.translation = {3, 0, -4};
+        cameraObject.rotation = {glm::radians(0.F), glm::radians(-40.F), 0.0F};
         camera.setViewYXZ(
             panda::gfx::view::YXZ {.position = cameraObject.translation, .rotation = cameraObject.rotation});
     }

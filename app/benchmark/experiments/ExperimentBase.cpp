@@ -68,7 +68,17 @@ auto ExperimentBase::runBenchmark(const BenchmarkParameters& params,
                       window,
                       nullptr);
     }
-    return metricsCollector.calculateResults(_name, simulationType);
+
+    // NEW: Use enhanced metrics calculation if supported
+    if (supportsEnhancedMetrics())
+    {
+        const auto config = createBenchmarkConfig(params, simulationParams);
+        return metricsCollector.calculateResults(_name, simulationType, config);
+    }
+    else
+    {
+        return metricsCollector.calculateResults(_name, simulationType);
+    }
 }
 
 //NOLINTBEGIN(bugprone-easily-swappable-parameters)
@@ -82,6 +92,14 @@ void ExperimentBase::runSimulation(cuda::Simulation& simulation,
                                    BenchmarkVisualizer* visualizer)
 //NOLINTEND(bugprone-easily-swappable-parameters)
 {
+    BenchmarkResult::SimulationConfig config;
+    config.cavitySize = simulationParams.domain.max.x - simulationParams.domain.min.x;
+    config.lidVelocity = simulationParams.lidVelocity;
+    config.restDensity = simulationParams.restDensity;
+    config.viscosityConstant = simulationParams.viscosityConstant;
+    config.domainMin = simulationParams.domain.min;
+    config.domainMax = simulationParams.domain.max;
+
     FrameTimeManager timeManager;
     metricsCollector.initialize(simulation, simulationParams.restDensity);
     panda::log::Info("Running simulation for {} frames, measuring every {} frames", totalFrames, measureInterval);
@@ -90,13 +108,12 @@ void ExperimentBase::runSimulation(cuda::Simulation& simulation,
     {
         timeManager.update();
         const auto deltaTime = timeManager.getDelta();
-
-        //if (window.shouldClose())
-        //{
-        //    panda::log::Warning("Simulation has been stopped");
-        //    return;
-        //}
         window.processInput();
+        if (window.shouldClose())
+        {
+            panda::log::Warning("Simulation has been stopped");
+            return;
+        }
 
         simulation.update(timestep);
         gui.setAverageNeighbourCount(simulation.calculateAverageNeighborCount());
@@ -105,7 +122,9 @@ void ExperimentBase::runSimulation(cuda::Simulation& simulation,
                                  .restDensity = simulationParams.restDensity});
         if (frame % measureInterval == 0)
         {
-            metricsCollector.collectFrameMetrics(simulation, deltaTime);
+            const auto cudaTime = simulation.getLastCudaComputationTime();
+            // KLUCZOWE: wywołanie collectCavityMetrics zamiast collectFrameMetrics
+            metricsCollector.collectCavityMetrics(simulation, deltaTime, cudaTime, config);
         }
         if (visualizer != nullptr)
         {

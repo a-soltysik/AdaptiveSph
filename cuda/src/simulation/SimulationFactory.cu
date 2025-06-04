@@ -2,8 +2,8 @@
 #include <memory>
 #include <vector>
 
+#include "SphSimulation.cuh"
 #include "adaptive/AdaptiveSphSimulation.cuh"
-#include "adaptive/SphSimulation.cuh"
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
 

@@ -3,9 +3,9 @@
 #include <glm/ext/vector_float3.hpp>
 #include <glm/geometric.hpp>
 
+#include "../../../SphSimulation.cuh"
 #include "VelocityCriterion.cuh"
 #include "cuda/Simulation.cuh"
-#include "simulation/adaptive/SphSimulation.cuh"
 
 namespace sph::cuda::refinement::velocity
 {

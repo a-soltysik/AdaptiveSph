@@ -16,7 +16,9 @@ add_library(
         src/simulation/adaptive/refinement/criteria/VelocityCriterion.cu
         src/simulation/adaptive/refinement/criteria/VorticityCriterion.cu
         src/simulation/adaptive/refinement/criteria/InterfaceCriterion.cu
-        src/utils/Iteration.cu)
+        src/utils/Iteration.cu
+        src/CudaTimer.cu
+        src/CudaTimer.cuh)
 target_compile_features(AdaptiveSphCuda PRIVATE cxx_std_20)
 target_compile_definitions(AdaptiveSphCuda PRIVATE EXPORTING_CUDA_LIB)
 target_include_directories(AdaptiveSphCuda PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)

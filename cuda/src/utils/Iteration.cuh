@@ -6,9 +6,9 @@
 #include <glm/ext/vector_int3.hpp>
 #include <glm/ext/vector_uint3.hpp>
 
+#include "../simulation/SphSimulation.cuh"
 #include "Utils.cuh"
 #include "cuda/Simulation.cuh"
-#include "simulation/adaptive/SphSimulation.cuh"
 
 namespace sph::cuda
 {
@@ -85,13 +85,20 @@ __device__ void forEachNeighbour(glm::vec4 position,
         {
             const auto neighborIdx = grid.particleArrayIndices[i];
             const auto neighborPos = particles.predictedPositions[neighborIdx];
-            auto shiftedPos = neighborPos + glm::vec4(positionShift, 0.0F);
+
+            // KLUCZOWA ZMIANA: Użyj minimum image distance zamiast position shifting
+            glm::vec4 adjustedNeighborPos;
             if (usePeriodic)
             {
-                adjustPositionForWrapping(position, shiftedPos, domainSize, simulationData.testCase);
+                adjustedNeighborPos =
+                    position + calculateMinImageDistance4(position, neighborPos, domainSize, simulationData.testCase);
+            }
+            else
+            {
+                adjustedNeighborPos = neighborPos;
             }
 
-            func(neighborIdx, shiftedPos);
+            func(neighborIdx, adjustedNeighborPos);
         }
     }
 }

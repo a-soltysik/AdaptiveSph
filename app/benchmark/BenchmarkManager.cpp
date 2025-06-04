@@ -49,9 +49,9 @@ void BenchmarkManager::runBenchmarks(const BenchmarkParameters& params,
         return;
     }
     panda::log::Info("Running {} benchmark", std::to_underlying(experiment->getName()));
-    static constexpr auto simulationTypes = std::array {//BenchmarkResult::SimulationType::Coarse,
-                                                        BenchmarkResult::SimulationType::Fine,
-                                                        BenchmarkResult::SimulationType::Adaptive};
+    static constexpr auto simulationTypes = std::array {BenchmarkResult::SimulationType::Coarse};
+    //BenchmarkResult::SimulationType::Fine};
+    //BenchmarkResult::SimulationType::Adaptive};
     for (const auto& simulationType : simulationTypes)
     {
         panda::log::Info("Running {} simulation", std::to_underlying(simulationType));

@@ -105,9 +105,29 @@ public:
 
     virtual void update(float deltaTime) = 0;
     [[nodiscard]] virtual auto getParticlesCount() const -> uint32_t = 0;
-    [[nodiscard]] virtual auto calculateAverageNeighborCount() const -> float = 0;
+    [[nodiscard]] virtual auto calculateAverageNeighborCount() const -> std::pair<float, float> = 0;
     [[nodiscard]] virtual auto updateDensityDeviations() const -> std::vector<float> = 0;
     virtual void setParticleVelocity(uint32_t particleIndex, const glm::vec4& velocity) = 0;
+    // NEW: Enhanced data access methods for advanced metrics collection
+    [[nodiscard]] virtual auto getParticlePositions() const -> std::vector<glm::vec4> = 0;
+    [[nodiscard]] virtual auto getParticleVelocities() const -> std::vector<glm::vec4> = 0;
+    [[nodiscard]] virtual auto getParticleDensities() const -> std::vector<float> = 0;
+    [[nodiscard]] virtual auto getParticleMasses() const -> std::vector<float> = 0;
+
+    // NEW: Convenience method to get all particle data at once
+    struct ParticleDataSnapshot
+    {
+        std::vector<glm::vec4> positions;
+        std::vector<glm::vec4> velocities;
+        std::vector<float> densities;
+        std::vector<float> masses;
+        uint32_t particleCount;
+    };
+
+    [[nodiscard]] virtual auto getParticleDataSnapshot() const -> ParticleDataSnapshot = 0;
+
+    // NEW: Performance timing interface
+    [[nodiscard]] virtual auto getLastCudaComputationTime() const -> float = 0;
 };
 
 SPH_CUDA_API auto createSimulation(const Simulation::Parameters& parameters,

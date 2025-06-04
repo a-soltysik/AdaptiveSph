@@ -12,6 +12,7 @@
 #include <span>
 #include <vector>
 
+#include "CudaTimer.cuh"
 #include "memory/ImportedParticleMemory.cuh"
 
 namespace sph::cuda
@@ -54,9 +55,21 @@ public:
         return _particleCount;
     }
 
-    [[nodiscard]] auto calculateAverageNeighborCount() const -> float override;
+    [[nodiscard]] auto calculateAverageNeighborCount() const -> std::pair<float, float> override;
     [[nodiscard]] auto updateDensityDeviations() const -> std::vector<float> override;
     void setParticleVelocity(uint32_t particleIndex, const glm::vec4& velocity) override;
+    // NEW: Enhanced data access methods implementation
+    [[nodiscard]] auto getParticlePositions() const -> std::vector<glm::vec4> override;
+    [[nodiscard]] auto getParticleVelocities() const -> std::vector<glm::vec4> override;
+    [[nodiscard]] auto getParticleDensities() const -> std::vector<float> override;
+    [[nodiscard]] auto getParticleMasses() const -> std::vector<float> override;
+    [[nodiscard]] auto getParticleDataSnapshot() const -> ParticleDataSnapshot override;
+
+    // NEW: Performance timing
+    [[nodiscard]] auto getLastCudaComputationTime() const -> float
+    {
+        return _lastCudaTime;
+    }
 
     //0 1 0 1
     //0 0 1 1
@@ -125,11 +138,16 @@ protected:
     void integrateMotion(float deltaTime) const;
     void handleCollisions() const;
 
+    mutable sph::benchmark::CudaTimer _cudaTimer;
+    mutable float _lastCudaTime = 0.0F;
+
 private:
     ParticlesInternalDataBuffer _particleBuffer;
     Parameters _simulationData;
     State _state;
     uint32_t _particleCount = 0;
     uint32_t _particleCapacity = 0;
+
+    // NEW: Performance timing
 };
 }

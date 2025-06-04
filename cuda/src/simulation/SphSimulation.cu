@@ -16,7 +16,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "adaptive/SphSimulation.cuh"
+#include "SphSimulation.cuh"
 #include "algorithm/Algorithm.cuh"
 #include "memory/ImportedParticleMemory.cuh"
 #include "utils/Utils.cuh"
@@ -94,6 +94,7 @@ auto SphSimulation::toInternalBuffer(const ParticlesDataBuffer& memory) -> Parti
 
 void SphSimulation::update(float deltaTime)
 {
+    _cudaTimer.start();
     computeExternalForces(deltaTime);
     resetGrid();
     assignParticlesToCells();
@@ -104,6 +105,8 @@ void SphSimulation::update(float deltaTime)
     computePressureForce(deltaTime);
     integrateMotion(deltaTime);
     handleCollisions();
+
+    _lastCudaTime = _cudaTimer.stop();
 
     cudaDeviceSynchronize();
 }
@@ -240,26 +243,44 @@ void SphSimulation::handleCollisions() const
                                                                                                   _simulationData);
 }
 
-auto SphSimulation::calculateAverageNeighborCount() const -> float
+auto SphSimulation::calculateAverageNeighborCount() const -> std::pair<float, float>
 {
     std::vector<uint32_t> neighborCounts(_particleCount, 0);
+    std::vector<uint32_t> farNeighborCounts(_particleCount, 0);
     uint32_t* d_neighborCounts = nullptr;
     cudaMalloc(&d_neighborCounts, _particleCount * sizeof(uint32_t));
     cudaMemcpy(d_neighborCounts, neighborCounts.data(), _particleCount * sizeof(uint32_t), cudaMemcpyHostToDevice);
+
+    uint32_t* d_farNeighborCounts = nullptr;
+    cudaMalloc(&d_farNeighborCounts, _particleCount * sizeof(uint32_t));
+    cudaMemcpy(d_farNeighborCounts,
+               farNeighborCounts.data(),
+               _particleCount * sizeof(uint32_t),
+               cudaMemcpyHostToDevice);
     kernel::countNeighbors<<<getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(getParticles(),
                                                                                      _state,
                                                                                      _simulationData,
-                                                                                     d_neighborCounts);
+                                                                                     d_neighborCounts,
+                                                                                     d_farNeighborCounts);
     cudaMemcpy(neighborCounts.data(), d_neighborCounts, _particleCount * sizeof(uint32_t), cudaMemcpyDeviceToHost);
     cudaFree(d_neighborCounts);
+    cudaMemcpy(farNeighborCounts.data(),
+               d_farNeighborCounts,
+               _particleCount * sizeof(uint32_t),
+               cudaMemcpyDeviceToHost);
+    cudaFree(d_farNeighborCounts);
 
     uint32_t totalNeighbors = 0;
+    uint32_t totalFarNeighbors = 0;
     for (uint32_t i = 0; i < _particleCount; i++)
     {
         totalNeighbors += neighborCounts[i];
+        totalFarNeighbors += farNeighborCounts[i];
     }
 
-    return _particleCount > 0 ? static_cast<float>(totalNeighbors) / static_cast<float>(_particleCount) : 0.F;
+    return _particleCount > 0 ? std::pair {static_cast<float>(totalNeighbors) / static_cast<float>(_particleCount),
+                                           static_cast<float>(totalFarNeighbors) / static_cast<float>(_particleCount)}
+                              : std::pair {0.F, 0.F};
 }
 
 std::vector<float> SphSimulation::updateDensityDeviations() const
@@ -287,4 +308,57 @@ void SphSimulation::setParticleVelocity(uint32_t particleIndex, const glm::vec4&
     }
 }
 
+// Add these methods to SphSimulation.cu at the end of the file, before the closing namespace brace
+
+auto SphSimulation::getParticlePositions() const -> std::vector<glm::vec4>
+{
+    if (_particleCount == 0)
+    {
+        return {};
+    }
+    return fromGpu(_particleBuffer.positions.getData<glm::vec4>(), _particleCount);
+}
+
+auto SphSimulation::getParticleVelocities() const -> std::vector<glm::vec4>
+{
+    if (_particleCount == 0)
+    {
+        return {};
+    }
+    return fromGpu(_particleBuffer.velocities.getData<glm::vec4>(), _particleCount);
+}
+
+auto SphSimulation::getParticleDensities() const -> std::vector<float>
+{
+    if (_particleCount == 0)
+    {
+        return {};
+    }
+    return fromGpu(_particleBuffer.densities.getData<float>(), _particleCount);
+}
+
+auto SphSimulation::getParticleMasses() const -> std::vector<float>
+{
+    if (_particleCount == 0)
+    {
+        return {};
+    }
+    return fromGpu(_particleBuffer.masses.getData<float>(), _particleCount);
+}
+
+auto SphSimulation::getParticleDataSnapshot() const -> ParticleDataSnapshot
+{
+    ParticleDataSnapshot snapshot;
+    snapshot.particleCount = _particleCount;
+
+    if (_particleCount > 0)
+    {
+        snapshot.positions = getParticlePositions();
+        snapshot.velocities = getParticleVelocities();
+        snapshot.densities = getParticleDensities();
+        snapshot.masses = getParticleMasses();
+    }
+
+    return snapshot;
+}
 }

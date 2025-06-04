@@ -66,4 +66,86 @@ auto LidDrivenCavity::initializeParticles(const cuda::Simulation::Parameters& si
     return initializeParticlesGrid(simulationParams, "Lid-Driven Cavity");
 }
 
+auto LidDrivenCavity::createBenchmarkConfig(const BenchmarkParameters& params,
+                                            const cuda::Simulation::Parameters& simulationParams) const
+    -> BenchmarkResult::SimulationConfig
+{
+    BenchmarkResult::SimulationConfig config;
+    config.cavitySize = params.cavitySize;
+    config.lidVelocity = params.lidVelocity;
+    config.restDensity = simulationParams.restDensity;
+    config.viscosityConstant = simulationParams.viscosityConstant;
+    config.domainMin = simulationParams.domain.min;
+    config.domainMax = simulationParams.domain.max;
+    return config;
+}
+
+auto LidDrivenCavity::supportsEnhancedMetrics() const -> bool
+{
+    return true;
+}
+
+void LidDrivenCavity::runSimulation(cuda::Simulation& simulation,
+                                    const cuda::Simulation::Parameters& simulationParams,
+                                    MetricsCollector& metricsCollector,
+                                    uint32_t totalFrames,
+                                    uint32_t measureInterval,
+                                    float timestep,
+                                    Window& window,
+                                    BenchmarkVisualizer* visualizer)
+{
+    // Create configuration for enhanced Cavity metrics
+    BenchmarkResult::SimulationConfig config;
+    config.restDensity = simulationParams.restDensity;
+    config.viscosityConstant = simulationParams.viscosityConstant;
+    config.domainMin = simulationParams.domain.min;
+    config.domainMax = simulationParams.domain.max;
+    // Extract Cavity-specific parameters from simulation parameters
+    config.cavitySize = simulationParams.domain.max.x - simulationParams.domain.min.x;  // Domain is cube
+    config.lidVelocity = simulationParams.lidVelocity;
+    FrameTimeManager timeManager;
+    metricsCollector.initialize(simulation, simulationParams.restDensity);
+    panda::log::Info("Running Lid Driven Cavity simulation for {} frames, measuring every {} frames",
+                     totalFrames,
+                     measureInterval);
+    SimulationDataGui gui {};
+    for (uint32_t frame = 0; frame < totalFrames; ++frame)
+    {
+        timeManager.update();
+        const auto deltaTime = timeManager.getDelta();
+        if (window.shouldClose())
+        {
+            panda::log::Warning("Simulation has been stopped");
+            return;
+        }
+        window.processInput();
+
+        simulation.update(timestep);
+        gui.setAverageNeighbourCount(simulation.calculateAverageNeighborCount());
+        gui.setDensityDeviation({.densityDeviations = simulation.updateDensityDeviations(),
+                                 .particleCount = simulation.getParticlesCount(),
+                                 .restDensity = simulationParams.restDensity});
+
+        if (frame % measureInterval == 0)
+        {
+            // Get CUDA computation time from simulation
+            const auto cudaTime = simulation.getLastCudaComputationTime();
+            // Use enhanced Cavity metrics collection with performance timing
+            metricsCollector.collectCavityMetrics(simulation, deltaTime, cudaTime, config);
+        }
+
+        if (visualizer != nullptr)
+        {
+            visualizer->renderFrame(simulation);
+        }
+
+        if (frame % 100 == 0 || frame == totalFrames - 1)
+        {
+            panda::log::Info("Completed frame {}/{} ({}%)", frame, totalFrames, (frame + 1) * 100 / totalFrames);
+        }
+    }
+
+    panda::log::Info("Lid Driven Cavity simulation completed");
+}
+
 }

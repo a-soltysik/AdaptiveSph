@@ -7,8 +7,8 @@
 #include <glm/ext/vector_float4.hpp>
 #include <vector>
 
+#include "../SphSimulation.cuh"
 #include "AdaptiveSphSimulation.cuh"
-#include "SphSimulation.cuh"
 #include "algorithm/adaptive/AdaptiveAlgorithm.cuh"
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
@@ -65,6 +65,8 @@ AdaptiveSphSimulation::AdaptiveSphSimulation(const Parameters& initialParameters
 
 void AdaptiveSphSimulation::update(float deltaTime)
 {
+    _cudaTimer.start();
+
     computeExternalForces(deltaTime);
     resetGrid();
     assignParticlesToCells();
@@ -82,6 +84,8 @@ void AdaptiveSphSimulation::update(float deltaTime)
     }
 
     handleCollisions();
+
+    _lastCudaTime = _cudaTimer.stop();
 
     cudaDeviceSynchronize();
     _frameCounter++;
