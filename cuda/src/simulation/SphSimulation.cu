@@ -68,6 +68,11 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
                massesVec.data(),
                massesVec.size() * sizeof(float),
                cudaMemcpyHostToDevice);
+
+    cudaMemcpy(_particleBuffer.accelerations.getData<glm::vec4>(),
+               velocitiesVec.data(),
+               velocitiesVec.size() * sizeof(glm::vec4),
+               cudaMemcpyHostToDevice);
 }
 
 SphSimulation::~SphSimulation()
@@ -89,7 +94,8 @@ auto SphSimulation::toInternalBuffer(const ParticlesDataBuffer& memory) -> Parti
             .radiuses = dynamic_cast<const ImportedParticleMemory&>(memory.radiuses),
             .smoothingRadiuses = dynamic_cast<const ImportedParticleMemory&>(memory.smoothingRadiuses),
             .masses = dynamic_cast<const ImportedParticleMemory&>(memory.masses),
-            .densityDeviations = dynamic_cast<const ImportedParticleMemory&>(memory.densityDeviations)};
+            .densityDeviations = dynamic_cast<const ImportedParticleMemory&>(memory.densityDeviations),
+            .accelerations = dynamic_cast<const ImportedParticleMemory&>(memory.accelerations)};
 }
 
 void SphSimulation::update(float deltaTime)
@@ -169,6 +175,8 @@ auto SphSimulation::getParticles() const -> ParticlesData
         .masses = _particleBuffer.masses.getData<std::remove_pointer_t<decltype(ParticlesData::masses)>>(),
         .densityDeviations = _particleBuffer.densityDeviations
                                  .getData<std::remove_pointer_t<decltype(ParticlesData::densityDeviations)>>(),
+        .accelerations =
+            _particleBuffer.accelerations.getData<std::remove_pointer_t<decltype(ParticlesData::accelerations)>>(),
         .particleCount = _particleCount};
 }
 

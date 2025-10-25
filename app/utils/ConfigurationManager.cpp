@@ -134,6 +134,10 @@ void ConfigurationManager::parseRefinementParameters(const json& jsonFile)
         {
             params.criterionType = cuda::refinement::RefinementParameters::Criterion::Interface;
         }
+        if (jsonFile["criterionType"].get<std::string>() == "curvature")
+        {
+            params.criterionType = cuda::refinement::RefinementParameters::Criterion::Curvature;
+        }
     }
 
     if (jsonFile.contains("splitting"))
@@ -173,6 +177,21 @@ void ConfigurationManager::parseRefinementParameters(const json& jsonFile)
             parseScalarProperty(vorticity["split"], "minimalVorticityThreshold", 34.F);
         params.vorticity.merge.maximalVorticityThreshold =
             parseScalarProperty(vorticity["merge"], "maximalVorticityThreshold", 3.4F);
+    }
+
+    if (jsonFile.contains("curvature"))
+    {
+        const auto& curvature = jsonFile["curvature"];
+
+        params.curvature.split.minimalCurvatureThreshold =
+            parseScalarProperty(curvature["split"], "minimalCurvatureThreshold", 1.0F);
+        params.curvature.split.minimalVelocityThreshold =
+            parseScalarProperty(curvature["split"], "minimalVelocityThreshold", 0.01F);
+
+        params.curvature.merge.maximalCurvatureThreshold =
+            parseScalarProperty(curvature["merge"], "maximalCurvatureThreshold", 0.1F);
+        params.curvature.merge.minimalVelocityThreshold =
+            parseScalarProperty(curvature["merge"], "minimalVelocityThreshold", 0.01F);
     }
 
     _refinementParams = params;

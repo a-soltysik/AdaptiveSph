@@ -55,8 +55,8 @@ __device__ auto calculateMergedSmoothingLength(std::pair<glm::vec4, glm::vec4> p
                                                std::pair<float, float> smoothingRadiuses,
                                                glm::vec4 mergedPos,
                                                float mergedMass,
-                                               float weightNormal = 1.F,
-                                               float weightNear = 0.F) -> float
+                                               float weightNormal = .8F,
+                                               float weightNear = 0.2F) -> float
 {
     if (masses.first <= 1e-12f || masses.second <= 1e-12f || !isfinite(masses.first) || !isfinite(masses.second) ||
         mergedMass <= 1e-12f || !isfinite(mergedMass))

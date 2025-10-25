@@ -53,6 +53,24 @@ struct InterfaceParameters
     Merge merge;
 };
 
+struct CurvatureParameters
+{
+    struct Split
+    {
+        float minimalCurvatureThreshold = 1.0F;  // [1/m] - minimal curvature to trigger split
+        float minimalVelocityThreshold = 0.01F;  // [m/s] - avoid division by zero
+    };
+
+    struct Merge
+    {
+        float maximalCurvatureThreshold = 0.1F;  // [1/m] - maximal curvature to allow merge
+        float minimalVelocityThreshold = 0.01F;  // [m/s] - avoid division by zero
+    };
+
+    Split split;
+    Merge merge;
+};
+
 struct SplittingParameters
 {
     float epsilon = 0.65F;           // Spacing parameter for daughter particles (from Vacondio 2016)
@@ -67,7 +85,8 @@ struct RefinementParameters
     {
         Velocity,
         Interface,
-        Vorticity
+        Vorticity,
+        Curvature
     };
 
     bool enabled = false;
@@ -83,6 +102,7 @@ struct RefinementParameters
     VelocityParameters velocity;
     VorticityParameters vorticity;
     InterfaceParameters interfaceParameters;
+    CurvatureParameters curvature;
 };
 
 }

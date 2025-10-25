@@ -209,7 +209,7 @@ void main() {
         totalLight += calculateSpotLight(ubo.spotLights[i], normal, intersectionPoint);
     }
 
-    outColor = getSpeedNeon(length(velocity), 0.0, 3.0) * vec4(totalLight, 1.0);
+    outColor = getSpeedNeon(length(velocity), 0.0, 10.0) * vec4(totalLight, 1.0);
     //outColor = getDensityDeviationColor(densityDeviation) * vec4(totalLight, 1.0);
 }
 

@@ -26,6 +26,7 @@ struct ParticlesData
     float* smoothingRadiuses;
     float* masses;
     float* densityDeviations;
+    glm::vec4* accelerations;
 
     uint32_t particleCount;
 };
@@ -42,6 +43,7 @@ struct ParticlesDataBuffer
     const ImportedMemory& smoothingRadiuses;
     const ImportedMemory& masses;
     const ImportedMemory& densityDeviations;
+    const ImportedMemory& accelerations;
 };
 
 class SPH_CUDA_API Simulation

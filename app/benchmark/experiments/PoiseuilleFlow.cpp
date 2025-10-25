@@ -5,7 +5,6 @@
 #include <vector>
 
 #include "ExperimentBase.hpp"
-#include "benchmark/MetricsCollector.hpp"
 #include "cuda/Simulation.cuh"
 #include "utils/ConfigurationManager.hpp"
 
@@ -23,12 +22,15 @@ auto PoiseuilleFlow::createSimulationParameters(const BenchmarkParameters& param
     -> cuda::Simulation::Parameters
 {
     cuda::Simulation::Parameters simulationParams = simulationParameters;
+    // Set domain based on channel dimensions
     const auto halfHeight = params.channelHeight / 2.0F;
     const auto halfWidth = params.channelWidth / 2.0F;
     const auto halfLength = params.channelLength / 2.0F;
     simulationParams.domain.min = glm::vec3(-halfLength, -halfHeight, -halfWidth);
     simulationParams.domain.max = glm::vec3(halfLength, halfHeight, halfWidth);
+    // Set driving force (gravity in x-direction for flow)
     simulationParams.gravity = glm::vec3(params.forceMagnitude, 0.0F, 0.0F);
+    // Set simulation parameters based on resolution type
     if (simulationType == BenchmarkResult::SimulationType::Coarse)
     {
         simulationParams.baseParticleRadius = params.coarse.baseParticleRadius;
@@ -47,7 +49,7 @@ auto PoiseuilleFlow::createSimulationParameters(const BenchmarkParameters& param
         simulationParams.nearPressureConstant = params.fine.nearPressureConstant;
         simulationParams.viscosityConstant = params.fine.viscosityConstant;
     }
-    else  // adaptive
+    else  // Adaptive
     {
         simulationParams.baseParticleRadius = params.adaptive.baseParticleRadius;
         simulationParams.baseParticleMass = params.adaptive.baseParticleMass;
@@ -72,82 +74,18 @@ auto PoiseuilleFlow::createBenchmarkConfig(const BenchmarkParameters& params,
     -> BenchmarkResult::SimulationConfig
 {
     BenchmarkResult::SimulationConfig config;
-    // Extract parameters from BenchmarkParameters and SimulationParameters
+    // Common parameters
+    config.restDensity = simulationParams.restDensity;
+    config.viscosityConstant = simulationParams.viscosityConstant;
+    config.domainMin = simulationParams.domain.min;
+    config.domainMax = simulationParams.domain.max;
+    // Poiseuille-specific parameters
     config.channelHeight = params.channelHeight;
     config.channelLength = params.channelLength;
     config.channelWidth = params.channelWidth;
     config.forceMagnitude = params.forceMagnitude;
-    config.restDensity = simulationParams.restDensity;
-    config.viscosityConstant = simulationParams.viscosityConstant;
-    config.domainMin = simulationParams.domain.min;
-    config.domainMax = simulationParams.domain.max;
+
     return config;
-}
-
-auto PoiseuilleFlow::supportsEnhancedMetrics() const -> bool
-{
-    return true;
-}
-
-void PoiseuilleFlow::runSimulation(cuda::Simulation& simulation,
-                                   const cuda::Simulation::Parameters& simulationParams,
-                                   MetricsCollector& metricsCollector,
-                                   uint32_t totalFrames,
-                                   uint32_t measureInterval,
-                                   float timestep,
-                                   Window& window,
-                                   BenchmarkVisualizer* visualizer)
-{
-    // Create configuration for enhanced Poiseuille metrics
-    BenchmarkResult::SimulationConfig config;
-    config.restDensity = simulationParams.restDensity;
-    config.viscosityConstant = simulationParams.viscosityConstant;
-    config.domainMin = simulationParams.domain.min;
-    config.domainMax = simulationParams.domain.max;
-    // Extract Poiseuille-specific parameters (we need access to BenchmarkParameters here)
-    // For now, extract from domain and simulation parameters
-    config.channelHeight = simulationParams.domain.max.y - simulationParams.domain.min.y;
-    config.channelLength = simulationParams.domain.max.x - simulationParams.domain.min.x;
-    config.channelWidth = simulationParams.domain.max.z - simulationParams.domain.min.z;
-    config.forceMagnitude = simulationParams.gravity.x;  // Force is applied in x-direction
-    FrameTimeManager timeManager;
-    metricsCollector.initialize(simulation, simulationParams.restDensity);
-    panda::log::Info("Running Poiseuille flow simulation for {} frames, measuring every {} frames",
-                     totalFrames,
-                     measureInterval);
-    SimulationDataGui gui {};
-    for (uint32_t frame = 0; frame < totalFrames; ++frame)
-    {
-        timeManager.update();
-        const auto deltaTime = timeManager.getDelta();
-
-        window.processInput();
-
-        simulation.update(timestep);
-        gui.setAverageNeighbourCount(simulation.calculateAverageNeighborCount());
-        gui.setDensityDeviation({.densityDeviations = simulation.updateDensityDeviations(),
-                                 .particleCount = simulation.getParticlesCount(),
-                                 .restDensity = simulationParams.restDensity});
-        if (frame % measureInterval == 0)
-        {
-            // Get CUDA computation time from simulation
-            const auto cudaTime = simulation.getLastCudaComputationTime();
-            // Use enhanced Poiseuille metrics collection with performance timing
-            metricsCollector.collectPoiseuilleMetrics(simulation, deltaTime, cudaTime, config);
-        }
-
-        if (visualizer != nullptr)
-        {
-            visualizer->renderFrame(simulation);
-        }
-
-        if (frame % 100 == 0 || frame == totalFrames - 1)
-        {
-            panda::log::Info("Completed frame {}/{} ({}%)", frame, totalFrames, (frame + 1) * 100 / totalFrames);
-        }
-    }
-
-    panda::log::Info("Poiseuille flow simulation completed");
 }
 
 }

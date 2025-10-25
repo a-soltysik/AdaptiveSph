@@ -5,7 +5,6 @@
 #include <vector>
 
 #include "ExperimentBase.hpp"
-#include "benchmark/MetricsCollector.hpp"
 #include "cuda/Simulation.cuh"
 #include "utils/ConfigurationManager.hpp"
 
@@ -23,11 +22,14 @@ auto TaylorGreenVortex::createSimulationParameters(const BenchmarkParameters& pa
     -> cuda::Simulation::Parameters
 {
     cuda::Simulation::Parameters simulationParams = simulationParameters;
+    // Set cubic domain for Taylor-Green vortex
     const auto domainSize = params.domainSize;
     simulationParams.domain.min = glm::vec3(0.0F, 0.0F, 0.0F);
     simulationParams.domain.max = glm::vec3(domainSize, domainSize, domainSize);
+    // No external gravity for Taylor-Green vortex
     simulationParams.gravity = glm::vec3(0.0F, 0.0F, 0.0F);
 
+    // Set simulation parameters based on resolution type
     if (simulationType == BenchmarkResult::SimulationType::Coarse)
     {
         simulationParams.baseParticleRadius = params.coarse.baseParticleRadius;
@@ -46,7 +48,7 @@ auto TaylorGreenVortex::createSimulationParameters(const BenchmarkParameters& pa
         simulationParams.nearPressureConstant = params.fine.nearPressureConstant;
         simulationParams.viscosityConstant = params.fine.viscosityConstant;
     }
-    else  // adaptive
+    else  // Adaptive
     {
         simulationParams.baseParticleRadius = params.adaptive.baseParticleRadius;
         simulationParams.baseParticleMass = params.adaptive.baseParticleMass;
@@ -66,6 +68,23 @@ auto TaylorGreenVortex::initializeParticles(const cuda::Simulation::Parameters& 
     -> std::vector<glm::vec4>
 {
     return initializeParticlesGrid(simulationParams, "Taylor-Green Vortex with periodic boundaries");
+}
+
+auto TaylorGreenVortex::createBenchmarkConfig(const BenchmarkParameters& params,
+                                              const cuda::Simulation::Parameters& simulationParams) const
+    -> BenchmarkResult::SimulationConfig
+{
+    BenchmarkResult::SimulationConfig config;
+    // Common parameters
+    config.restDensity = simulationParams.restDensity;
+    config.viscosityConstant = simulationParams.viscosityConstant;
+    config.domainMin = simulationParams.domain.min;
+    config.domainMax = simulationParams.domain.max;
+
+    // Taylor-Green Vortex specific parameters
+    config.domainSize = params.domainSize;
+
+    return config;
 }
 
 }

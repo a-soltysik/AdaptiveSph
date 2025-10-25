@@ -12,8 +12,9 @@
 namespace sph::cuda::refinement::interfaceCriterion
 {
 
-__device__ auto calculateMinSurfaceDistance(const glm::vec4& position, const Simulation::Parameters::Domain& domain)
-    -> glm::vec3
+__device__ auto calculateMinSurfaceDistance(const glm::vec4& position,
+                                            const Simulation::Parameters::Domain& domain,
+                                            const Simulation::Parameters& simulationData) -> glm::vec3
 {
     const auto distToMinX = position.x - domain.min.x;
     const auto distToMaxX = domain.max.x - position.x;
@@ -25,6 +26,11 @@ __device__ auto calculateMinSurfaceDistance(const glm::vec4& position, const Sim
     const auto minDistX = glm::min(distToMinX, distToMaxX);
     const auto minDistY = glm::min(distToMinY, distToMaxY);
     const auto minDistZ = glm::min(distToMinZ, distToMaxZ);
+
+    if (simulationData.testCase == Simulation::Parameters::TestCase::PoiseuilleFlow)
+    {
+        return {FLT_MAX, glm::max(0.0F, minDistY), glm::max(0.0F, minDistZ)};
+    }
 
     return {glm::max(0.0F, minDistX), glm::max(0.0F, minDistY), glm::max(0.0F, minDistZ)};
 }
@@ -40,18 +46,7 @@ __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles,
     }
 
     const auto position = particles.positions[id];
-    // Poiseuille flow type simulation: Check distance from X-axis boundaries
-    const auto distToMinX = position.x - simulationData.domain.min.x;
-    const auto distToMaxX = simulationData.domain.max.x - position.x;
-    const auto minDistanceFromXBoundary = glm::min(distToMinX, distToMaxX);
-
-    // If distance from X-axis boundary is less than 1, return 1 for splitting
-    if (minDistanceFromXBoundary < 1.0F)
-    {
-        return -1.0F;
-    }
-
-    const auto minDistances = calculateMinSurfaceDistance(position, simulationData.domain);
+    const auto minDistances = calculateMinSurfaceDistance(position, simulationData.domain, simulationData);
     const auto domainSize = simulationData.domain.max - simulationData.domain.min;
     const auto splitThresholds = _interface.split.distanceRatioThreshold * domainSize;
     const auto normalizedDistances = minDistances / splitThresholds;
@@ -71,7 +66,7 @@ __device__ auto MergeCriterionGenerator::operator()(ParticlesData particles,
     }
 
     const auto position = particles.positions[id];
-    const auto minDistances = calculateMinSurfaceDistance(position, simulationData.domain);
+    const auto minDistances = calculateMinSurfaceDistance(position, simulationData.domain, simulationData);
     const auto domainSize = simulationData.domain.max - simulationData.domain.min;
     const auto mergeThresholds = _interface.merge.distanceRatioThreshold * domainSize;
     const auto normalizedDistances = minDistances / mergeThresholds;

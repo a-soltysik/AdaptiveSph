@@ -71,9 +71,6 @@ public:
         return _lastCudaTime;
     }
 
-    //0 1 0 1
-    //0 0 1 1
-
 protected:
     struct ParticlesInternalDataBuffer
     {
@@ -87,9 +84,10 @@ protected:
         const ImportedParticleMemory& smoothingRadiuses;
         const ImportedParticleMemory& masses;
         const ImportedParticleMemory& densityDeviations;
+        const ImportedParticleMemory& accelerations;
     };
 
-    static auto createGrid(const Parameters& data, size_t particleCapacity) -> Grid;
+    virtual auto createGrid(const Parameters& data, size_t particleCapacity) -> Grid;
     static auto toInternalBuffer(const ParticlesDataBuffer& memory) -> ParticlesInternalDataBuffer;
 
     [[nodiscard]] auto getParticles() const -> ParticlesData;

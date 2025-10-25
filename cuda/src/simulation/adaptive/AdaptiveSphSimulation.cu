@@ -12,6 +12,7 @@
 #include "algorithm/adaptive/AdaptiveAlgorithm.cuh"
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
+#include "refinement/criteria/CurvatureCriterion.cuh"
 #include "refinement/criteria/InterfaceCriterion.cuh"
 #include "refinement/criteria/VelocityCriterion.cuh"
 #include "refinement/criteria/VorticityCriterion.cuh"
@@ -108,9 +109,10 @@ void AdaptiveSphSimulation::performAdaptiveRefinement()
     identifyAndMergeParticles();
     const auto particlesRemovedInLastMerge = currentCount - getParticlesCount();
 
-    if (particlesRemovedInLastMerge > 0)
+    if (particlesRemovedInLastMerge && getParticlesCount() < 100000)
     {
         rebuildGridAfterMerge();
+        computeDensities();
         identifyAndSplitParticles(particlesRemovedInLastMerge);
     }
 }
@@ -181,6 +183,15 @@ void AdaptiveSphSimulation::identifyAndSplitParticles(uint32_t removedParticles)
             getState().grid,
             getParameters());
     }
+    else if (_refinementParams.criterionType == refinement::RefinementParameters::Criterion::Curvature)
+    {
+        refinement::getCriterionValues<<<SphSimulation::getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(
+            getParticles(),
+            _refinementData.split.criterionValues,
+            refinement::curvature::SplitCriterionGenerator(minMass, _refinementParams.curvature.split),
+            getState().grid,
+            getParameters());
+    }
     else
     {
         refinement::getCriterionValues<<<SphSimulation::getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(
@@ -193,10 +204,12 @@ void AdaptiveSphSimulation::identifyAndSplitParticles(uint32_t removedParticles)
 
     refinement::findTopParticlesToSplit(getParticles(), _refinementData, _refinementParams, thrust::greater<float> {});
 
-    const auto particlesToSplitCount =
-        std::min(fromGpu(_refinementData.split.particlesSplitCount), removedParticles / 12);
+    const auto particlesToSplitCount = std::min<int32_t>(fromGpu(_refinementData.split.particlesSplitCount),
+                                                         (100000 - static_cast<int32_t>(getParticlesCount())) / 13);
 
-    if (particlesToSplitCount == 0)
+    std::cout << particlesToSplitCount << " " << getParticlesCount() << std::endl;
+
+    if (particlesToSplitCount <= 0)
     {
         return;
     }
@@ -287,6 +300,15 @@ void AdaptiveSphSimulation::calculateMergeCriteria(std::span<float> criterionVal
             getState().grid,
             getParameters());
     }
+    else if (_refinementParams.criterionType == refinement::RefinementParameters::Criterion::Curvature)
+    {
+        refinement::getCriterionValues<<<SphSimulation::getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(
+            getParticles(),
+            criterionValues,
+            refinement::curvature::MergeCriterionGenerator(maxMass, _refinementParams.curvature.merge),
+            getState().grid,
+            getParameters());
+    }
     else
     {
         refinement::getCriterionValues<<<SphSimulation::getBlocksPerGridForParticles(), getThreadsPerBlock()>>>(
@@ -304,6 +326,35 @@ void AdaptiveSphSimulation::rebuildGridAfterMerge()
     assignParticlesToCells();
     sortParticles();
     calculateCellStartAndEndIndices();
+}
+
+auto AdaptiveSphSimulation::createGrid(const Parameters& data, size_t particleCapacity) -> Grid
+{
+    int32_t* particleIndices {};
+    int32_t* particleArrayIndices {};
+    int32_t* cellStartIndices {};
+    int32_t* cellEndIndices {};
+
+    const auto gridCellWidth = 4 * data.baseSmoothingRadius * 1.4F;
+    const auto gridCellCount = glm::uvec3 {glm::ceil((data.domain.max - data.domain.min) / gridCellWidth)};
+
+    cudaMalloc(&particleIndices, particleCapacity * sizeof(int32_t));
+    cudaMalloc(&particleArrayIndices, particleCapacity * sizeof(int32_t));
+    cudaMalloc(&cellStartIndices,
+               static_cast<size_t>(gridCellCount.x * gridCellCount.y * gridCellCount.z) * sizeof(int32_t));
+    cudaMalloc(&cellEndIndices,
+               static_cast<size_t>(gridCellCount.x * gridCellCount.y * gridCellCount.z) * sizeof(int32_t));
+
+    return Grid {
+        .gridSize = gridCellCount,
+        .cellSize = glm::vec3 {gridCellWidth},
+        .cellStartIndices =
+            std::span {cellStartIndices, static_cast<size_t>(gridCellCount.x * gridCellCount.y * gridCellCount.z)},
+        .cellEndIndices =
+            std::span {cellEndIndices, static_cast<size_t>(gridCellCount.x * gridCellCount.y * gridCellCount.z)},
+        .particleGridIndices = std::span {particleIndices, particleCapacity},
+        .particleArrayIndices = std::span {particleArrayIndices, particleCapacity}
+    };
 }
 
 }

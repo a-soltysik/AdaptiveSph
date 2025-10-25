@@ -35,6 +35,7 @@ private:
     void identifyAndSplitParticles(uint32_t removedParticles);
     void identifyAndMergeParticles();
     void rebuildGridAfterMerge();
+    auto createGrid(const Parameters& data, size_t particleCapacity) -> Grid override;
 
     Memory<float> _criterionValuesSplit;
     Memory<uint32_t> _particlesIdsToSplit;

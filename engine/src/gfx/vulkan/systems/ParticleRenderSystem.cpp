@@ -56,6 +56,8 @@ ParticleRenderSystem::ParticleRenderSystem(const Device& device, vk::RenderPass 
           .masses =
               createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::masses)>(_device, particleCount),
           .densityDeviations = createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::densityDeviations)>(
+              _device, particleCount),
+          .accelerations = createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::accelerations)>(
               _device, particleCount)}
 {
 }
@@ -78,6 +80,7 @@ auto ParticleRenderSystem::getImportedMemory() const -> sph::cuda::ParticlesData
         .smoothingRadiuses = _particleBuffer.smoothingRadiuses.getImportedMemory(),
         .masses = _particleBuffer.masses.getImportedMemory(),
         .densityDeviations = _particleBuffer.densityDeviations.getImportedMemory(),
+        .accelerations = _particleBuffer.accelerations.getImportedMemory(),
     };
 }
 

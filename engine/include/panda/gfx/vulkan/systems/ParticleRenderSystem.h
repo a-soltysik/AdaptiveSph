@@ -60,6 +60,7 @@ private:
         SharedBuffer smoothingRadiuses;
         SharedBuffer masses;
         SharedBuffer densityDeviations;
+        SharedBuffer accelerations;
     };
 
     const Device& _device;

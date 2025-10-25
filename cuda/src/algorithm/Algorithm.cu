@@ -212,6 +212,7 @@ __global__ void computePressureForce(ParticlesData particles,
 
     const auto particleMass = particles.masses[idx];
     const auto acceleration = pressureForce / particleMass;
+    particles.accelerations[idx] += acceleration;
 
     particles.velocities[idx] += acceleration * dt;
 }
@@ -265,6 +266,7 @@ __global__ void computeViscosityForce(ParticlesData particles,
 
     const auto particleMass = particles.masses[idx];
     const auto acceleration = simulationData.viscosityConstant * viscosityForce / particleMass;
+    particles.accelerations[idx] += acceleration;
     particles.velocities[idx] += acceleration * dt;
 }
 
@@ -317,7 +319,6 @@ __device__ void handleLidDrivenCavityCollision(ParticlesData particles,
             particles.positions[id][i] = minBoundary;
             if (i == 1)
             {
-                // Top wall moves at lid velocity
                 particles.velocities[id] = glm::vec4(simulationData.lidVelocity, 1.F, 0.0F, 0.0F);
             }
             else
@@ -461,6 +462,7 @@ __global__ void computeExternalForces(ParticlesData particles, Simulation::Param
 
     // Apply gravity force to velocity
     particles.velocities[idx] += glm::vec4 {simulationData.gravity, 0.F} * deltaTime;
+    particles.accelerations[idx] = glm::vec4 {simulationData.gravity, 0.F};
     // Special handling for Taylor-Green vortex - initialize velocity field
     if (simulationData.testCase == cuda::Simulation::Parameters::TestCase::TaylorGreenVortex)
     {

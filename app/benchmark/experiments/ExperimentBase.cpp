@@ -23,6 +23,7 @@
 
 namespace sph::benchmark
 {
+
 ExperimentBase::ExperimentBase(cuda::Simulation::Parameters::TestCase name)
     : _name(name)
 {
@@ -35,15 +36,22 @@ auto ExperimentBase::runBenchmark(const BenchmarkParameters& params,
                                   Window& window,
                                   bool visualize) -> BenchmarkResult
 {
+    // Create simulation parameters and configuration
     auto simulationParams = createSimulationParameters(params, simulationParameters, simulationType);
     const auto particles = initializeParticles(simulationParams);
+    const auto config = createBenchmarkConfig(params, simulationParams);
+    // Configure refinement for adaptive simulations
     auto refinementParams = params.refinement;
     refinementParams.enabled = (simulationType == BenchmarkResult::SimulationType::Adaptive);
+    // Create simulation
     auto simulation = cuda::createSimulation(simulationParams,
                                              particles,
                                              api.initializeParticleSystem(refinementParams.maxParticleCount),
                                              refinementParams);
+
+    // Initialize metrics collector
     MetricsCollector metricsCollector;
+    // Run simulation with or without visualization
     if (visualize)
     {
         auto visualizer = std::make_unique<BenchmarkVisualizer>(api, _name, simulationType);
@@ -69,19 +77,10 @@ auto ExperimentBase::runBenchmark(const BenchmarkParameters& params,
                       nullptr);
     }
 
-    // NEW: Use enhanced metrics calculation if supported
-    if (supportsEnhancedMetrics())
-    {
-        const auto config = createBenchmarkConfig(params, simulationParams);
-        return metricsCollector.calculateResults(_name, simulationType, config);
-    }
-    else
-    {
-        return metricsCollector.calculateResults(_name, simulationType);
-    }
+    // Calculate and return results with enhanced metrics
+    return metricsCollector.calculateResults(_name, simulationType, config);
 }
 
-//NOLINTBEGIN(bugprone-easily-swappable-parameters)
 void ExperimentBase::runSimulation(cuda::Simulation& simulation,
                                    const cuda::Simulation::Parameters& simulationParams,
                                    MetricsCollector& metricsCollector,
@@ -90,24 +89,22 @@ void ExperimentBase::runSimulation(cuda::Simulation& simulation,
                                    float timestep,
                                    Window& window,
                                    BenchmarkVisualizer* visualizer)
-//NOLINTEND(bugprone-easily-swappable-parameters)
 {
-    BenchmarkResult::SimulationConfig config;
-    config.cavitySize = simulationParams.domain.max.x - simulationParams.domain.min.x;
-    config.lidVelocity = simulationParams.lidVelocity;
-    config.restDensity = simulationParams.restDensity;
-    config.viscosityConstant = simulationParams.viscosityConstant;
-    config.domainMin = simulationParams.domain.min;
-    config.domainMax = simulationParams.domain.max;
-
+    // Create unified benchmark configuration
+    const auto config = createBenchmarkConfig(BenchmarkParameters {}, simulationParams);
     FrameTimeManager timeManager;
     metricsCollector.initialize(simulation, simulationParams.restDensity);
-    panda::log::Info("Running simulation for {} frames, measuring every {} frames", totalFrames, measureInterval);
+    panda::log::Info("Running {} simulation for {} frames, measuring every {} frames",
+                     static_cast<uint32_t>(_name),
+                     totalFrames,
+                     measureInterval);
+
     SimulationDataGui gui {};
     for (uint32_t frame = 0; frame < totalFrames; ++frame)
     {
         timeManager.update();
         const auto deltaTime = timeManager.getDelta();
+        // Handle window events
         window.processInput();
         if (window.shouldClose())
         {
@@ -115,28 +112,36 @@ void ExperimentBase::runSimulation(cuda::Simulation& simulation,
             return;
         }
 
+        // Update simulation
         simulation.update(timestep);
+        // Update GUI
         gui.setAverageNeighbourCount(simulation.calculateAverageNeighborCount());
         gui.setDensityDeviation({.densityDeviations = simulation.updateDensityDeviations(),
                                  .particleCount = simulation.getParticlesCount(),
                                  .restDensity = simulationParams.restDensity});
+
+        // Collect metrics at measurement intervals
         if (frame % measureInterval == 0)
         {
             const auto cudaTime = simulation.getLastCudaComputationTime();
-            // KLUCZOWE: wywołanie collectCavityMetrics zamiast collectFrameMetrics
-            metricsCollector.collectCavityMetrics(simulation, deltaTime, cudaTime, config);
+            // Use unified enhanced metrics collection for all experiments
+            metricsCollector.collectEnhancedMetrics(simulation, deltaTime, cudaTime, config, _name);
         }
+
+        // Render frame if visualizer is available
         if (visualizer != nullptr)
         {
             visualizer->renderFrame(simulation);
         }
+
+        // Progress logging
         if (frame % 100 == 0 || frame == totalFrames - 1)
         {
             panda::log::Info("Completed frame {}/{} ({}%)", frame, totalFrames, (frame + 1) * 100 / totalFrames);
         }
     }
 
-    panda::log::Info("Simulation completed");
+    panda::log::Info("{} simulation completed", static_cast<uint32_t>(_name));
 }
 
 auto ExperimentBase::initializeParticlesGrid(const cuda::Simulation::Parameters& simulationParams,
@@ -161,6 +166,7 @@ auto ExperimentBase::initializeParticlesGrid(const cuda::Simulation::Parameters&
 
     auto result = std::vector<glm::vec4>();
     result.reserve(static_cast<size_t>(gridSize.x) * gridSize.y * gridSize.z);
+
     for (uint32_t i = 0; i < gridSize.x; i++)
     {
         for (uint32_t j = 0; j < gridSize.y; j++)
@@ -183,6 +189,8 @@ auto ExperimentBase::initializeParticlesGrid(const cuda::Simulation::Parameters&
                      domainMin.x + offset.x,
                      domainMin.y + offset.y,
                      domainMin.z + offset.z);
+
     return result;
 }
+
 }
