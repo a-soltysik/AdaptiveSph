@@ -1,7 +1,7 @@
 #pragma once
 
 #ifdef _WIN32
-#    ifdef EXPORTING_CUDA_LIB
+#    ifdef ASPH_CUDA_EXPORTS
 #        define SPH_CUDA_API __declspec(dllexport)
 #    else
 #        define SPH_CUDA_API __declspec(dllimport)

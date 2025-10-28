@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
 #include <glm/ext/vector_int3.hpp>
 #include <glm/ext/vector_uint3.hpp>
@@ -13,24 +12,7 @@
 namespace sph::cuda
 {
 
-__device__ void handlePeriodicBoundaries(const glm::ivec3& targetCell,
-                                         glm::ivec3& wrappedCell,
-                                         glm::vec3& positionShift,
-                                         const glm::uvec3& gridSize,
-                                         const glm::vec3& domainSize,
-                                         Simulation::Parameters::TestCase testCase);
-
-__device__ void applyPeriodicBoundary(
-    int32_t targetCoord, int32_t& wrappedCoord, float& positionShift, uint32_t gridSize, float domainSize);
-
 __device__ bool isOutsideGrid(const glm::ivec3& cell, const glm::uvec3& gridSize);
-
-__device__ void adjustPositionForWrapping(const glm::vec4& position,
-                                          glm::vec4& shiftedPos,
-                                          const glm::vec3& domainSize,
-                                          Simulation::Parameters::TestCase testCase);
-
-__device__ void shiftCoordinateForWrapping(float diff, float& coord, float domainSize);
 
 template <typename Func>
 __device__ void forEachNeighbour(glm::vec4 position,
@@ -39,13 +21,6 @@ __device__ void forEachNeighbour(glm::vec4 position,
                                  const SphSimulation::Grid& grid,
                                  Func&& func)
 {
-    const auto usePeriodic = (simulationData.testCase == Simulation::Parameters::TestCase::PoiseuilleFlow ||
-                              simulationData.testCase == Simulation::Parameters::TestCase::TaylorGreenVortex);
-
-    const auto domainMin = simulationData.domain.min;
-    const auto domainMax = simulationData.domain.max;
-    const auto domainSize = domainMax - domainMin;
-
     const auto centerCell = calculateCellIndex(position, simulationData, grid);
 
     for (const auto& offset : offsets)
@@ -55,17 +30,6 @@ __device__ void forEachNeighbour(glm::vec4 position,
                                             static_cast<int32_t>(centerCell.z) + offset.z};
 
         glm::ivec3 wrappedCell = targetCell;
-        glm::vec3 positionShift(0.0F);
-
-        if (usePeriodic)
-        {
-            handlePeriodicBoundaries(targetCell,
-                                     wrappedCell,
-                                     positionShift,
-                                     grid.gridSize,
-                                     domainSize,
-                                     simulationData.testCase);
-        }
 
         if (isOutsideGrid(wrappedCell, grid.gridSize))
         {
@@ -85,13 +49,7 @@ __device__ void forEachNeighbour(glm::vec4 position,
         {
             const auto neighborIdx = grid.particleArrayIndices[i];
             const auto neighborPos = particles.predictedPositions[neighborIdx];
-            auto shiftedPos = neighborPos + glm::vec4(positionShift, 0.0F);
-            if (usePeriodic)
-            {
-                adjustPositionForWrapping(position, shiftedPos, domainSize, simulationData.testCase);
-            }
-
-            func(neighborIdx, shiftedPos);
+            func(neighborIdx, neighborPos);
         }
     }
 }

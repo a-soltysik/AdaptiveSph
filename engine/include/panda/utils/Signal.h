@@ -3,8 +3,6 @@
 #include <concepts>
 #include <cstddef>
 #include <functional>
-#include <memory>
-#include <mutex>
 #include <utility>
 #include <vector>
 
@@ -34,7 +32,6 @@ private:
     template <std::convertible_to<Args>... Params>
     auto emit(const Params&... params) const -> void
     {
-        std::lock_guard<std::mutex> lock {_connectionsMutex};
         for ([[maybe_unused]] auto& [key, value] : _connections)
         {
             value(params...);
@@ -42,7 +39,6 @@ private:
     }
 
     std::vector<std::pair<size_t, ChannelT>> _connections;
-    mutable std::mutex _connectionsMutex;
 };
 
 template <typename... Args>
@@ -136,7 +132,6 @@ template <typename... Args>
 template <typename... Args>
 [[nodiscard]] auto Signal<Args...>::connect(ChannelT&& connection) -> ReceiverT
 {
-    std::lock_guard<std::mutex> lock {_connectionsMutex};
     auto receiver = ReceiverT {*this};
     _connections.emplace_back(receiver.getId(), std::move(connection));
     return receiver;
@@ -145,7 +140,6 @@ template <typename... Args>
 template <typename... Args>
 auto Signal<Args...>::disconnect(const ReceiverT& receiver) -> void
 {
-    std::lock_guard<std::mutex> lock {_connectionsMutex};
     std::erase_if(_connections, [&receiver](const auto& elem) noexcept {
         return elem.first == receiver.getId();
     });

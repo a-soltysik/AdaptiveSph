@@ -76,11 +76,9 @@ void SimulationDataGui::displayAverageNeighborCount(float averageNeighbors) cons
     ImGui::End();
 }
 
-//NOLINTBEGIN(bugprone-easily-swappable-parameters)
 void SimulationDataGui::displayDensityStatistics(const std::vector<float>& densityDeviations,
                                                  uint32_t particleCount,
                                                  float restDensity)
-//NOLINTEND(bugprone-easily-swappable-parameters)
 {
     if (particleCount == 0)
     {

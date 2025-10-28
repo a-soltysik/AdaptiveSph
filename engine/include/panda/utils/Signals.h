@@ -10,7 +10,7 @@
 
 #include "Signal.h"
 #include "panda/Window.h"
-#include "panda/gfx/vulkan/Scene.h"
+#include "panda/gfx/Scene.h"
 
 namespace panda::utils::signals
 {
@@ -26,7 +26,7 @@ using FrameBufferResized = Signal<FrameBufferResizedData>;
 struct BeginGuiRenderData
 {
     vk::CommandBuffer commandBuffer;
-    std::reference_wrapper<gfx::vulkan::Scene> scene;
+    std::reference_wrapper<gfx::Scene> scene;
 };
 
 using BeginGuiRender = Signal<BeginGuiRenderData>;

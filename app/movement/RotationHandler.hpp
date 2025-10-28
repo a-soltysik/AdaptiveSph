@@ -2,7 +2,7 @@
 
 #include <glm/ext/vector_float2.hpp>
 
-#include "../ui/Window.hpp"
+#include "ui/Window.hpp"
 
 namespace sph
 {

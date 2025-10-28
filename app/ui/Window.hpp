@@ -9,8 +9,8 @@
 #include <memory>
 #include <vector>
 
-#include "../input/KeyboardHandler.hpp"
-#include "../input/MouseHandler.hpp"
+#include "input/KeyboardHandler.hpp"
+#include "input/MouseHandler.hpp"
 
 namespace sph
 {

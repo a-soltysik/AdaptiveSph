@@ -4,11 +4,11 @@
 #include <thrust/functional.h>
 #include <vector_types.h>
 
+#include <cstdint>
 #include <glm/ext/vector_float4.hpp>
 #include <vector>
 
 #include "AdaptiveSphSimulation.cuh"
-#include "SphSimulation.cuh"
 #include "algorithm/adaptive/AdaptiveAlgorithm.cuh"
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
@@ -16,6 +16,7 @@
 #include "refinement/criteria/InterfaceCriterion.cuh"
 #include "refinement/criteria/VelocityCriterion.cuh"
 #include "refinement/criteria/VorticityCriterion.cuh"
+#include "simulation/adaptive/SphSimulation.cuh"
 #include "utils/Utils.cuh"
 
 namespace sph::cuda
@@ -26,14 +27,12 @@ AdaptiveSphSimulation::AdaptiveSphSimulation(const Parameters& initialParameters
                                              const ParticlesDataBuffer& memory,
                                              const refinement::RefinementParameters& refinementParams)
     : SphSimulation(initialParameters, positions, memory, refinementParams.maxParticleCount),
-      _refinementParams(refinementParams),
-      // Initialize CudaMemory objects with RAII
       _criterionValuesSplit(refinementParams.maxParticleCount),
-      _particlesIdsToSplit(static_cast<size_t>(refinementParams.maxParticleCount * refinementParams.maxBatchRatio)),
+      _particlesIdsToSplit(
+          static_cast<size_t>(static_cast<float>(refinementParams.maxParticleCount) * refinementParams.maxBatchRatio)),
       _particlesSplitCount(1),
       _particlesIds(refinementParams.maxParticleCount),
       _particlesCount(1),
-      // Initialize enhanced merge data
       _mergeCriterionValues(refinementParams.maxParticleCount),
       _mergeEligibleParticles(refinementParams.maxParticleCount),
       _mergeEligibleCount(1),
@@ -42,21 +41,21 @@ AdaptiveSphSimulation::AdaptiveSphSimulation(const Parameters& initialParameters
       _mergeCount(1),
       _mergeRemovalFlags(refinementParams.maxParticleCount),
       _mergePrefixSums(refinementParams.maxParticleCount),
-      // Create wrapped data structures
+      _refinementParams(refinementParams),
       _refinementData {
-          .split {.criterionValues {_criterionValuesSplit.get(), _criterionValuesSplit.size()},
-                  .particlesIdsToSplit {_particlesIdsToSplit.get(), _particlesIdsToSplit.size()},
-                  .particlesSplitCount {_particlesSplitCount.get()}},
-          .merge {.criterionValues = {_mergeCriterionValues.get(), _mergeCriterionValues.size()},
-                  .eligibleParticles = {_mergeEligibleParticles.get(), _mergeEligibleParticles.size()},
-                  .eligibleCount = _mergeEligibleCount.get(),
-                  .mergeCandidates = {_mergeCandidates.get(), _mergeCandidates.size()},
-                  .mergePairs = {_mergePairs.get(), _mergePairs.size()},
-                  .removalFlags = {_mergeRemovalFlags.get(), _mergeRemovalFlags.size()},
-                  .prefixSums = {_mergePrefixSums.get(), _mergePrefixSums.size()},
-                  .mergeCount = _mergeCount.get()},
-          .particlesIds {_particlesIds.get(), _particlesIds.size()},
-          .particlesCount {_particlesCount.get()}
+          .split = {.criterionValues = {_criterionValuesSplit.get(), _criterionValuesSplit.size()},
+                    .particlesIdsToSplit = {_particlesIdsToSplit.get(), _particlesIdsToSplit.size()},
+                    .particlesSplitCount = {_particlesSplitCount.get()}},
+          .merge = {.criterionValues = {_mergeCriterionValues.get(), _mergeCriterionValues.size()},
+                    .eligibleParticles = {_mergeEligibleParticles.get(), _mergeEligibleParticles.size()},
+                    .eligibleCount = _mergeEligibleCount.get(),
+                    .mergeCandidates = {_mergeCandidates.get(), _mergeCandidates.size()},
+                    .mergePairs = {_mergePairs.get(), _mergePairs.size()},
+                    .removalFlags = {_mergeRemovalFlags.get(), _mergeRemovalFlags.size()},
+                    .prefixSums = {_mergePrefixSums.get(), _mergePrefixSums.size()},
+                    .mergeCount = _mergeCount.get()},
+          .particlesIds = {_particlesIds.get(), _particlesIds.size()},
+          .particlesCount = {_particlesCount.get()}
 },
       _targetParticleCount(static_cast<uint32_t>(positions.size()))
 {
@@ -118,28 +117,22 @@ void AdaptiveSphSimulation::resetRefinementCounters() const
     cudaMemcpy(_refinementData.split.particlesSplitCount, &zero, sizeof(uint32_t), cudaMemcpyHostToDevice);
     cudaMemcpy(_refinementData.merge.eligibleCount, &zero, sizeof(uint32_t), cudaMemcpyHostToDevice);
     cudaMemcpy(_refinementData.merge.mergeCount, &zero, sizeof(uint32_t), cudaMemcpyHostToDevice);
-    // Reset criterion values arrays
     cudaMemset(_refinementData.split.criterionValues.data(),
                0,
                _refinementData.split.criterionValues.size() * sizeof(float));
     cudaMemset(_refinementData.merge.criterionValues.data(),
                0,
                _refinementData.merge.criterionValues.size() * sizeof(float));
-    // Reset particle IDs array
     cudaMemset(_refinementData.particlesIds.data(), 0, _refinementData.particlesIds.size() * sizeof(uint32_t));
-
-    // Reset all removal flags and markers
 
     cudaMemset(_refinementData.merge.removalFlags.data(),
                0,
                _refinementData.merge.removalFlags.size() * sizeof(uint32_t));
     cudaMemset(_refinementData.merge.prefixSums.data(), 0, _refinementData.merge.prefixSums.size() * sizeof(uint32_t));
 
-    // Reset split particle IDs
     cudaMemset(_refinementData.split.particlesIdsToSplit.data(),
                0,
                _refinementData.split.particlesIdsToSplit.size() * sizeof(uint32_t));
-    // Reset merge particle IDs
     cudaMemset(_refinementData.merge.eligibleParticles.data(),
                0,
                _refinementData.merge.eligibleParticles.size() * sizeof(uint32_t));

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <string_view>
 
 namespace panda::config
 {
@@ -14,6 +15,6 @@ inline constexpr auto isDebug = false;
 inline constexpr auto isDebug = true;
 #endif
 
-inline const auto shaderPath = std::filesystem::path{"../shader"};
+inline const auto shaderPath = std::filesystem::path {"../shader"};
 
 }

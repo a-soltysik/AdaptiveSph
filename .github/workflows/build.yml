@@ -1,8 +1,5 @@
 name: Build
 
-env:
-  CCACHE_CONFIGPATH: '~/.cache/ccache'
-
 on:
   push:
     branches:
@@ -11,146 +8,67 @@ on:
     branches:
       - 'master'
 jobs:
-  Build:
-    runs-on: ${{ matrix.os }}
+  build:
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-        build_type:
-          - Release
-          - Debug
-        compiler:
-          - gcc-13
-          - llvm-18
-          - msvc
-        exclude:
-          - os: ubuntu-latest
+        config:
+          - name: "Windows MSVC Release"
+            os: windows-latest
+            preset: windows-msvc-release
             compiler: msvc
-          - os: windows-latest
-            compiler: gcc-13
-          - os: windows-latest
-            compiler: llvm-18
+
+          - name: "Windows MSVC Debug"
+            os: windows-latest
+            preset: windows-msvc-debug
+            compiler: msvc
+
+          - name: "Linux GCC Release"
+            os: ubuntu-latest
+            preset: linux-gcc-release
+            compiler: gcc-14
+
+          - name: "Linux GCC Debug"
+            os: ubuntu-latest
+            preset: linux-gcc-with-warnings
+            compiler: gcc-14
+
+          - name: "Linux Clang Release"
+            os: ubuntu-latest
+            preset: linux-clang-release
+            compiler: llvm-20
+
+          - name: "Linux Clang Debug"
+            os: ubuntu-latest
+            preset: linux-clang-with-warnings
+            compiler: llvm-20
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Install X11
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: |
-          sudo apt update
-          sudo apt install xorg-dev
-
-      - name: Install Vulkan SDK
-        uses: humbletim/install-vulkan-sdk@v1.2
+      - name: Setup Build Environment
+        uses: ./.github/actions/setup-build-env
         with:
-          version: 1.4.304.1
-          cache: true
-
-      - name: Install CUDA Toolkit
-        uses: Jimver/cuda-toolkit@v0.2.22
-        with:
-          log-file-suffix: '${{github.job}}-${{matrix.os}}-${{matrix.compiler}}-${{matrix.build_type}}.txt'
-          method: network
-          sub-packages: '["nvcc", "cudart", "thrust"]'
+          preset: ${{ matrix.config.preset }}
 
       - name: Setup Cache
         uses: ./.github/actions/setup-cache
         with:
-          compiler: ${{ matrix.compiler }}
-          build_type: ${{ matrix.build_type }}
-
-      - name: Project Name
-        uses: cardinalby/export-env-action@2.2.0
-        with:
-          envFile: '.github/constants.env'
+          preset: ${{ matrix.config.preset }}
 
       - name: Setup Cpp
-        uses: aminya/setup-cpp@v1.2.2
+        uses: aminya/setup-cpp@v1.7.1
         with:
-          compiler: ${{ matrix.compiler }}
-          vcvarsall: ${{ contains(matrix.os, 'windows' )}}
+          compiler: ${{ matrix.config.compiler }}
+          vcvarsall: ${{ contains(matrix.config.os, 'windows' )}}
           cmake: true
           ninja: true
           ccache: true
 
-      - name: Configure CMake
-        run: >-
-          cmake -S . -B ./build -G Ninja
-          -DCMAKE_BUILD_TYPE=${{matrix.build_type}}
-          -D${{ env.PROJECT_NAME }}_ENABLE_CACHE=ON
-          -DGLFW_BUILD_WAYLAND=OFF
-          -DCPM_SOURCE_CACHE="~/.cache/CPM"
+      - name: Configure
+        run: cmake --preset ${{ matrix.config.preset }}
+
       - name: Build
-        run: |
-          cmake --build ./build --config ${{matrix.build_type}}
-
-  StaticAnalysis:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-        compiler:
-          - gcc-13
-          - llvm-20
-        build_type:
-          - Debug
-    steps:
-      - uses: actions/checkout@v4
-
-      - if: ${{ matrix.os == 'ubuntu-latest' }}
-        name: Install X11
-        run: |
-          sudo apt update
-          sudo apt install xorg-dev
-
-      - name: Install Vulkan SDK
-        uses: humbletim/install-vulkan-sdk@v1.2
-        with:
-          version: latest
-          cache: true
-
-      - name: Install CUDA Toolkit
-        uses: Jimver/cuda-toolkit@v0.2.22
-        with:
-          log-file-suffix: '${{github.job}}-${{matrix.os}}-${{matrix.compiler}}-${{matrix.build_type}}.txt'
-          method: network
-          sub-packages: '["nvcc", "cudart", "thrust"]'
-
-      - name: Setup Cache
-        uses: ./.github/actions/setup-cache
-        with:
-          compiler: ${{ matrix.compiler }}
-          build_type: ${{ matrix.build_type }}
-
-      - name: Project Name
-        uses: cardinalby/export-env-action@2.2.0
-        with:
-          envFile: '.github/constants.env'
-
-      - name: Setup Cpp
-        uses: aminya/setup-cpp@v1.2.2
-        with:
-          compiler: ${{ matrix.compiler }}
-          cmake: true
-          ninja: true
-          ccache: true
-          clangtidy: true
-          cppcheck: true
-
-      - name: Configure CMake
-        run: >-
-          cmake -S . -B ./build -G Ninja
-          -DCMAKE_BUILD_TYPE=${{matrix.build_type}}
-          -D${{ env.PROJECT_NAME }}_ENABLE_CACHE=ON
-          -D${{ env.PROJECT_NAME }}_ENABLE_WARNINGS_AS_ERRORS=ON
-          -D${{ env.PROJECT_NAME }}_ENABLE_CLANG_TIDY=ON 
-          -D${{ env.PROJECT_NAME }}_ENABLE_CPPCHECK=ON 
-          -DGLFW_BUILD_WAYLAND=OFF
-          -DCPM_SOURCE_CACHE="~/.cache/CPM"
-      - name: Build
-        run: |
-          cmake --build ./build --config ${{matrix.build_type}}
+        run: cmake --build --preset ${{ matrix.config.preset }}

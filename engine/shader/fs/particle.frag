@@ -66,59 +66,50 @@ bool raySphereIntersection(vec3 rayOrigin, vec3 rayDir, vec3 sphereCenter, float
 
 vec4 getSpeedColor(float speed, float minSpeed, float maxSpeed)
 {
-    // Normalize speed to [0,1] range
     float normalizedSpeed = clamp((speed - minSpeed) / (maxSpeed - minSpeed), 0.0, 1.0);
 
-    // Define color keypoints (blue -> green -> yellow -> orange -> red)
     const vec3 colorBlue = vec3(0.0, 0.0, 1.0);
     const vec3 colorGreen = vec3(0.0, 1.0, 0.0);
     const vec3 colorYellow = vec3(1.0, 1.0, 0.0);
     const vec3 colorOrange = vec3(1.0, 0.5, 0.0);
     const vec3 colorRed = vec3(1.0, 0.0, 0.0);
 
-    // Determine which segment of the gradient we're in
     vec3 finalColor;
 
     if (normalizedSpeed < 0.25) {
-        // Blue to Green
         float t = normalizedSpeed / 0.25;
         finalColor = mix(colorBlue, colorGreen, t);
     } else if (normalizedSpeed < 0.5) {
-        // Green to Yellow
         float t = (normalizedSpeed - 0.25) / 0.25;
         finalColor = mix(colorGreen, colorYellow, t);
     } else if (normalizedSpeed < 0.75) {
-        // Yellow to Orange
         float t = (normalizedSpeed - 0.5) / 0.25;
         finalColor = mix(colorYellow, colorOrange, t);
     } else {
-        // Orange to Red
         float t = (normalizedSpeed - 0.75) / 0.25;
         finalColor = mix(colorOrange, colorRed, t);
     }
 
-    // Return final color with full opacity
     return vec4(finalColor, 1.0);
 }
 
 vec4 getDensityDeviationColor(float deviation)
 {
-    // Visualize density deviation with different colors
     vec3 color;
 
     if (deviation < -0.2) {
-        color = vec3(0.0, 0.0, 1.0);// Blue for very low density (<-20%)
+        color = vec3(0.0, 0.0, 1.0);
     } else if (deviation < -0.1) {
-        float t = (deviation + 0.2) / 0.1;// Normalize to [0,1]
-        color = mix(vec3(0.0, 0.0, 1.0), vec3(0.0, 1.0, 1.0), t);// Blue to Cyan
+        float t = (deviation + 0.2) / 0.1;
+        color = mix(vec3(0.0, 0.0, 1.0), vec3(0.0, 1.0, 1.0), t);
     } else if (deviation < 0.1) {
-        float t = (deviation + 0.1) / 0.2;// Normalize to [0,1]
-        color = mix(vec3(0.0, 1.0, 1.0), vec3(0.0, 1.0, 0.0), t);// Cyan to Green
+        float t = (deviation + 0.1) / 0.2;
+        color = mix(vec3(0.0, 1.0, 1.0), vec3(0.0, 1.0, 0.0), t);
     } else if (deviation < 0.2) {
-        float t = (deviation - 0.1) / 0.1;// Normalize to [0,1]
-        color = mix(vec3(0.0, 1.0, 0.0), vec3(1.0, 0.5, 0.0), t);// Green to Orange
+        float t = (deviation - 0.1) / 0.1;
+        color = mix(vec3(0.0, 1.0, 0.0), vec3(1.0, 0.5, 0.0), t);
     } else {
-        color = vec3(1.0, 0.0, 0.0);// Red for very high density (>20%)
+        color = vec3(1.0, 0.0, 0.0);
     }
 
     return vec4(color, 1.0);
