@@ -84,7 +84,9 @@ auto findTopParticlesToSplit(ParticlesData particles,
                          });
 
     const auto maxParticlesCount =
-        std::min<uint32_t>(topParticlesCount, particles.particleCount * refinementParameters.maxBatchRatio);
+        std::min(static_cast<uint32_t>(topParticlesCount),
+                 static_cast<uint32_t>(
+                     std::round(static_cast<float>(particles.particleCount) * refinementParameters.maxBatchRatio)));
     cudaMemcpy(refinementData.split.particlesSplitCount, &maxParticlesCount, sizeof(uint32_t), cudaMemcpyHostToDevice);
 
     thrust::copy_n(thrust::device,
@@ -101,7 +103,6 @@ auto findTopParticlesToMerge(ParticlesData particles,
 {
     cudaDeviceSynchronize();
 
-    // Sort particles by criterion value
     thrust::sequence(thrust::device,
                      refinementData.particlesIds.data(),
                      refinementData.particlesIds.data() + particles.particleCount,
@@ -119,7 +120,9 @@ auto findTopParticlesToMerge(ParticlesData particles,
                                                     return value > 0.0F;
                                                 });
     const auto maxEligibleCount =
-        std::min<uint32_t>(eligibleCount, particles.particleCount * refinementParameters.maxBatchRatio);
+        std::min(static_cast<uint32_t>(eligibleCount),
+                 static_cast<uint32_t>(
+                     std::round(static_cast<float>(particles.particleCount) * refinementParameters.maxBatchRatio)));
 
     thrust::copy_n(thrust::device,
                    refinementData.particlesIds.data(),

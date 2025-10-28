@@ -11,7 +11,7 @@
 #include <glm/ext/vector_float2.hpp>
 #include <utility>
 
-#include "../ui/Window.hpp"
+#include "ui/Window.hpp"
 #include "utils/Formatters.hpp"  // NOLINT(misc-include-cleaner)
 #include "utils/Signals.hpp"
 

@@ -1,47 +1,42 @@
-# ! target_link_cuda
-# A function that links Cuda to the given target
-#
-# # Example
-# add_executable(main_cuda main.cu)
-# target_compile_features(main_cuda PRIVATE cxx_std_17)
-# target_link_libraries(main_cuda PRIVATE project_options project_warnings)
-# target_link_cuda(main_cuda)
-#
-macro(sph_target_link_cuda target)
-    # optional named CUDA_WARNINGS
-    set(oneValueArgs CUDA_WARNINGS)
-    cmake_parse_arguments(
-        _cuda_args
-        ""
-        "${oneValueArgs}"
-        ""
-        ${ARGN})
+macro(sph_target_link_cuda target_name)
+    set_target_properties(${target_name} PROPERTIES
+            CUDA_STANDARD ${CMAKE_CUDA_STANDARD}
+            CUDA_STANDARD_REQUIRED ON
+            CUDA_EXTENSIONS OFF
+    )
 
-    # use the same C++ standard if not specified
-    if("${CMAKE_CUDA_STANDARD}" STREQUAL "")
-        set(CMAKE_CUDA_STANDARD "${CMAKE_CXX_STANDARD}")
-    endif()
+    set_target_properties(${target_name} PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
+    set_target_properties(${target_name} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    set_target_properties(${target_name} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
-    set_target_properties(${target} PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
-
-    # -fPIC
-    set_target_properties(${target} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-
-    # We need to explicitly state that we need all CUDA files in the
-    # ${target} library to be built with -dc as the member functions
-    # could be called by other libraries and executables
-    set_target_properties(${target} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-
-    if(APPLE)
-        # We need to add the path to the driver (libcuda.dylib) as an rpath,
-        # so that the static cuda runtime can find it at runtime.
-        set_property(TARGET ${target} PROPERTY BUILD_RPATH ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
-    endif()
-
-    if(WIN32 AND "$ENV{VSCMD_VER}" STREQUAL "")
-        message(
-            WARNING
-                "Compiling CUDA on Windows outside the Visual Studio Command prompt or without running `vcvarsall.bat x64` probably fails"
+    if (ASPH_CUDA_ENABLE_CUSTOM_ARCHITECTURE)
+        set_target_properties(${target_name} PROPERTIES
+                CUDA_ARCHITECTURES "${ASPH_CUDA_ARCHITECTURES}"
         )
-    endif()
+    endif ()
+
+    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+        target_compile_options(${target_name} PRIVATE
+                $<$<COMPILE_LANGUAGE:CUDA>:-g>
+        )
+        if (ASPH_CUDA_ENABLE_DEBUG)
+            target_compile_options(${target_name} PRIVATE
+                    $<$<COMPILE_LANGUAGE:CUDA>:-G>
+            )
+        endif ()
+    else ()
+        if (ASPH_CUDA_ENABLE_LINEINFO)
+            target_compile_options(${target_name} PRIVATE
+                    $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>
+            )
+        endif ()
+        target_compile_options(${target_name} PRIVATE
+                $<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-O3>
+        )
+    endif ()
+
+    target_compile_options(${target_name} PRIVATE
+            $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>
+            $<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>
+    )
 endmacro()

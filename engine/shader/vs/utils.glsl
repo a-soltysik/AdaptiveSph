@@ -7,10 +7,10 @@ vec4 eulerToQuat(vec3 eulerAngles) {
     float s3 = sin(eulerAngles.z * 0.5);
 
     vec4 q;
-    q.x = s1 * c2 * c3 - c1 * s2 * s3;// X
-    q.y = c1 * s2 * c3 + s1 * c2 * s3;// Y
-    q.z = c1 * c2 * s3 - s1 * s2 * c3;// Z
-    q.w = c1 * c2 * c3 + s1 * s2 * s3;// W
+    q.x = s1 * c2 * c3 - c1 * s2 * s3;
+    q.y = c1 * s2 * c3 + s1 * c2 * s3;
+    q.z = c1 * c2 * s3 - s1 * s2 * c3;
+    q.w = c1 * c2 * c3 + s1 * s2 * s3;
     return q;
 }
 

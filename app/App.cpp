@@ -4,9 +4,9 @@
 #include <panda/Logger.h>
 #include <panda/gfx/Camera.h>
 #include <panda/gfx/Light.h>
-#include <panda/gfx/vulkan/object/Object.h>
-#include <panda/gfx/vulkan/object/Surface.h>
-#include <panda/gfx/vulkan/object/Texture.h>
+#include <panda/gfx/object/Object.h>
+#include <panda/gfx/object/Surface.h>
+#include <panda/gfx/object/Texture.h>
 #include <panda/utils/Assert.h>
 #include <panda/utils/Signals.h>
 
@@ -22,6 +22,7 @@
 #include <glm/ext/vector_uint3.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
+#include <glm/gtx/string_cast.hpp>
 #include <glm/trigonometric.hpp>
 #include <memory>
 #include <string>
@@ -29,8 +30,6 @@
 #include <utility>
 #include <vector>
 
-#include "benchmark/BenchmarkManager.hpp"
-#include "glm/gtx/string_cast.hpp"
 #include "input/MouseHandler.hpp"
 #include "internal/config.hpp"
 #include "mesh/InvertedCube.hpp"
@@ -41,7 +40,6 @@
 
 namespace
 {
-
 [[nodiscard]] constexpr auto getSignalName(const int signalValue) noexcept -> std::string_view
 {
     switch (signalValue)
@@ -72,7 +70,7 @@ namespace
 
 void processCamera(const float deltaTime,
                    const sph::Window& window,
-                   panda::gfx::vulkan::Transform& cameraObject,
+                   panda::gfx::Transform& cameraObject,
                    panda::gfx::Camera& camera)
 {
     static constexpr auto rotationVelocity = 500.F;
@@ -108,12 +106,10 @@ void processCamera(const float deltaTime,
         .rotation = {-cameraObject.rotation.x, cameraObject.rotation.y, 0}
     });
 }
-
 }
 
 namespace sph
 {
-
 App::App(std::string configPath)
     : _configPath(std::move(configPath))
 {
@@ -129,26 +125,22 @@ auto App::run() -> int
     static constexpr auto defaultWidth = uint32_t {1920};
     static constexpr auto defaultHeight = uint32_t {1080};
     _window = std::make_unique<Window>(glm::uvec2 {defaultWidth, defaultHeight}, config::project_name.data());
-    _api = std::make_unique<panda::gfx::vulkan::Context>(*_window);
+    _api = std::make_unique<panda::gfx::Context>(*_window);
 
-    auto redTexture = panda::gfx::vulkan::Texture::getDefaultTexture(*_api, {1, 0, 0, 1});
+    auto redTexture = panda::gfx::Texture::getDefaultTexture(*_api, {1, 0, 0, 1});
 
-    _scene = std::make_unique<panda::gfx::vulkan::Scene>();
+    _scene = std::make_unique<panda::gfx::Scene>();
 
     _api->registerTexture(std::move(redTexture));
 
-    if (_benchmarkParams.has_value() && _benchmarkParams.value().enabled)
-    {
-        runBenchmarks();
-        return 0;
-    }
-
     setDefaultScene();
 
-    _simulation = createSimulation(_simulationParameters,
-                                   _particles,
-                                   _api->initializeParticleSystem(_refinementParameters.maxParticleCount),
-                                   _refinementParameters);
+    _simulation = cuda::createSimulation(
+        _simulationParameters,
+        _particles,
+        _api->initializeParticleSystem(static_cast<size_t>(_initialParameters.particleCount.x) *
+                                       _initialParameters.particleCount.y * _initialParameters.particleCount.z),
+        _refinementParameters);
 
     mainLoop();
     return 0;
@@ -170,45 +162,17 @@ auto App::loadConfigurationFromFile(const std::string& configPath) -> bool
 
     panda::log::Info("Successfully loaded configuration from file: {}", configPath);
 
-    //NOLINTBEGIN(bugprone-unchecked-optional-access)
-    _simulationParameters = _configManager.getSimulationParameters().value();
-    _initialParameters = _configManager.getInitialParameters().value();
-    _refinementParameters = _configManager.getRefinementParameters().value();
-    _benchmarkParams = _configManager.getBenchmarkParameters();
-    //NOLINTEND(bugprone-unchecked-optional-access)
+    _simulationParameters = _configManager.getSimulationParameters().value_or(cuda::Simulation::Parameters {});
+    _initialParameters = _configManager.getInitialParameters().value_or(InitialParameters {});
+    _refinementParameters =
+        _configManager.getRefinementParameters().value_or(cuda::refinement::RefinementParameters {});
 
     return true;
 }
 
-auto App::runBenchmarks() -> void
-{
-    if (!_benchmarkParams.has_value() || !_benchmarkParams.value().enabled)
-    {
-        panda::log::Info("Benchmarks are disabled.");
-        return;
-    }
-
-    panda::log::Info("Running benchmarks...");
-    // Ensure window is created and visible
-    if (!_window)
-    {
-        _window = std::make_unique<Window>(glm::uvec2 {1280, 720}, "SPH Benchmark");
-    }
-
-    // Create API if not already created
-    if (!_api)
-    {
-        _api = std::make_unique<panda::gfx::vulkan::Context>(*_window);
-    }
-
-    benchmark::BenchmarkManager {}.runBenchmarks(_benchmarkParams.value(), _simulationParameters, *_api, *_window);
-
-    panda::log::Info("Benchmarks completed.");
-}
-
 auto App::mainLoop() const -> void
 {
-    auto cameraObject = panda::gfx::vulkan::Transform {};
+    auto cameraObject = panda::gfx::Transform {};
 
     cameraObject.translation = {0, 0.5, -5};
     _scene->getCamera().setViewYXZ(
@@ -226,7 +190,7 @@ auto App::mainLoop() const -> void
             _window->processInput();
 
             timeManager.update();
-            _simulation->update(0.0001F);
+            _simulation->update(timeManager.getDelta());
             gui.setAverageNeighbourCount(_simulation->calculateAverageNeighborCount());
             gui.setDensityDeviation({.densityDeviations = _simulation->updateDensityDeviations(),
                                      .particleCount = _simulation->getParticlesCount(),
@@ -234,7 +198,7 @@ auto App::mainLoop() const -> void
             _scene->setParticleCount(_simulation->getParticlesCount());
             _scene->getCamera().setPerspectiveProjection(
                 panda::gfx::projection::Perspective {.fovY = glm::radians(50.F),
-                                                     .aspect = _api->getRenderer().getAspectRatio(),
+                                                     .aspect = _api->getAspectRatio(),
                                                      .zNear = 0.1F,
                                                      .zFar = 100});
             processCamera(timeManager.getDelta(), *_window, cameraObject, _scene->getCamera());
@@ -283,15 +247,15 @@ void App::setDefaultScene()
     setupLighting();
 }
 
-void App::createDomainBoundaries()
+void App::createDomainBoundaries() const
 {
-    auto blueTexture = panda::gfx::vulkan::Texture::getDefaultTexture(*_api, {0, 0, 1, 0.3F});
+    auto blueTexture = panda::gfx::Texture::getDefaultTexture(*_api, {0, 0, 1, 0.3F});
     auto invertedCubeMesh = mesh::inverted_cube::create(*_api, "InvertedCube");
 
     const auto domain = _simulationParameters.domain;
     auto& object = _scene->setDomain("Domain",
                                      {
-                                         panda::gfx::vulkan::Surface {blueTexture.get(), invertedCubeMesh.get()}
+                                         panda::gfx::Surface {blueTexture.get(), invertedCubeMesh.get()}
     });
     object.transform.rotation = {};
     object.transform.translation = domain.getTranslation();
@@ -367,5 +331,4 @@ void App::setupLighting() const
         directionalLight.value().get().direction = {6.2F, 2.F, 1.F};
     }
 }
-
 }

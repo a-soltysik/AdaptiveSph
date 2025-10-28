@@ -2,7 +2,7 @@
 
 #include <optional>
 
-#include "../ui/Window.hpp"
+#include "ui/Window.hpp"
 
 namespace sph
 {

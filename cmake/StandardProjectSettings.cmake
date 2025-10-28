@@ -1,41 +1,35 @@
-# Set a default build type if none was specified
-if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     message(STATUS "Setting build type to 'RelWithDebInfo' as none was specified.")
     set(CMAKE_BUILD_TYPE
-        RelWithDebInfo
-        CACHE STRING "Choose the type of build." FORCE)
-    # Set the possible values of build type for cmake-gui, ccmake
+            RelWithDebInfo
+            CACHE STRING "Choose the type of build." FORCE)
     set_property(
-        CACHE CMAKE_BUILD_TYPE
-        PROPERTY STRINGS
-                 "Debug"
-                 "Release"
-                 "MinSizeRel"
-                 "RelWithDebInfo")
-endif()
+            CACHE CMAKE_BUILD_TYPE
+            PROPERTY STRINGS
+            "Debug"
+            "Release"
+            "MinSizeRel"
+            "RelWithDebInfo")
+endif ()
 
-# Enhance error reporting and compiler messages
-if(CMAKE_CXX_COMPILER_ID MATCHES ".*Clang")
-    if(WIN32)
-        # On Windows cuda nvcc uses cl and not clang
+if (CMAKE_CXX_COMPILER_ID MATCHES ".*Clang")
+    if (WIN32)
         add_compile_options($<$<COMPILE_LANGUAGE:C>:-fcolor-diagnostics> $<$<COMPILE_LANGUAGE:CXX>:-fcolor-diagnostics>)
-    else()
+    else ()
         add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fcolor-diagnostics>)
-    endif()
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    if(WIN32)
-        # On Windows cuda nvcc uses cl and not gcc
+    endif ()
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    if (WIN32)
         add_compile_options($<$<COMPILE_LANGUAGE:C>:-fdiagnostics-color=always>
-                            $<$<COMPILE_LANGUAGE:CXX>:-fdiagnostics-color=always>)
-    else()
+                $<$<COMPILE_LANGUAGE:CXX>:-fdiagnostics-color=always>)
+    else ()
         add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fdiagnostics-color=always>)
-    endif()
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND MSVC_VERSION GREATER 1900)
+    endif ()
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND MSVC_VERSION GREATER 1900)
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/diagnostics:column>)
-else()
+else ()
     message(STATUS "No colored compiler diagnostic set for '${CMAKE_CXX_COMPILER_ID}' compiler.")
-endif()
+endif ()
 
-# run vcvarsall when msvc is used
 include("${CMAKE_CURRENT_LIST_DIR}/VCEnvironment.cmake")
 run_vcvarsall()

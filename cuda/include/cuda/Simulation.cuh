@@ -13,7 +13,6 @@
 
 namespace sph::cuda
 {
-
 struct ParticlesData
 {
     glm::vec4* positions;
@@ -51,8 +50,8 @@ public:
     {
         struct Domain
         {
-            glm::vec3 min;
-            glm::vec3 max;
+            glm::vec3 min = {-1.F, -1.F, -1.F};
+            glm::vec3 max = {1.F, 1.F, 1.F};
 
             [[nodiscard]] auto getTranslation() const noexcept -> glm::vec3
             {
@@ -76,14 +75,6 @@ public:
             }
         };
 
-        enum class TestCase : uint32_t
-        {
-            None_,
-            LidDrivenCavity,
-            PoiseuilleFlow,
-            TaylorGreenVortex
-        };
-
         Domain domain;
         glm::vec3 gravity;
         float restDensity;
@@ -96,17 +87,20 @@ public:
         float baseParticleRadius;
         float baseParticleMass;
         float lidVelocity = 0.F;
-        TestCase testCase = TestCase::None_;
 
-        uint32_t threadsPerBlock;
+        uint32_t threadsPerBlock = 256;
     };
 
     virtual ~Simulation() = default;
 
     virtual void update(float deltaTime) = 0;
+
     [[nodiscard]] virtual auto getParticlesCount() const -> uint32_t = 0;
+
     [[nodiscard]] virtual auto calculateAverageNeighborCount() const -> float = 0;
+
     [[nodiscard]] virtual auto updateDensityDeviations() const -> std::vector<float> = 0;
+
     virtual void setParticleVelocity(uint32_t particleIndex, const glm::vec4& velocity) = 0;
 };
 
@@ -115,5 +109,4 @@ SPH_CUDA_API auto createSimulation(const Simulation::Parameters& parameters,
                                    const ParticlesDataBuffer& memory,
                                    const refinement::RefinementParameters& refinementParams)
     -> std::unique_ptr<Simulation>;
-
 }

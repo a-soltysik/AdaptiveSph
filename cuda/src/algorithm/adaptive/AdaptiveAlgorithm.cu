@@ -4,6 +4,7 @@
 #include <cfloat>
 #include <climits>
 #include <cmath>
+#include <cstdint>
 #include <glm/exponential.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
@@ -17,6 +18,7 @@
 #include "cuda/refinement/RefinementParameters.cuh"
 #include "glm/ext/scalar_constants.hpp"
 #include "simulation/adaptive/SphSimulation.cuh"
+#include "simulation/adaptive/refinement/Common.cuh"
 #include "utils/Iteration.cuh"
 
 namespace sph::cuda::refinement
@@ -235,11 +237,9 @@ __global__ void resolveMergePairs(RefinementData::MergeData mergeData, uint32_t 
 
     if (mergeData.mergeCandidates[candidateIdx] == idx)
     {
-        // Only the smaller index should process the merge to avoid duplications
         if (idx < candidateIdx)
         {
             const auto pairIdx = atomicAdd(mergeData.mergeCount, 1);
-            // Store the pair (smaller index first)
             mergeData.mergePairs[2 * pairIdx] = idx;
             mergeData.mergePairs[2 * pairIdx + 1] = candidateIdx;
 

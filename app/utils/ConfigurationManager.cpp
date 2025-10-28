@@ -14,7 +14,6 @@
 #include <string>
 
 #include "cuda/Simulation.cuh"
-#include "glm/ext/scalar_constants.hpp"
 
 using json = nlohmann::json;
 
@@ -48,10 +47,6 @@ auto ConfigurationManager::loadFromFile(const std::string& filePath) -> bool
         if (jsonFile.contains("initial"))
         {
             parseInitialParameters(jsonFile["initial"]);
-        }
-        if (jsonFile.contains("benchmark"))
-        {
-            parseBenchmarkParameters(jsonFile["benchmark"]);
         }
 
         return true;
@@ -87,10 +82,6 @@ auto ConfigurationManager::loadFromString(const std::string& jsonString) -> bool
         if (jsonFile.contains("initial"))
         {
             parseInitialParameters(jsonFile["initial"]);
-        }
-        if (jsonFile.contains("benchmark"))
-        {
-            parseBenchmarkParameters(jsonFile["benchmark"]);
         }
 
         return true;
@@ -200,101 +191,6 @@ void ConfigurationManager::parseInitialParameters(const json& jsonFile)
     _initialParams = params;
 }
 
-//NOLINTNEXTLINE(readability-function-cognitive-complexity)
-void ConfigurationManager::parseBenchmarkParameters(const json& jsonFile)
-{
-    BenchmarkParameters params;
-
-    params.enabled = parseScalarProperty(jsonFile, "enabled", false);
-
-    if (jsonFile.contains("testCase"))
-    {
-        if (jsonFile["testCase"].get<std::string>() == "lidDrivenCavity")
-        {
-            params.testCase = cuda::Simulation::Parameters::TestCase::LidDrivenCavity;
-        }
-        else if (jsonFile["testCase"].get<std::string>() == "poiseuilleFlow")
-        {
-            params.testCase = cuda::Simulation::Parameters::TestCase::PoiseuilleFlow;
-        }
-        else if (jsonFile["testCase"].get<std::string>() == "taylorGreenVortex")
-        {
-            params.testCase = cuda::Simulation::Parameters::TestCase::TaylorGreenVortex;
-        }
-    }
-
-    params.outputPath = parseScalarProperty(jsonFile, "outputPath", std::string {"output"});
-
-    if (jsonFile.contains("resolutions"))
-    {
-        const auto& resolutions = jsonFile["resolutions"];
-
-        if (resolutions.contains("coarse"))
-        {
-            const auto& coarse = resolutions["coarse"];
-            params.coarse.baseParticleRadius = parseScalarProperty(coarse, "baseParticleRadius", 0.25F);
-            params.coarse.baseParticleMass = parseScalarProperty(coarse, "baseParticleMass", 1.F);
-            params.coarse.baseSmoothingRadius = parseScalarProperty(coarse, "baseSmoothingRadius", 1.F);
-            params.coarse.pressureConstant = parseScalarProperty(coarse, "pressureConstant", 1.F);
-            params.coarse.nearPressureConstant = parseScalarProperty(coarse, "nearPressureConstant", 0.01F);
-            params.coarse.viscosityConstant = parseScalarProperty(coarse, "viscosityConstant", 0.001F);
-        }
-        if (resolutions.contains("fine"))
-        {
-            const auto& fine = resolutions["fine"];
-            params.fine.baseParticleRadius = parseScalarProperty(fine, "baseParticleRadius", 0.25F);
-            params.fine.baseParticleMass = parseScalarProperty(fine, "baseParticleMass", 1.F);
-            params.fine.baseSmoothingRadius = parseScalarProperty(fine, "baseSmoothingRadius", 1.F);
-            params.fine.pressureConstant = parseScalarProperty(fine, "pressureConstant", 1.F);
-            params.fine.nearPressureConstant = parseScalarProperty(fine, "nearPressureConstant", 0.01F);
-            params.fine.viscosityConstant = parseScalarProperty(fine, "viscosityConstant", 0.001F);
-        }
-        if (resolutions.contains("adaptive"))
-        {
-            const auto& adaptive = resolutions["adaptive"];
-            params.adaptive.baseParticleRadius = parseScalarProperty(adaptive, "baseParticleRadius", 0.25F);
-            params.adaptive.baseParticleMass = parseScalarProperty(adaptive, "baseParticleMass", 1.F);
-            params.adaptive.baseSmoothingRadius = parseScalarProperty(adaptive, "baseSmoothingRadius", 1.F);
-            params.adaptive.pressureConstant = parseScalarProperty(adaptive, "pressureConstant", 1.F);
-            params.adaptive.nearPressureConstant = parseScalarProperty(adaptive, "nearPressureConstant", 0.01F);
-            params.adaptive.viscosityConstant = parseScalarProperty(adaptive, "viscosityConstant", 0.001F);
-        }
-    }
-
-    params.measurementInterval = parseScalarProperty(jsonFile, "measurementInterval", uint32_t {1000});
-    params.totalSimulationFrames = parseScalarProperty(jsonFile, "totalSimulationFrames", uint32_t {100000});
-    params.timestep = parseScalarProperty(jsonFile, "timestep", 0.001F);
-
-    if (jsonFile.contains("poiseuille"))
-    {
-        const auto& poiseuille = jsonFile["poiseuille"];
-        params.channelHeight = parseScalarProperty(poiseuille, "channelHeight", 1.F);
-        params.channelLength = parseScalarProperty(poiseuille, "channelLength", 5.F);
-        params.channelWidth = parseScalarProperty(poiseuille, "channelWidth", 1.F);
-        params.forceMagnitude = parseScalarProperty(poiseuille, "forceMagnitude", 5.F);
-    }
-
-    if (jsonFile.contains("taylorGreen"))
-    {
-        const auto& taylorGreen = jsonFile["taylorGreen"];
-        params.domainSize = parseScalarProperty(taylorGreen, "domainSize", 2.F * glm::pi<float>());
-    }
-
-    if (jsonFile.contains("lidDrivenCavity"))
-    {
-        const auto& lidDrivenCavity = jsonFile["lidDrivenCavity"];
-        params.cavitySize = parseScalarProperty(lidDrivenCavity, "cavitySize", 3.F);
-        params.lidVelocity = parseScalarProperty(lidDrivenCavity, "lidVelocity", 1.F);
-    }
-
-    if (_refinementParams.has_value())
-    {
-        params.refinement = _refinementParams.value();
-    }
-
-    _benchmarkParams = params;
-}
-
 auto ConfigurationManager::getSimulationParameters() const -> std::optional<cuda::Simulation::Parameters>
 {
     return _simulationParams;
@@ -308,11 +204,6 @@ auto ConfigurationManager::getRefinementParameters() const -> std::optional<cuda
 auto ConfigurationManager::getInitialParameters() const -> std::optional<InitialParameters>
 {
     return _initialParams;
-}
-
-auto ConfigurationManager::getBenchmarkParameters() const -> std::optional<BenchmarkParameters>
-{
-    return _benchmarkParams;
 }
 
 void ConfigurationManager::parseSimulationParameters(const json& jsonFile)
@@ -377,5 +268,4 @@ auto ConfigurationManager::parseVec3Property(const json& jsonFile, const std::st
     }
     return defaultValue;
 }
-
 }

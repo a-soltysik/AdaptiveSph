@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstddef>
 #include <glm/ext/vector_float3.hpp>
 #include <string>
 #include <vector>

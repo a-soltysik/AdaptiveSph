@@ -1,0 +1,114 @@
+name: Static Analysis
+
+on:
+  push:
+    branches:
+      - 'master'
+  pull_request:
+    branches:
+      - "master"
+
+jobs:
+  clang-tidy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          preset: linux-gcc-with-clang-tidy
+
+      - name: Setup Cache
+        uses: ./.github/actions/setup-cache
+        with:
+          preset: linux-gcc-with-clang-tidy
+
+      - name: Setup Cpp
+        uses: aminya/setup-cpp@v1.7.1
+        with:
+          compiler: gcc-14
+          cmake: true
+          ninja: true
+          ccache: true
+          clang-tidy: true
+
+      - name: Configure
+        run: cmake --preset linux-gcc-with-clang-tidy
+
+      - name: Build
+        run: cmake --build --preset linux-gcc-with-clang-tidy
+
+  cppcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          preset: linux-gcc-with-cppcheck
+
+      - name: Setup Cache
+        uses: ./.github/actions/setup-cache
+        with:
+          preset: linux-gcc-with-cppcheck
+
+      - name: Setup Cpp
+        uses: aminya/setup-cpp@v1.7.1
+        with:
+          compiler: gcc-14
+          cmake: true
+          ninja: true
+          ccache: true
+          cppcheck: true
+
+      - name: Configure
+        run: cmake --preset linux-gcc-with-cppcheck
+
+      - name: Build
+        run: cmake --build --preset linux-gcc-with-cppcheck
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          preset: linux-gcc-debug
+
+      - name: Setup Cache
+        uses: ./.github/actions/setup-cache
+        with:
+          preset: linux-gcc-debug
+
+      - name: Setup Cpp
+        uses: aminya/setup-cpp@v1.7.1
+        with:
+          compiler: gcc-14
+          cmake: true
+          ninja: true
+          ccache: true
+
+      - name: Configure
+        run: cmake --preset linux-gcc-debug
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2.2.0
+        with:
+          languages: cpp
+          config-file: ./.github/codeql/codeql-config.yml
+
+      - name: Build
+        run: cmake --build --preset linux-gcc-debug
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2.2.0

@@ -1,28 +1,31 @@
-name: setup_cache
+name: Setup Cache
 description: "sets up the shared cache"
 inputs:
-  compiler:
+  preset:
     required: true
-    type: string
-  build_type:
-    required: true
-    type: string
+    description: CMake preset
 
 runs:
   using: "composite"
   steps:
+    - name: Set cache environment variables
+      shell: bash
+      run: |
+        echo "CPM_SOURCE_CACHE=${{ github.workspace }}/.cache/CPM" >> $GITHUB_ENV
+        echo "CCACHE_DIR=${{ github.workspace }}/.cache/ccache" >> $GITHUB_ENV
+
     - name: Cache CMake dependency source code
-      uses: actions/cache@v4
+      uses: actions/cache@v4.3.0
       with:
-        path: "~/.cache/CPM"
+        path: ${{ github.workspace }}/.cache/CPM
         key: ${{ runner.os }}-cpm-${{ hashFiles('**/') }}
         restore-keys: |
           ${{ runner.os }}-cpm-
 
     - name: Cache ccache
-      uses: actions/cache@v4
+      uses: actions/cache@v4.3.0
       with:
-        path: ${{ env.CCACHE_CONFIGPATH }}
-        key: ${{ runner.os }}-${{ inputs.compiler }}-${{ inputs.build_type }}-${{ hashFiles('**/CMakeLists.txt') }}
+        path: ${{ github.workspace }}/.cache/ccache
+        key: ${{ runner.os }}-${{ inputs.preset }}-${{ hashFiles('**/CMakeLists.txt') }}
         restore-keys: |
-          ${{ runner.os }}-${{ inputs.compiler }}-${{ inputs.build_type }}
+          ${{ runner.os }}-${{ inputs.preset }}

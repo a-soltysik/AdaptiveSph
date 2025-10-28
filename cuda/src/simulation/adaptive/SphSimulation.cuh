@@ -58,9 +58,6 @@ public:
     [[nodiscard]] auto updateDensityDeviations() const -> std::vector<float> override;
     void setParticleVelocity(uint32_t particleIndex, const glm::vec4& velocity) override;
 
-    //0 1 0 1
-    //0 0 1 1
-
 protected:
     struct ParticlesInternalDataBuffer
     {
