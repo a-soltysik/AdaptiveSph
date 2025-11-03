@@ -1,7 +1,7 @@
 #pragma once
+#include "../../../SphSimulation.cuh"
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
-#include "simulation/adaptive/SphSimulation.cuh"
 
 namespace sph::cuda::refinement::interfaceCriterion
 {

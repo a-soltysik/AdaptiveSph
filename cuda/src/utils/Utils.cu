@@ -6,10 +6,10 @@
 #include <glm/ext/vector_float4.hpp>
 #include <utility>
 
+#include "../simulation/SphSimulation.cuh"
 #include "Utils.cuh"
 #include "cuda/Simulation.cuh"
 #include "glm/ext/vector_uint3.hpp"
-#include "simulation/adaptive/SphSimulation.cuh"
 
 namespace sph::cuda
 {

@@ -5,9 +5,9 @@
 #include <glm/ext/vector_int3.hpp>
 #include <glm/ext/vector_uint3.hpp>
 
+#include "../simulation/SphSimulation.cuh"
 #include "Utils.cuh"
 #include "cuda/Simulation.cuh"
-#include "simulation/adaptive/SphSimulation.cuh"
 
 namespace sph::cuda
 {

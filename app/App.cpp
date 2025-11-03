@@ -1,6 +1,7 @@
 #include "App.hpp"
 
 #include <GLFW/glfw3.h>
+#include <fmt/format.h>
 #include <panda/Logger.h>
 #include <panda/gfx/Camera.h>
 #include <panda/gfx/Light.h>
@@ -25,6 +26,7 @@
 #include <glm/gtx/string_cast.hpp>
 #include <glm/trigonometric.hpp>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -36,6 +38,7 @@
 #include "movement/MovementHandler.hpp"
 #include "movement/RotationHandler.hpp"
 #include "ui/SimulationDataGui.hpp"
+#include "utils/Configuration.hpp"
 #include "utils/FrameTimeManager.hpp"
 
 namespace
@@ -120,11 +123,16 @@ auto App::run() -> int
     initializeLogger();
     registerSignalHandlers();
 
-    loadConfigurationFromFile(_configPath);
+    auto config = loadConfigurationFromFile(_configPath);
+
+    const auto initialParameters = panda::expect(config.initialParameters, "Initial parameters couldn't be found");
+    const auto simulationParameters =
+        panda::expect(config.simulationParameters, "Simulation parameters couldn't be found");
 
     static constexpr auto defaultWidth = uint32_t {1920};
     static constexpr auto defaultHeight = uint32_t {1080};
-    _window = std::make_unique<Window>(glm::uvec2 {defaultWidth, defaultHeight}, config::project_name.data());
+    _window =
+        std::make_unique<Window>(glm::uvec2 {defaultWidth, defaultHeight}, std::string {config::project_name}.data());
     _api = std::make_unique<panda::gfx::Context>(*_window);
 
     auto redTexture = panda::gfx::Texture::getDefaultTexture(*_api, {1, 0, 0, 1});
@@ -133,41 +141,37 @@ auto App::run() -> int
 
     _api->registerTexture(std::move(redTexture));
 
-    setDefaultScene();
+    setDefaultScene(simulationParameters, initialParameters);
 
     _simulation = cuda::createSimulation(
-        _simulationParameters,
+        simulationParameters,
         _particles,
-        _api->initializeParticleSystem(static_cast<size_t>(_initialParameters.particleCount.x) *
-                                       _initialParameters.particleCount.y * _initialParameters.particleCount.z),
-        _refinementParameters);
+        _api->initializeParticleSystem(config.refinementParameters
+                                           .and_then([](const auto& refinementParameter) -> std::optional<uint32_t> {
+                                               if (refinementParameter.enabled)
+                                               {
+                                                   return refinementParameter.maxParticleCount;
+                                               }
+                                               return std::nullopt;
+                                           })
+                                           .value_or(initialParameters.getScalarCount())),
+        config.refinementParameters);
 
     mainLoop();
     return 0;
 }
 
-auto App::loadConfigurationFromFile(const std::string& configPath) -> bool
+auto App::loadConfigurationFromFile(const std::string& configPath) -> utils::Configuration
 {
-    if (!std::filesystem::exists(configPath))
-    {
-        panda::log::Warning("Config file not found: {}. Using default parameters.", configPath);
-        return false;
-    }
-
-    if (!_configManager.loadFromFile(configPath))
-    {
-        panda::log::Warning("Failed to load configuration from file: {}. Using default parameters.", configPath);
-        return false;
-    }
+    panda::expect(std::filesystem::exists(configPath),
+                  fmt::format("Config file not found: {}. Using default parameters.", configPath));
+    const auto config =
+        panda::expect(utils::loadConfigurationFromFile(configPath),
+                      fmt::format("Failed to load configuration from file: {}. Using default parameters.", configPath));
 
     panda::log::Info("Successfully loaded configuration from file: {}", configPath);
 
-    _simulationParameters = _configManager.getSimulationParameters().value_or(cuda::Simulation::Parameters {});
-    _initialParameters = _configManager.getInitialParameters().value_or(InitialParameters {});
-    _refinementParameters =
-        _configManager.getRefinementParameters().value_or(cuda::refinement::RefinementParameters {});
-
-    return true;
+    return config;
 }
 
 auto App::mainLoop() const -> void
@@ -180,7 +184,7 @@ auto App::mainLoop() const -> void
 
     auto gui = SimulationDataGui {};
 
-    auto timeManager = FrameTimeManager {};
+    auto timeManager = utils::FrameTimeManager {};
     const std::vector densityDeviations(_simulation->getParticlesCount(), 0.F);
     while (!_window->shouldClose()) [[likely]]
     {
@@ -192,9 +196,7 @@ auto App::mainLoop() const -> void
             timeManager.update();
             _simulation->update(timeManager.getDelta());
             gui.setAverageNeighbourCount(_simulation->calculateAverageNeighborCount());
-            gui.setDensityDeviation({.densityDeviations = _simulation->updateDensityDeviations(),
-                                     .particleCount = _simulation->getParticlesCount(),
-                                     .restDensity = _simulationParameters.restDensity});
+            gui.setDensityInfo(_simulation->getDensityInfo(0.1F));
             _scene->setParticleCount(_simulation->getParticlesCount());
             _scene->getCamera().setPerspectiveProjection(
                 panda::gfx::projection::Perspective {.fovY = glm::radians(50.F),
@@ -240,19 +242,19 @@ auto App::registerSignalHandlers() -> void
     panda::shouldNotBe(std::signal(SIGTERM, signalHandler), SIG_ERR, "Failed to register signal handler");
 }
 
-void App::setDefaultScene()
+void App::setDefaultScene(const cuda::Simulation::Parameters& simulationParameters,
+                          const utils::InitialParameters& initialParameters)
 {
-    createDomainBoundaries();
-    createParticleDistribution();
+    createDomainBoundaries(simulationParameters.domain);
+    createParticleDistribution(simulationParameters, initialParameters);
     setupLighting();
 }
 
-void App::createDomainBoundaries() const
+void App::createDomainBoundaries(cuda::Simulation::Parameters::Domain domain) const
 {
     auto blueTexture = panda::gfx::Texture::getDefaultTexture(*_api, {0, 0, 1, 0.3F});
     auto invertedCubeMesh = mesh::inverted_cube::create(*_api, "InvertedCube");
 
-    const auto domain = _simulationParameters.domain;
     auto& object = _scene->setDomain("Domain",
                                      {
                                          panda::gfx::Surface {blueTexture.get(), invertedCubeMesh.get()}
@@ -265,25 +267,21 @@ void App::createDomainBoundaries() const
     _api->registerTexture(std::move(blueTexture));
 }
 
-void App::createParticleDistribution()
+void App::createParticleDistribution(const cuda::Simulation::Parameters& simulationParameters,
+                                     const utils::InitialParameters& initialParameters)
 {
-    const auto simulationSize = _initialParameters.particleCount;
+    panda::log::Info("Creating particle distribution with grid size: {}",
+                     glm::to_string(initialParameters.particleCount));
 
-    panda::log::Info("Creating particle distribution with grid size: {}x{}x{}",
-                     simulationSize.x,
-                     simulationSize.y,
-                     simulationSize.z);
-
-    const auto domainMin = _simulationParameters.domain.min;
-    const auto domainMax = _simulationParameters.domain.max;
+    const auto domainMin = simulationParameters.domain.min;
+    const auto domainMax = simulationParameters.domain.max;
     const auto domainSize = domainMax - domainMin;
-    const auto gridSize = _initialParameters.particleCount;
 
-    const auto particleSpacing = calculateParticleSpacing(domainSize, gridSize);
+    const auto particleSpacing = calculateParticleSpacing(domainSize, initialParameters.particleCount);
     panda::log::Info("Particle spacing: {}", glm::to_string(particleSpacing));
 
     const auto startPos = domainMin + particleSpacing;
-    createParticlesInGrid(startPos, gridSize, particleSpacing);
+    createParticlesInGrid(startPos, initialParameters, particleSpacing);
 }
 
 auto App::calculateParticleSpacing(const glm::vec3& domainSize, const glm::uvec3& gridSize) -> glm::vec3
@@ -293,15 +291,17 @@ auto App::calculateParticleSpacing(const glm::vec3& domainSize, const glm::uvec3
             gridSize.z > 1 ? domainSize.z / static_cast<float>(gridSize.z + 1) : domainSize.z / 2.0F};
 }
 
-void App::createParticlesInGrid(const glm::vec3& startPos, const glm::uvec3& gridSize, const glm::vec3& spacing)
+void App::createParticlesInGrid(const glm::vec3& startPos,
+                                const utils::InitialParameters& initialParameters,
+                                const glm::vec3& spacing)
 {
     _particles.clear();
-    _particles.reserve(static_cast<size_t>(gridSize.x) * gridSize.y * gridSize.z);
-    for (uint32_t i = 0; i < gridSize.x; i++)
+    _particles.reserve(initialParameters.getScalarCount());
+    for (uint32_t i = 0; i < initialParameters.particleCount.x; i++)
     {
-        for (uint32_t j = 0; j < gridSize.y; j++)
+        for (uint32_t j = 0; j < initialParameters.particleCount.y; j++)
         {
-            for (uint32_t k = 0; k < gridSize.z; k++)
+            for (uint32_t k = 0; k < initialParameters.particleCount.z; k++)
             {
                 const auto position = startPos + glm::vec3(spacing.x * static_cast<float>(i),
                                                            spacing.y * static_cast<float>(j),

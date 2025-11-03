@@ -1,3 +1,5 @@
+#include <device_atomic_functions.h>
+
 #include <cmath>
 #include <cstdint>
 #include <cuda/Simulation.cuh>
@@ -7,7 +9,7 @@
 #include "Algorithm.cuh"
 #include "glm/geometric.hpp"
 #include "kernels/Kernel.cuh"
-#include "simulation/adaptive/SphSimulation.cuh"
+#include "simulation/SphSimulation.cuh"
 #include "utils/Iteration.cuh"
 #include "utils/Utils.cuh"
 
@@ -40,16 +42,16 @@ __global__ void resetGrid(SphSimulation::Grid grid)
 }
 
 __global__ void assignParticlesToCells(ParticlesData particles,
-                                       SphSimulation::State state,
+                                       SphSimulation::Grid grid,
                                        Simulation::Parameters simulationData)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx < particles.particleCount)
     {
-        state.grid.particleArrayIndices[idx] = idx;
-        const auto cellPosition = calculateCellIndex(particles.positions[idx], simulationData, state.grid);
-        const auto cellIndex = flattenCellIndex(cellPosition, state.grid.gridSize);
-        state.grid.particleGridIndices[idx] = cellIndex;
+        grid.particleArrayIndices[idx] = idx;
+        const auto cellPosition = calculateCellIndex(particles.positions[idx], simulationData, grid);
+        const auto cellIndex = flattenCellIndex(cellPosition, grid.gridSize);
+        grid.particleGridIndices[idx] = cellIndex;
     }
 }
 
@@ -74,7 +76,7 @@ __global__ void calculateCellStartAndEndIndices(SphSimulation::Grid grid, uint32
 }
 
 __global__ void computeDensities(ParticlesData particles,
-                                 SphSimulation::State state,
+                                 SphSimulation::Grid grid,
                                  Simulation::Parameters simulationData)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
@@ -90,7 +92,7 @@ __global__ void computeDensities(ParticlesData particles,
     forEachNeighbour(position,
                      particles,
                      simulationData,
-                     state.grid,
+                     grid,
                      [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
                          const auto offsetToNeighbour = adjustedPos - position;
                          const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
@@ -115,7 +117,7 @@ __global__ void computeDensities(ParticlesData particles,
 }
 
 __global__ void computePressureForce(ParticlesData particles,
-                                     SphSimulation::State state,
+                                     SphSimulation::Grid grid,
                                      Simulation::Parameters simulationData,
                                      float dt)
 {
@@ -135,7 +137,7 @@ __global__ void computePressureForce(ParticlesData particles,
     forEachNeighbour(position,
                      particles,
                      simulationData,
-                     state.grid,
+                     grid,
                      [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
                          if (neighbourIdx == idx)
                          {
@@ -181,7 +183,7 @@ __global__ void computePressureForce(ParticlesData particles,
 }
 
 __global__ void computeViscosityForce(ParticlesData particles,
-                                      SphSimulation::State state,
+                                      SphSimulation::Grid grid,
                                       Simulation::Parameters simulationData,
                                       float dt)
 {
@@ -200,7 +202,7 @@ __global__ void computeViscosityForce(ParticlesData particles,
     forEachNeighbour(position,
                      particles,
                      simulationData,
-                     state.grid,
+                     grid,
                      [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
                          if (neighbourIdx == idx)
                          {
@@ -286,10 +288,10 @@ __global__ void computeExternalForces(ParticlesData particles, Simulation::Param
     particles.predictedPositions[idx] = particles.positions[idx] + particles.velocities[idx] * deltaTime;
 }
 
-__global__ void countNeighbors(ParticlesData particles,
-                               SphSimulation::State state,
-                               Simulation::Parameters simulationData,
-                               uint32_t* neighborCounts)
+__global__ void sumAllNeighbors(ParticlesData particles,
+                                SphSimulation::Grid grid,
+                                Simulation::Parameters simulationData,
+                                uint32_t* totalNeighborCount)
 {
     const auto idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= particles.particleCount)
@@ -298,12 +300,12 @@ __global__ void countNeighbors(ParticlesData particles,
     }
     const auto position = particles.positions[idx];
     const auto radiusSquared = particles.smoothingRadiuses[idx] * particles.smoothingRadiuses[idx];
-    uint32_t count = 0;
+    auto count = uint32_t {0};
 
     forEachNeighbour(position,
                      particles,
                      simulationData,
-                     state.grid,
+                     grid,
                      [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
                          if (idx == neighbourIdx)
                          {
@@ -319,18 +321,6 @@ __global__ void countNeighbors(ParticlesData particles,
                          }
                      });
 
-    neighborCounts[idx] = count;
-}
-
-__global__ void calculateDensityDeviations(ParticlesData particles, float restDensity)
-{
-    const auto idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= particles.particleCount)
-    {
-        return;
-    }
-
-    const auto deviation = (particles.densities[idx] - restDensity) / restDensity;
-    particles.densityDeviations[idx] = deviation;
+    atomicAdd(totalNeighborCount, count);
 }
 }

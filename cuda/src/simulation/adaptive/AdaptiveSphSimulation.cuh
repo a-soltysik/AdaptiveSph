@@ -4,14 +4,13 @@
 
 #include <cstdint>
 #include <glm/ext/vector_float4.hpp>
-#include <span>
 #include <vector>
 
-#include "SphSimulation.cuh"
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
 #include "refinement/Common.cuh"
-#include "utils/Memory.cuh"
+#include "simulation/SphSimulation.cuh"
+#include "utils/DeviceValue.cuh"
 
 namespace sph::cuda
 {
@@ -30,25 +29,10 @@ private:
     void performAdaptiveRefinement();
     void updateParticleCount();
     [[nodiscard]] auto getBlocksPerGridForParticles(uint32_t count) const -> dim3;
-    void calculateMergeCriteria(std::span<float> criterionValues) const;
-    void resetRefinementCounters() const;
+    void calculateMergeCriteria(float* criterionValues) const;
+    void resetRefinementCounters();
     void identifyAndSplitParticles(uint32_t removedParticles);
     void identifyAndMergeParticles();
-
-    Memory<float> _criterionValuesSplit;
-    Memory<uint32_t> _particlesIdsToSplit;
-    Memory<uint32_t> _particlesSplitCount;
-    Memory<uint32_t> _particlesIds;
-    Memory<uint32_t> _particlesCount;
-
-    Memory<float> _mergeCriterionValues;
-    Memory<uint32_t> _mergeEligibleParticles;
-    Memory<uint32_t> _mergeEligibleCount;
-    Memory<uint32_t> _mergeCandidates;
-    Memory<uint32_t> _mergePairs;
-    Memory<uint32_t> _mergeCount;
-    Memory<refinement::RefinementData::RemovalState> _mergeRemovalFlags;
-    Memory<uint32_t> _mergePrefixSums;
 
     refinement::RefinementParameters _refinementParams;
     refinement::RefinementData _refinementData;

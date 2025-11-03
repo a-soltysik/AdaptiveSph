@@ -1,7 +1,7 @@
 #pragma once
 #include <panda/utils/Signals.h>
 
-#include <vector>
+#include <cuda/Simulation.cuh>
 
 namespace sph
 {
@@ -10,28 +10,19 @@ class Window;
 class SimulationDataGui
 {
 public:
-    struct DensityDeviation
-    {
-        std::vector<float> densityDeviations;
-        uint32_t particleCount;
-        float restDensity;
-    };
-
     explicit SimulationDataGui();
 
     void setAverageNeighbourCount(float neighbourCount);
-    void setDensityDeviation(DensityDeviation densityDeviation);
+    void setDensityInfo(const cuda::Simulation::DensityInfo& densityInfo);
 
 private:
-    void render();
+    void render() const;
 
     void displayAverageNeighborCount(float averageNeighbors) const;
-    static void displayDensityStatistics(const std::vector<float>& densityDeviations,
-                                         uint32_t particleCount,
-                                         float restDensity);
+    static void displayDensityStatistics(const cuda::Simulation::DensityInfo& densityInfo);
 
     panda::utils::signals::BeginGuiRender::ReceiverT _beginGuiReceiver;
     float _averageNeighbourCount = 0.F;
-    DensityDeviation _densityDeviation {};
+    cuda::Simulation::DensityInfo _densityInfo {};
 };
 }

@@ -3,7 +3,7 @@
 #include <chrono>
 #include <cstdint>
 
-namespace sph
+namespace sph::utils
 {
 
 auto FrameTimeManager::update() -> void

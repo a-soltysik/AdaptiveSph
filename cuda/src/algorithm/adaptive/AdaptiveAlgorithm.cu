@@ -4,7 +4,6 @@
 #include <cfloat>
 #include <climits>
 #include <cmath>
-#include <cstdint>
 #include <glm/exponential.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
@@ -17,16 +16,17 @@
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
 #include "glm/ext/scalar_constants.hpp"
-#include "simulation/adaptive/SphSimulation.cuh"
+#include "simulation/SphSimulation.cuh"
 #include "simulation/adaptive/refinement/Common.cuh"
+#include "utils/HelperMath.cuh"
 #include "utils/Iteration.cuh"
 
 namespace sph::cuda::refinement
 {
 namespace detail
 {
-__device__ __constant__ float phi = std::numbers::phi_v<float>;
-__device__ __constant__ float invnorm = 0.5257311121F;
+inline constexpr __device__ auto phi = std::numbers::phi_v<float>;
+inline constexpr __device__ auto invnorm = 0.5257311121F;
 }
 
 __device__ auto getNewRadius(float mass, float baseMass, float baseRadius) -> float
@@ -34,23 +34,20 @@ __device__ auto getNewRadius(float mass, float baseMass, float baseRadius) -> fl
     return baseRadius * glm::pow(mass / baseMass, 1.0F / 3.0F);
 }
 
-__device__ auto getIcosahedronVertices() -> std::array<glm::vec3, 12>
-{
-    return std::array {
-        glm::vec3 {0.F,                            detail::phi * detail::invnorm,  detail::invnorm               },
-        glm::vec3 {0.F,                            detail::phi * detail::invnorm,  -detail::invnorm              },
-        glm::vec3 {0.F,                            -detail::phi * detail::invnorm, -detail::invnorm              },
-        glm::vec3 {0.F,                            -detail::phi * detail::invnorm, detail::invnorm               },
-        glm::vec3 {detail::invnorm,                0,                              detail::phi * detail::invnorm },
-        glm::vec3 {-detail::invnorm,               0,                              detail::phi * detail::invnorm },
-        glm::vec3 {detail::invnorm,                0,                              -detail::phi * detail::invnorm},
-        glm::vec3 {-detail::invnorm,               0,                              -detail::phi * detail::invnorm},
-        glm::vec3 {detail::phi * detail::invnorm,  detail::invnorm,                0                             },
-        glm::vec3 {detail::phi * detail::invnorm,  -detail::invnorm,               0                             },
-        glm::vec3 {-detail::phi * detail::invnorm, detail::invnorm,                0                             },
-        glm::vec3 {-detail::phi * detail::invnorm, -detail::invnorm,               0                             }
-    };
-}
+constexpr __constant__ __device__ auto icosahedronVertices = std::array {
+    float3 {0.F,                            detail::phi* detail::invnorm,  detail::invnorm              },
+    float3 {0.F,                            detail::phi* detail::invnorm,  -detail::invnorm             },
+    float3 {0.F,                            -detail::phi* detail::invnorm, -detail::invnorm             },
+    float3 {0.F,                            -detail::phi* detail::invnorm, detail::invnorm              },
+    float3 {detail::invnorm,                0,                             detail::phi* detail::invnorm },
+    float3 {-detail::invnorm,               0,                             detail::phi* detail::invnorm },
+    float3 {detail::invnorm,                0,                             -detail::phi* detail::invnorm},
+    float3 {-detail::invnorm,               0,                             -detail::phi* detail::invnorm},
+    float3 {detail::phi * detail::invnorm,  detail::invnorm,               0                            },
+    float3 {detail::phi * detail::invnorm,  -detail::invnorm,              0                            },
+    float3 {-detail::phi * detail::invnorm, detail::invnorm,               0                            },
+    float3 {-detail::phi * detail::invnorm, -detail::invnorm,              0                            }
+};
 
 __device__ auto calculateMergedSmoothingLength(std::pair<glm::vec4, glm::vec4> positions,
                                                std::pair<float, float> masses,
@@ -79,7 +76,7 @@ __device__ auto calculateMergedSmoothingLength(std::pair<glm::vec4, glm::vec4> p
 }
 
 __global__ void splitParticles(ParticlesData particles,
-                               RefinementData refinementData,
+                               RefinementDataView refinementData,
                                SplittingParameters params,
                                uint32_t maxParticleCount)
 {
@@ -88,8 +85,8 @@ __global__ void splitParticles(ParticlesData particles,
     {
         return;
     }
+
     const auto particleIdx = refinementData.split.particlesIdsToSplit[tid];
-    const auto icosahedronVertices = getIcosahedronVertices();
     const auto newParticleBase = atomicAdd(refinementData.particlesCount, icosahedronVertices.size());
 
     if (newParticleBase + icosahedronVertices.size() > maxParticleCount)
@@ -116,7 +113,7 @@ __global__ void splitParticles(ParticlesData particles,
         const auto newIdx = newParticleBase + i;
 
         const auto offset = icosahedronVertices[i] * params.epsilon * originalSmoothingLength;
-        particles.positions[newIdx] = originalPosition + glm::vec4(offset, 0.0F);
+        particles.positions[newIdx] = originalPosition + glm::vec4(offset.x, offset.y, offset.z, 0.0F);
         particles.predictedPositions[newIdx] = particles.positions[newIdx];
         particles.velocities[newIdx] = originalVelocity;
         particles.masses[newIdx] = daughterMass;
@@ -129,31 +126,28 @@ __global__ void splitParticles(ParticlesData particles,
     }
 }
 
-__global__ void updateParticleCount(RefinementData refinementData, uint32_t particleCount)
+__device__ void updateParticleCount(RefinementDataView refinementData, uint32_t particleCount)
 {
-    if (blockIdx.x == 0 && threadIdx.x == 0)
+    auto removedCount = refinementData.merge.prefixSums[particleCount - 1];
+    if (refinementData.merge.removalFlags[particleCount - 1] == RefinementData::RemovalState::Remove)
     {
-        auto removedCount = refinementData.merge.prefixSums[particleCount - 1];
-        if (refinementData.merge.removalFlags[particleCount - 1] == RefinementData::RemovalState::Remove)
-        {
-            removedCount++;
-        }
-
-        *refinementData.particlesCount = particleCount - removedCount;
+        removedCount++;
     }
+
+    *refinementData.particlesCount = particleCount - removedCount;
 }
 
-__global__ void compactParticles(ParticlesData particles, RefinementData::MergeData mergeData, uint32_t particleCount)
+__global__ void compactParticles(ParticlesData particles, RefinementDataView refinementData, uint32_t particleCount)
 {
-    const auto idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx >= particleCount)
     {
         return;
     }
 
-    if (mergeData.removalFlags[idx] == RefinementData::RemovalState::Keep)
+    if (refinementData.merge.removalFlags[idx] == RefinementData::RemovalState::Keep)
     {
-        const auto newIdx = idx - mergeData.prefixSums[idx];
+        const auto newIdx = idx - refinementData.merge.prefixSums[idx];
 
         particles.positions[newIdx] = particles.positions[idx];
         particles.predictedPositions[newIdx] = particles.predictedPositions[idx];
@@ -165,22 +159,27 @@ __global__ void compactParticles(ParticlesData particles, RefinementData::MergeD
         particles.nearDensities[newIdx] = particles.nearDensities[idx];
         particles.pressures[newIdx] = particles.pressures[idx];
     }
+
+    if (blockIdx.x == 0 && threadIdx.x == 0)
+    {
+        updateParticleCount(refinementData, particleCount);
+    }
 }
 
 __global__ void identifyMergeCandidates(ParticlesData particles,
-                                        RefinementData::MergeData mergeData,
+                                        RefinementDataView refinementData,
                                         SphSimulation::Grid grid,
                                         Simulation::Parameters simulationData,
                                         RefinementParameters refinementParameters)
 {
     const auto idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= *mergeData.eligibleCount)
+    if (idx >= *refinementData.merge.eligibleCount)
     {
         return;
     }
-    const auto particleId = mergeData.eligibleParticles[idx];
+    const auto particleId = refinementData.merge.eligibleParticles[idx];
 
-    mergeData.mergeCandidates[particleId] = UINT_MAX;
+    refinementData.merge.mergeCandidates[particleId] = UINT_MAX;
 
     const auto position = particles.positions[particleId];
     const auto smoothingRadius = particles.smoothingRadiuses[particleId];
@@ -196,7 +195,7 @@ __global__ void identifyMergeCandidates(ParticlesData particles,
                          {
                              return;
                          }
-                         if (mergeData.removalFlags[neighborIdx] != RefinementData::RemovalState::Keep)
+                         if (refinementData.merge.removalFlags[neighborIdx] != RefinementData::RemovalState::Keep)
                          {
                              return;
                          }
@@ -217,11 +216,11 @@ __global__ void identifyMergeCandidates(ParticlesData particles,
                      });
     if (closestIdx != UINT_MAX)
     {
-        mergeData.mergeCandidates[particleId] = closestIdx;
+        refinementData.merge.mergeCandidates[particleId] = closestIdx;
     }
 }
 
-__global__ void resolveMergePairs(RefinementData::MergeData mergeData, uint32_t particleCount)
+__global__ void resolveMergePairs(RefinementDataView refinementData, uint32_t particleCount)
 {
     const auto idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= particleCount)
@@ -229,37 +228,38 @@ __global__ void resolveMergePairs(RefinementData::MergeData mergeData, uint32_t 
         return;
     }
 
-    if (mergeData.mergeCandidates[idx] == UINT_MAX || mergeData.removalFlags[idx] != RefinementData::RemovalState::Keep)
+    if (refinementData.merge.mergeCandidates[idx] == UINT_MAX ||
+        refinementData.merge.removalFlags[idx] != RefinementData::RemovalState::Keep)
     {
         return;
     }
-    const auto candidateIdx = mergeData.mergeCandidates[idx];
+    const auto candidateIdx = refinementData.merge.mergeCandidates[idx];
 
-    if (mergeData.mergeCandidates[candidateIdx] == idx)
+    if (refinementData.merge.mergeCandidates[candidateIdx] == idx)
     {
         if (idx < candidateIdx)
         {
-            const auto pairIdx = atomicAdd(mergeData.mergeCount, 1);
-            mergeData.mergePairs[2 * pairIdx] = idx;
-            mergeData.mergePairs[2 * pairIdx + 1] = candidateIdx;
+            const auto pairIdx = atomicAdd(refinementData.merge.mergeCount, 1);
+            refinementData.merge.mergePairs[2 * pairIdx] = idx;
+            refinementData.merge.mergePairs[2 * pairIdx + 1] = candidateIdx;
 
-            mergeData.removalFlags[candidateIdx] = RefinementData::RemovalState::Remove;
+            refinementData.merge.removalFlags[candidateIdx] = RefinementData::RemovalState::Remove;
         }
     }
 }
 
 __global__ void performMerges(ParticlesData particles,
-                              RefinementData::MergeData mergeData,
+                              RefinementDataView refinementData,
                               Simulation::Parameters simulationData)
 {
     const auto idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= *mergeData.mergeCount)
+    if (idx >= *refinementData.merge.mergeCount)
     {
         return;
     }
 
-    const auto keepIdx = mergeData.mergePairs[2 * idx];
-    const auto removeIdx = mergeData.mergePairs[2 * idx + 1];
+    const auto keepIdx = refinementData.merge.mergePairs[2 * idx];
+    const auto removeIdx = refinementData.merge.mergePairs[2 * idx + 1];
 
     if (keepIdx == UINT_MAX || removeIdx == UINT_MAX || keepIdx == removeIdx || keepIdx >= particles.particleCount ||
         removeIdx >= particles.particleCount)

@@ -4,10 +4,10 @@
 #include <glm/ext/vector_float4.hpp>
 #include <glm/geometric.hpp>
 
+#include "../../../SphSimulation.cuh"
 #include "CurvatureCriterion.cuh"
 #include "algorithm/kernels/Kernel.cuh"
 #include "cuda/Simulation.cuh"
-#include "simulation/adaptive/SphSimulation.cuh"
 #include "utils/Iteration.cuh"
 
 namespace sph::cuda::refinement::curvature

@@ -10,8 +10,8 @@
 #include <utility>
 #include <vector>
 
+#include "../simulation/SphSimulation.cuh"
 #include "cuda/Simulation.cuh"
-#include "simulation/adaptive/SphSimulation.cuh"
 
 namespace sph::cuda
 {
