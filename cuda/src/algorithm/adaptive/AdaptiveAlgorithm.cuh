@@ -11,38 +11,37 @@
 #include <span>
 #include <thrust/detail/sequence.inl>
 
+#include "../../simulation/SphSimulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
-#include "simulation/adaptive/SphSimulation.cuh"
 #include "simulation/adaptive/refinement/Common.cuh"
 
 namespace sph::cuda::refinement
 {
 
 __global__ auto splitParticles(ParticlesData particles,
-                               RefinementData refinementData,
+                               RefinementDataView refinementData,
                                SplittingParameters params,
                                uint32_t maxParticleCount) -> void;
 
-__global__ auto buildCompactionMap(RefinementData::MergeData mergeData, uint32_t particleCount) -> void;
-__global__ auto compactParticles(ParticlesData particles, RefinementData::MergeData mergeData, uint32_t oldCount)
-    -> void;
+__global__ auto buildCompactionMap(RefinementDataView refinementData, uint32_t particleCount) -> void;
+__global__ auto compactParticles(ParticlesData particles, RefinementDataView refinementData, uint32_t oldCount) -> void;
 
 __global__ auto identifyMergeCandidates(ParticlesData particles,
-                                        RefinementData::MergeData mergeData,
+                                        RefinementDataView refinementData,
                                         SphSimulation::Grid grid,
                                         Simulation::Parameters simulationData,
                                         RefinementParameters refinementParameters) -> void;
 
-__global__ auto resolveMergePairs(RefinementData::MergeData mergeData, uint32_t particleCount) -> void;
+__global__ auto resolveMergePairs(RefinementDataView refinementData, uint32_t particleCount) -> void;
 __global__ auto performMerges(ParticlesData particles,
-                              RefinementData::MergeData mergeData,
+                              RefinementDataView refinementData,
                               Simulation::Parameters simulationData) -> void;
 
 __global__ auto updateParticleCount(RefinementData refinementData, uint32_t particleCount) -> void;
 
 template <typename CriterionGenerator>
 __global__ void getCriterionValues(ParticlesData particles,
-                                   std::span<float> splitCriterionValues,
+                                   float* splitCriterionValues,
                                    CriterionGenerator criterionGenerator,
                                    const SphSimulation::Grid grid,
                                    const Simulation::Parameters simulationData)
@@ -58,7 +57,7 @@ __global__ void getCriterionValues(ParticlesData particles,
 
 template <typename CriterionSorter>
 auto findTopParticlesToSplit(ParticlesData particles,
-                             RefinementData refinementData,
+                             RefinementData& refinementData,
                              RefinementParameters refinementParameters,
                              CriterionSorter criterionSorter) -> void
 {
@@ -87,7 +86,8 @@ auto findTopParticlesToSplit(ParticlesData particles,
         std::min(static_cast<uint32_t>(topParticlesCount),
                  static_cast<uint32_t>(
                      std::round(static_cast<float>(particles.particleCount) * refinementParameters.maxBatchRatio)));
-    cudaMemcpy(refinementData.split.particlesSplitCount, &maxParticlesCount, sizeof(uint32_t), cudaMemcpyHostToDevice);
+
+    refinementData.split.particlesSplitCount = maxParticlesCount;
 
     thrust::copy_n(thrust::device,
                    refinementData.particlesIds.data(),
@@ -97,7 +97,7 @@ auto findTopParticlesToSplit(ParticlesData particles,
 
 template <typename CriterionSorter>
 auto findTopParticlesToMerge(ParticlesData particles,
-                             RefinementData refinementData,
+                             RefinementData& refinementData,
                              RefinementParameters refinementParameters,
                              CriterionSorter criterionSorter) -> void
 {
@@ -129,7 +129,7 @@ auto findTopParticlesToMerge(ParticlesData particles,
                    maxEligibleCount,
                    refinementData.merge.eligibleParticles.data());
 
-    cudaMemcpy(refinementData.merge.eligibleCount, &maxEligibleCount, sizeof(uint32_t), cudaMemcpyHostToDevice);
+    refinementData.merge.eligibleCount = maxEligibleCount;
 }
 
 }

@@ -11,7 +11,7 @@ target_sources(
         movement/RotationHandler.cpp
         ui/SimulationDataGui.cpp
         utils/FrameTimeManager.cpp
-        utils/ConfigurationManager.cpp
+        utils/Configuration.cpp
         App.cpp)
 
 target_link_libraries(

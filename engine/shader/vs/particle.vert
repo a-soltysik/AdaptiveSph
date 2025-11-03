@@ -14,7 +14,6 @@ layout (location = 1) out vec3 worldPosition;
 layout (location = 2) out vec3 sphereCenter;
 layout (location = 3) out float radius;
 layout (location = 4) out vec3 velocity;
-layout (location= 5) out float densityDeviation;
 
 layout (set = 0, binding = 0) uniform VertUbo
 {
@@ -34,10 +33,6 @@ layout (set = 0, binding = 4) readonly buffer RadiusBuffer {
     float radiuses[];
 };
 
-layout (set = 0, binding = 5) readonly buffer DensityBuffer {
-    float densityDeviations[];
-};
-
 void main() {
     vec2 quadCoord = OFFSETS[gl_VertexIndex];
 
@@ -55,7 +50,6 @@ void main() {
     worldPosition = vertexPosition;
     sphereCenter = positions[gl_InstanceIndex].xyz;
     velocity = velocities[gl_InstanceIndex].xyz;
-    densityDeviation = densityDeviations[gl_InstanceIndex].x;
 
     gl_Position = ubo.projection * ubo.view * vec4(vertexPosition, 1.0);
 }

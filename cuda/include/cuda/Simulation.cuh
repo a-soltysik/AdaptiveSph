@@ -5,6 +5,7 @@
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "Api.cuh"
@@ -24,7 +25,6 @@ struct ParticlesData
     float* radiuses;
     float* smoothingRadiuses;
     float* masses;
-    float* densityDeviations;
 
     uint32_t particleCount;
 };
@@ -40,7 +40,6 @@ struct ParticlesDataBuffer
     const ImportedMemory& radiuses;
     const ImportedMemory& smoothingRadiuses;
     const ImportedMemory& masses;
-    const ImportedMemory& densityDeviations;
 };
 
 class SPH_CUDA_API Simulation
@@ -86,9 +85,19 @@ public:
         float baseSmoothingRadius;
         float baseParticleRadius;
         float baseParticleMass;
-        float lidVelocity = 0.F;
 
         uint32_t threadsPerBlock = 256;
+    };
+
+    struct DensityInfo
+    {
+        float restDensity;
+        float minDensity;
+        float maxDensity;
+        float averageDensity;
+        uint32_t underDensityCount;
+        uint32_t normalDensityCount;
+        uint32_t overDensityCount;
     };
 
     virtual ~Simulation() = default;
@@ -99,14 +108,12 @@ public:
 
     [[nodiscard]] virtual auto calculateAverageNeighborCount() const -> float = 0;
 
-    [[nodiscard]] virtual auto updateDensityDeviations() const -> std::vector<float> = 0;
-
-    virtual void setParticleVelocity(uint32_t particleIndex, const glm::vec4& velocity) = 0;
+    [[nodiscard]] virtual auto getDensityInfo(float threshold) const -> DensityInfo = 0;
 };
 
 SPH_CUDA_API auto createSimulation(const Simulation::Parameters& parameters,
                                    const std::vector<glm::vec4>& positions,
                                    const ParticlesDataBuffer& memory,
-                                   const refinement::RefinementParameters& refinementParams)
+                                   const std::optional<refinement::RefinementParameters>& refinementParams)
     -> std::unique_ptr<Simulation>;
 }

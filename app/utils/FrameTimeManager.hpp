@@ -2,7 +2,7 @@
 #include <chrono>
 #include <cstdint>
 
-namespace sph
+namespace sph::utils
 {
 
 class FrameTimeManager

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <thrust/device_vector.h>
 #include <vector_types.h>
 
 #include <cstddef>
@@ -30,11 +31,6 @@ public:
         std::span<int32_t> particleArrayIndices;
     };
 
-    struct State
-    {
-        Grid grid;
-    };
-
     SphSimulation(const Parameters& initialParameters,
                   const std::vector<glm::vec4>& positions,
                   const ParticlesDataBuffer& memory,
@@ -55,8 +51,7 @@ public:
     }
 
     [[nodiscard]] auto calculateAverageNeighborCount() const -> float override;
-    [[nodiscard]] auto updateDensityDeviations() const -> std::vector<float> override;
-    void setParticleVelocity(uint32_t particleIndex, const glm::vec4& velocity) override;
+    [[nodiscard]] auto getDensityInfo(float threshold) const -> DensityInfo override;
 
 protected:
     struct ParticlesInternalDataBuffer
@@ -70,7 +65,6 @@ protected:
         const ImportedParticleMemory& radiuses;
         const ImportedParticleMemory& smoothingRadiuses;
         const ImportedParticleMemory& masses;
-        const ImportedParticleMemory& densityDeviations;
     };
 
     static auto createGrid(const Parameters& data, size_t particleCapacity) -> Grid;
@@ -78,9 +72,9 @@ protected:
 
     [[nodiscard]] auto getParticles() const -> ParticlesData;
 
-    [[nodiscard]] auto getState() const -> const State&
+    [[nodiscard]] auto getGrid() const -> const Grid&
     {
-        return _state;
+        return _grid;
     }
 
     [[nodiscard]] auto getParameters() const -> const Parameters&
@@ -125,7 +119,7 @@ protected:
 private:
     ParticlesInternalDataBuffer _particleBuffer;
     Parameters _simulationData;
-    State _state;
+    Grid _grid;
     uint32_t _particleCount = 0;
     uint32_t _particleCapacity = 0;
 };

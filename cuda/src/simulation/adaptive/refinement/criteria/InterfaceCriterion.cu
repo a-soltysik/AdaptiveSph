@@ -4,10 +4,10 @@
 #include <glm/ext/vector_float4.hpp>
 #include <glm/glm.hpp>
 
+#include "../../../SphSimulation.cuh"
 #include "InterfaceCriterion.cuh"
 #include "cuda/Simulation.cuh"
 #include "glm/gtx/component_wise.hpp"
-#include "simulation/adaptive/SphSimulation.cuh"
 
 namespace sph::cuda::refinement::interfaceCriterion
 {

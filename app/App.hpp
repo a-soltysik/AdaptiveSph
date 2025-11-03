@@ -11,9 +11,8 @@
 #include <string>
 #include <vector>
 
-#include "cuda/refinement/RefinementParameters.cuh"
 #include "ui/Window.hpp"
-#include "utils/ConfigurationManager.hpp"
+#include "utils/Configuration.hpp"
 
 namespace sph
 {
@@ -31,31 +30,30 @@ private:
 
     static auto calculateParticleSpacing(const glm::vec3& domainSize, const glm::uvec3& gridSize) -> glm::vec3;
 
-    auto loadConfigurationFromFile(const std::string& configPath) -> bool;
+    static auto loadConfigurationFromFile(const std::string& configPath) -> utils::Configuration;
 
     auto mainLoop() const -> void;
 
-    auto setDefaultScene() -> void;
+    auto setDefaultScene(const cuda::Simulation::Parameters& simulationParameters,
+                         const utils::InitialParameters& initialParameters) -> void;
 
-    void createDomainBoundaries() const;
+    void createDomainBoundaries(cuda::Simulation::Parameters::Domain domain) const;
 
-    void createParticleDistribution();
+    void createParticleDistribution(const cuda::Simulation::Parameters& simulationParameters,
+                                    const utils::InitialParameters& initialParameters);
 
     void setupLighting() const;
 
-    void createParticlesInGrid(const glm::vec3& startPos, const glm::uvec3& gridSize, const glm::vec3& spacing);
+    void createParticlesInGrid(const glm::vec3& startPos,
+                               const utils::InitialParameters& initialParameters,
+                               const glm::vec3& spacing);
 
     std::vector<glm::vec4> _particles;
     std::unique_ptr<panda::gfx::Scene> _scene;
-
     std::unique_ptr<Window> _window;
     std::unique_ptr<panda::gfx::Context> _api;
     std::unique_ptr<cuda::Simulation> _simulation;
-    cuda::Simulation::Parameters _simulationParameters {};
-    cuda::refinement::RefinementParameters _refinementParameters {};
-    InitialParameters _initialParameters {};
 
-    ConfigurationManager _configManager;
     std::string _configPath;
 };
 }

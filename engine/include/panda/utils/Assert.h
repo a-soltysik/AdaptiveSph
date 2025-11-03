@@ -157,7 +157,7 @@ auto expectNot(T&& value,
 }
 
 template <typename T>
-auto expect(std::optional<T>&& value,
+auto expect(std::optional<T> value,
             std::string_view message,
             std::source_location location = std::source_location::current()) noexcept -> T
 {

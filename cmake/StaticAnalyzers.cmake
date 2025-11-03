@@ -20,6 +20,7 @@ macro(sph_enable_cppcheck WARNINGS_AS_ERRORS)
                     --suppress=missingIncludeSystem
                     --suppress=internalAstError
                     --suppress=unmatchedSuppression
+                    --suppress=unknownMacro
                     --inconclusive
                     --check-level=exhaustive
                     --suppress=${SUPPRESS_DIR}
