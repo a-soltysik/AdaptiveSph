@@ -1,9 +1,9 @@
 #pragma once
 #include <cstdint>
 
-#include "../../../SphSimulation.cuh"
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
+#include "simulation/SphSimulation.cuh"
 
 namespace sph::cuda::refinement::velocity
 {
@@ -45,5 +45,44 @@ private:
     float _maximalMass;
     VelocityParameters::Merge _merge;
 };
+
+inline __device__ auto SplitCriterionGenerator::operator()(ParticlesData particles,
+                                                           uint32_t id,
+                                                           const SphSimulation::Grid& grid,
+                                                           const Simulation::Parameters& simulationData) const -> float
+{
+    if (particles.masses[id] < _minimalMass)
+    {
+        return -1;
+    }
+    const auto velocity = particles.velocities[id];
+    const auto velocityMagnitude = glm::length(glm::vec3(velocity));
+    if (velocityMagnitude < _split.minimalSpeedThreshold)
+    {
+        return -1;
+    }
+    return velocityMagnitude;
+}
+
+inline __device__ auto MergeCriterionGenerator::operator()(ParticlesData particles,
+                                                           uint32_t id,
+                                                           const SphSimulation::Grid& grid,
+                                                           const Simulation::Parameters& simulationData) const -> float
+{
+    if (particles.masses[id] > _maximalMass)
+    {
+        return -1;
+    }
+
+    const auto velocity = particles.velocities[id];
+    const auto velocityMagnitude = glm::length(glm::vec3(velocity));
+
+    if (velocityMagnitude < _merge.maximalSpeedThreshold)
+    {
+        return velocityMagnitude / _merge.maximalSpeedThreshold;
+    }
+
+    return -1;
+}
 
 }

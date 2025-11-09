@@ -1,18 +1,15 @@
 #pragma once
 
 #include <cuda_runtime_api.h>
-#include <driver_types.h>
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #include <thrust/sort.h>
 
-#include <cstdint>
 #include <cuda/Simulation.cuh>
-#include <span>
 #include <thrust/detail/sequence.inl>
 
-#include "../../simulation/SphSimulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
+#include "simulation/SphSimulation.cuh"
 #include "simulation/adaptive/refinement/Common.cuh"
 
 namespace sph::cuda::refinement

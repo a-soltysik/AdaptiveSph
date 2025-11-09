@@ -49,7 +49,7 @@ __global__ void assignParticlesToCells(ParticlesData particles,
     if (idx < particles.particleCount)
     {
         grid.particleArrayIndices[idx] = idx;
-        const auto cellPosition = calculateCellIndex(particles.positions[idx], simulationData, grid);
+        const auto cellPosition = calculateCellIndex(particles.predictedPositions[idx], simulationData, grid);
         const auto cellIndex = flattenCellIndex(cellPosition, grid.gridSize);
         grid.particleGridIndices[idx] = cellIndex;
     }
@@ -65,12 +65,21 @@ __global__ void calculateCellStartAndEndIndices(SphSimulation::Grid grid, uint32
 
     const auto cellIdx = grid.particleGridIndices[idx];
 
-    if (idx == 0 || grid.particleGridIndices[idx - 1] != cellIdx)
+    if (idx == particleCount - 1)
+    {
+        grid.cellEndIndices[cellIdx] = idx;
+        return;
+    }
+    if (idx == 0)
     {
         grid.cellStartIndices[cellIdx] = idx;
+        return;
     }
-    if (idx == grid.particleArrayIndices.size() - 1 || grid.particleGridIndices[idx + 1] != cellIdx)
+
+    const auto cellIdxNext = grid.particleGridIndices[idx + 1];
+    if (cellIdx != cellIdxNext)
     {
+        grid.cellStartIndices[cellIdxNext] = idx + 1;
         grid.cellEndIndices[cellIdx] = idx;
     }
 }
@@ -86,6 +95,7 @@ __global__ void computeDensities(ParticlesData particles,
     }
 
     const auto position = particles.predictedPositions[idx];
+    const auto smoothingRadius = particles.smoothingRadiuses[idx];
     auto density = 0.F;
     auto nearDensity = 0.F;
 
@@ -93,6 +103,7 @@ __global__ void computeDensities(ParticlesData particles,
                      particles,
                      simulationData,
                      grid,
+                     smoothingRadius,
                      [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
                          const auto offsetToNeighbour = adjustedPos - position;
                          const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
@@ -131,6 +142,7 @@ __global__ void computePressureForce(ParticlesData particles,
     const auto nearDensity = particles.nearDensities[idx];
     const auto pressure = (density - simulationData.restDensity) * simulationData.pressureConstant;
     const auto nearPressure = nearDensity * simulationData.nearPressureConstant;
+    const auto smoothingRadius = particles.smoothingRadiuses[idx];
 
     auto pressureForce = glm::vec4 {};
 
@@ -138,6 +150,7 @@ __global__ void computePressureForce(ParticlesData particles,
                      particles,
                      simulationData,
                      grid,
+                     smoothingRadius,
                      [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
                          if (neighbourIdx == idx)
                          {
@@ -198,11 +211,13 @@ __global__ void computeViscosityForce(ParticlesData particles,
 
     auto viscosityForce = glm::vec4 {};
     const auto radiusSquared = particles.smoothingRadiuses[idx] * particles.smoothingRadiuses[idx];
+    const auto smoothingRadius = particles.smoothingRadiuses[idx];
 
     forEachNeighbour(position,
                      particles,
                      simulationData,
                      grid,
+                     smoothingRadius,
                      [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
                          if (neighbourIdx == idx)
                          {
@@ -300,12 +315,14 @@ __global__ void sumAllNeighbors(ParticlesData particles,
     }
     const auto position = particles.positions[idx];
     const auto radiusSquared = particles.smoothingRadiuses[idx] * particles.smoothingRadiuses[idx];
+    const auto smoothingRadius = particles.smoothingRadiuses[idx];
     auto count = uint32_t {0};
 
     forEachNeighbour(position,
                      particles,
                      simulationData,
                      grid,
+                     smoothingRadius,
                      [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
                          if (idx == neighbourIdx)
                          {

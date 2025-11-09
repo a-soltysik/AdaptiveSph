@@ -5,17 +5,10 @@ add_library(
         src/algorithm/Algorithm.cu
         src/simulation/SphSimulation.cu
         src/memory/ImportedParticleMemory.cu
-        src/algorithm/kernels/Kernel.cu
         src/algorithm/adaptive/AdaptiveAlgorithm.cu
-
         src/simulation/adaptive/AdaptiveSphSimulation.cu
         src/simulation/SimulationFactory.cu
-        src/utils/Utils.cu
-        src/simulation/adaptive/refinement/criteria/VelocityCriterion.cu
-        src/simulation/adaptive/refinement/criteria/VorticityCriterion.cu
-        src/simulation/adaptive/refinement/criteria/CurvatureCriterion.cu
-        src/simulation/adaptive/refinement/criteria/InterfaceCriterion.cu
-        src/utils/Iteration.cu)
+)
 
 add_library(AdaptiveSph::Cuda ALIAS AdaptiveSphCuda)
 

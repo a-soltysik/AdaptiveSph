@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <cuda/Simulation.cuh>
 
-#include "../simulation/SphSimulation.cuh"
+#include "simulation/SphSimulation.cuh"
 
 namespace sph::cuda::kernel
 {

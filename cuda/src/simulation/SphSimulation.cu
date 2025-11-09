@@ -5,8 +5,6 @@
 #include <thrust/sort.h>
 #include <vector_types.h>
 
-#include <cstddef>
-#include <cstdint>
 #include <cuda/Simulation.cuh>
 #include <glm/common.hpp>
 #include <glm/ext/vector_float3.hpp>
@@ -115,7 +113,7 @@ auto SphSimulation::createGrid(const Parameters& data, size_t particleCapacity) 
     int32_t* cellEndIndices {};
 
     const auto gridCellWidth = 2 * data.baseSmoothingRadius;
-    const auto gridCellCount = glm::uvec3 {glm::ceil((data.domain.max - data.domain.min) / gridCellWidth)};
+    const auto gridCellCount = glm::ivec3 {glm::ceil((data.domain.max - data.domain.min) / gridCellWidth)};
 
     cudaMalloc(&particleIndices, particleCapacity * sizeof(int32_t));
     cudaMalloc(&particleArrayIndices, particleCapacity * sizeof(int32_t));
@@ -126,7 +124,7 @@ auto SphSimulation::createGrid(const Parameters& data, size_t particleCapacity) 
 
     return Grid {
         .gridSize = gridCellCount,
-        .cellSize = glm::vec3 {gridCellWidth},
+        .cellSize = (data.domain.max - data.domain.min) / glm::vec3 {gridCellCount},
         .cellStartIndices =
             std::span {cellStartIndices, static_cast<size_t>(gridCellCount.x * gridCellCount.y * gridCellCount.z)},
         .cellEndIndices =
@@ -143,7 +141,8 @@ auto SphSimulation::getBlocksPerGridForParticles() const -> dim3
 
 auto SphSimulation::getBlocksPerGridForGrid() const -> dim3
 {
-    return {(_grid.gridSize.x * _grid.gridSize.y * _grid.gridSize.z + _simulationData.threadsPerBlock - 1) /
+    return {(static_cast<uint32_t>(_grid.gridSize.x * _grid.gridSize.y * _grid.gridSize.z) +
+             _simulationData.threadsPerBlock - 1) /
             _simulationData.threadsPerBlock};
 }
 
