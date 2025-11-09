@@ -44,9 +44,9 @@ AdaptiveSphSimulation::AdaptiveSphSimulation(const Parameters& initialParameters
       _refinementParams(refinementParams),
       // Create wrapped data structures
       _refinementData {
-          .split {.criterionValues {_criterionValuesSplit.get(), _criterionValuesSplit.size()},
-                  .particlesIdsToSplit {_particlesIdsToSplit.get(), _particlesIdsToSplit.size()},
-                  .particlesSplitCount {_particlesSplitCount.get()}},
+          .split {.criterionValues = {_criterionValuesSplit.get(), _criterionValuesSplit.size()},
+                  .particlesIdsToSplit = {_particlesIdsToSplit.get(), _particlesIdsToSplit.size()},
+                  .particlesSplitCount = {_particlesSplitCount.get()}},
           .merge {.criterionValues = {_mergeCriterionValues.get(), _mergeCriterionValues.size()},
                   .eligibleParticles = {_mergeEligibleParticles.get(), _mergeEligibleParticles.size()},
                   .eligibleCount = _mergeEligibleCount.get(),
@@ -55,8 +55,8 @@ AdaptiveSphSimulation::AdaptiveSphSimulation(const Parameters& initialParameters
                   .removalFlags = {_mergeRemovalFlags.get(), _mergeRemovalFlags.size()},
                   .prefixSums = {_mergePrefixSums.get(), _mergePrefixSums.size()},
                   .mergeCount = _mergeCount.get()},
-          .particlesIds {_particlesIds.get(), _particlesIds.size()},
-          .particlesCount {_particlesCount.get()}
+          .particlesIds = {_particlesIds.get(), _particlesIds.size()},
+          .particlesCount = {_particlesCount.get()}
 },
       _targetParticleCount(static_cast<uint32_t>(positions.size()))
 {
