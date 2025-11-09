@@ -99,8 +99,8 @@ void SphSimulation::update(float deltaTime)
     sortParticles();
     calculateCellStartAndEndIndices();
     computeDensities();
-    computePressureForce(deltaTime);
-    computeViscosityForce(deltaTime);
+    //computePressureForce(deltaTime);
+    //computeViscosityForce(deltaTime);
     integrateMotion(deltaTime);
     handleCollisions();
 

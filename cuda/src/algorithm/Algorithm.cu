@@ -55,6 +55,26 @@ __global__ void assignParticlesToCells(ParticlesData particles,
     }
 }
 
+//__global__ void calculateCellStartAndEndIndices(SphSimulation::Grid grid, uint32_t particleCount)
+//{
+//    const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+//    if (idx >= particleCount)
+//    {
+//        return;
+//    }
+//
+//    const auto cellIdx = grid.particleGridIndices[idx];
+//
+//    if (idx == 0 || grid.particleGridIndices[idx - 1] != cellIdx)
+//    {
+//        grid.cellStartIndices[cellIdx] = idx;
+//    }
+//    if (idx == grid.particleArrayIndices.size() - 1 || grid.particleGridIndices[idx + 1] != cellIdx)
+//    {
+//        grid.cellEndIndices[cellIdx] = idx;
+//    }
+//}
+
 __global__ void calculateCellStartAndEndIndices(SphSimulation::Grid grid, uint32_t particleCount)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
@@ -65,12 +85,21 @@ __global__ void calculateCellStartAndEndIndices(SphSimulation::Grid grid, uint32
 
     const auto cellIdx = grid.particleGridIndices[idx];
 
-    if (idx == 0 || grid.particleGridIndices[idx - 1] != cellIdx)
+    if (idx == particleCount - 1)
+    {
+        grid.cellEndIndices[cellIdx] = idx;
+        return;
+    }
+    if (idx == 0)
     {
         grid.cellStartIndices[cellIdx] = idx;
+        return;
     }
-    if (idx == grid.particleArrayIndices.size() - 1 || grid.particleGridIndices[idx + 1] != cellIdx)
+
+    const auto cellIdxNext = grid.particleGridIndices[idx + 1];
+    if (cellIdx != cellIdxNext)
     {
+        grid.cellStartIndices[cellIdxNext] = idx + 1;
         grid.cellEndIndices[cellIdx] = idx;
     }
 }

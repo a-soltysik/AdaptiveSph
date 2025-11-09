@@ -16,28 +16,18 @@
 namespace sph::cuda
 {
 
+namespace constants
+{
+inline constexpr auto warpSize = uint32_t {32};
+}
+
 extern __constant__ int3 offsets[27];
 
 __device__ auto calculateCellIndex(glm::vec4 position,
                                    const Simulation::Parameters& simulationData,
-                                   const SphSimulation::Grid& grid) -> glm::uvec3;
-__device__ auto flattenCellIndex(glm::uvec3 cellIndex, glm::uvec3 gridSize) -> uint32_t;
-__device__ auto getStartEndIndices(glm::uvec3 cellIndex, const SphSimulation::Grid& grid)
+                                   const SphSimulation::Grid& grid) -> glm::ivec3;
+__device__ auto flattenCellIndex(glm::ivec3 cellIndex, glm::ivec3 gridSize) -> uint32_t;
+__device__ auto getStartEndIndices(glm::ivec3 cellIndex, const SphSimulation::Grid& grid)
     -> std::pair<int32_t, int32_t>;
 
-template <typename T>
-auto fromGpu(const T* gpuPtr) -> T
-{
-    auto hostData = T {};
-    cudaMemcpy(&hostData, gpuPtr, sizeof(T), cudaMemcpyDeviceToHost);
-    return hostData;
-}
-
-template <typename T>
-auto fromGpu(const T* gpuPtr, size_t elementsCount) -> std::vector<T>
-{
-    auto hostData = std::vector<T>(elementsCount);
-    cudaMemcpy(hostData.data(), gpuPtr, elementsCount * sizeof(T), cudaMemcpyDeviceToHost);
-    return hostData;
-}
 }

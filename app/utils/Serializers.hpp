@@ -108,7 +108,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::Simulation::Parameters,
                                    baseSmoothingRadius,
                                    baseParticleRadius,
                                    baseParticleMass,
-                                   threadsPerBlock)
+                                   threadsPerBlock,
+                                   sharedMemorySizePerBlock)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::utils::InitialParameters, particleCount)
 

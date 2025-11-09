@@ -86,7 +86,8 @@ public:
         float baseParticleRadius;
         float baseParticleMass;
 
-        uint32_t threadsPerBlock = 256;
+        uint32_t threadsPerBlock;
+        uint32_t sharedMemorySizePerBlock;
     };
 
     struct DensityInfo

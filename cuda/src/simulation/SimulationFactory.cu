@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "SphSimulation.cuh"
+#include "SphSimulationENS.cuh"
 #include "adaptive/AdaptiveSphSimulation.cuh"
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
@@ -21,7 +22,8 @@ auto createSimulation(const Simulation::Parameters& parameters,
     {
         return std::make_unique<AdaptiveSphSimulation>(parameters, positions, memory, refinementParams.value());
     }
-    return std::make_unique<SphSimulation>(parameters, positions, memory, refinementParams.value().maxParticleCount);
+    return std::make_unique<SphSimulationENS>(parameters, positions, memory, refinementParams.value().maxParticleCount);
+    //return std::make_unique<SphSimulation>(parameters, positions, memory, refinementParams.value().maxParticleCount);
 }
 
 }

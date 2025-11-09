@@ -1,0 +1,8 @@
+//
+// Created by Andrzej on 4.11.2025.
+//
+
+#ifndef ADAPTIVESPH_KERNELSENS_CUH
+#define ADAPTIVESPH_KERNELSENS_CUH
+
+#endif  //ADAPTIVESPH_KERNELSENS_CUH

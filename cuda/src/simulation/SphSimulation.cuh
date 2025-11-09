@@ -23,7 +23,7 @@ class SphSimulation : public Simulation
 public:
     struct Grid
     {
-        glm::uvec3 gridSize;
+        glm::ivec3 gridSize;
         glm::vec3 cellSize;
         std::span<int32_t> cellStartIndices;
         std::span<int32_t> cellEndIndices;

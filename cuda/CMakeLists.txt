@@ -3,9 +3,12 @@ include("${CMAKE_SOURCE_DIR}/cmake/Cuda.cmake")
 add_library(
         AdaptiveSphCuda SHARED
         src/algorithm/Algorithm.cu
+        src/algorithm/AlgorithmENS.cu
         src/simulation/SphSimulation.cu
+        src/simulation/SphSimulationENS.cu
         src/memory/ImportedParticleMemory.cu
         src/algorithm/kernels/Kernel.cu
+        src/algorithm/kernels/KernelsENS.cu
         src/algorithm/adaptive/AdaptiveAlgorithm.cu
 
         src/simulation/adaptive/AdaptiveSphSimulation.cu
@@ -15,7 +18,9 @@ add_library(
         src/simulation/adaptive/refinement/criteria/VorticityCriterion.cu
         src/simulation/adaptive/refinement/criteria/CurvatureCriterion.cu
         src/simulation/adaptive/refinement/criteria/InterfaceCriterion.cu
-        src/utils/Iteration.cu)
+        src/utils/Iteration.cu
+        src/utils/IterationENS.cuh
+        src/utils/IterationENS.cu)
 
 add_library(AdaptiveSph::Cuda ALIAS AdaptiveSphCuda)
 
