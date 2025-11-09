@@ -68,7 +68,7 @@ public:
                 return scale.x * scale.y * scale.z;
             }
 
-            auto fromTransform(glm::vec3 translation, glm::vec3 scale) -> Domain
+            static auto fromTransform(glm::vec3 translation, glm::vec3 scale) -> Domain
             {
                 return {.min = translation - scale / 2.F, .max = translation + scale / 2.F};
             }

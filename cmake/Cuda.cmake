@@ -3,13 +3,12 @@ macro(sph_target_link_cuda target_name)
             CUDA_STANDARD ${CMAKE_CUDA_STANDARD}
             CUDA_STANDARD_REQUIRED ON
             CUDA_EXTENSIONS OFF
+            CUDA_RUNTIME_LIBRARY Shared
+            POSITION_INDEPENDENT_CODE ON
+            CUDA_SEPARABLE_COMPILATION OFF
     )
 
-    set_target_properties(${target_name} PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
-    set_target_properties(${target_name} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    set_target_properties(${target_name} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-
-    if (ASPH_CUDA_ENABLE_CUSTOM_ARCHITECTURE)
+    if (ASPH_CUDA_ENABLE_CUSTOM_ARCHITECTURES)
         set_target_properties(${target_name} PROPERTIES
                 CUDA_ARCHITECTURES "${ASPH_CUDA_ARCHITECTURES}"
         )
@@ -39,5 +38,6 @@ macro(sph_target_link_cuda target_name)
             $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>
             $<$<COMPILE_LANGUAGE:CUDA>:--expt-extended-lambda>
             $<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>
+            $<$<COMPILE_LANGUAGE:CUDA>:-diag-suppress 20012>
     )
 endmacro()

@@ -1,14 +1,11 @@
 #pragma once
 
-#include <thrust/device_vector.h>
 #include <vector_types.h>
 
-#include <cstddef>
 #include <cstdint>
 #include <cuda/Simulation.cuh>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
-#include <glm/ext/vector_uint3.hpp>
 #include <glm/glm.hpp>
 #include <span>
 #include <vector>
@@ -23,7 +20,7 @@ class SphSimulation : public Simulation
 public:
     struct Grid
     {
-        glm::uvec3 gridSize;
+        glm::ivec3 gridSize;
         glm::vec3 cellSize;
         std::span<int32_t> cellStartIndices;
         std::span<int32_t> cellEndIndices;

@@ -25,8 +25,8 @@ namespace sph::cuda::refinement
 {
 namespace detail
 {
-inline constexpr __device__ auto phi = std::numbers::phi_v<float>;
-inline constexpr __device__ auto invnorm = 0.5257311121F;
+constexpr __device__ auto phi = std::numbers::phi_v<float>;
+constexpr __device__ auto invnorm = 0.5257311121F;
 }
 
 __device__ auto getNewRadius(float mass, float baseMass, float baseRadius) -> float
@@ -190,6 +190,7 @@ __global__ void identifyMergeCandidates(ParticlesData particles,
                      particles,
                      simulationData,
                      grid,
+                     smoothingRadius,
                      [&](const auto neighborIdx, const glm::vec4& adjustedPos) {
                          if (neighborIdx == particleId)
                          {
