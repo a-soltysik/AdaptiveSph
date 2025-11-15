@@ -99,11 +99,11 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::Simulation::Parameters::Domain, mi
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::Simulation::Parameters,
                                    domain,
                                    gravity,
+                                   speedOfSound,
                                    restDensity,
-                                   pressureConstant,
-                                   nearPressureConstant,
                                    restitution,
                                    viscosityConstant,
+                                   surfaceTensionConstant,
                                    maxVelocity,
                                    baseSmoothingRadius,
                                    baseParticleRadius,
@@ -112,9 +112,25 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::Simulation::Parameters,
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::utils::InitialParameters, particleCount)
 
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::utils::Configuration,
-                                   initialParameters,
-                                   simulationParameters,
-                                   refinementParameters)
+template <>
+struct adl_serializer<sph::utils::Configuration>
+{
+    static void to_json(json& j, const sph::utils::Configuration& c)
+    {
+        j = json {
+            {"initialParameters",    c.initialParameters   },
+            {"simulationParameters", c.simulationParameters},
+            {"refinementParameters", c.refinementParameters}
+        };
+    }
+
+    static void from_json(const json& j, sph::utils::Configuration& c)
+    {
+        c.initialParameters = j.value("initialParameters", std::optional<sph::utils::InitialParameters> {});
+        c.simulationParameters = j.value("simulationParameters", std::optional<sph::cuda::Simulation::Parameters> {});
+        c.refinementParameters =
+            j.value("refinementParameters", std::optional<sph::cuda::refinement::RefinementParameters> {});
+    }
+};
 
 }

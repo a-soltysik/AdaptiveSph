@@ -65,7 +65,7 @@ auto Renderer::beginSwapChainRenderPass() const -> void
 {
     expect(_isFrameStarted, "Can't begin render pass when frame is not began");
     static constexpr auto clearColor =
-        vk::ClearValue {vk::ClearColorValue {.float32 {std::array {0.F, 0.F, 0.F, 1.F}}}};
+        vk::ClearValue {vk::ClearColorValue {.float32 {std::array {0.08F, 0.08F, 0.1F, 1.F}}}};
     static constexpr auto depthStencil = vk::ClearValue {
         .depthStencil = vk::ClearDepthStencilValue {.depth = 1.F, .stencil = 0}
     };

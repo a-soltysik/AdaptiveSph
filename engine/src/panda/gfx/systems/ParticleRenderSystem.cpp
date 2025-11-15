@@ -38,17 +38,12 @@ ParticleRenderSystem::ParticleRenderSystem(const Device& device, vk::RenderPass 
       _particleBuffer {
           .positions =
               createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::positions)>(_device, particleCount),
-          .predictedPositions =
-              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::predictedPositions)>(_device,
-                                                                                                        particleCount),
           .velocities =
               createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::velocities)>(_device, particleCount),
+          .accelerations = createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::accelerations)>(
+              _device, particleCount),
           .densities =
               createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::densities)>(_device, particleCount),
-          .nearDensities = createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::nearDensities)>(
-              _device, particleCount),
-          .pressures =
-              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::pressures)>(_device, particleCount),
           .radiuses =
               createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::radiuses)>(_device, particleCount),
           .smoothingRadiuses = createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::smoothingRadiuses)>(
@@ -68,11 +63,9 @@ auto ParticleRenderSystem::getImportedMemory() const -> sph::cuda::ParticlesData
 {
     return {
         .positions = _particleBuffer.positions.getImportedMemory(),
-        .predictedPositions = _particleBuffer.predictedPositions.getImportedMemory(),
         .velocities = _particleBuffer.velocities.getImportedMemory(),
+        .accelerations = _particleBuffer.accelerations.getImportedMemory(),
         .densities = _particleBuffer.densities.getImportedMemory(),
-        .nearDensities = _particleBuffer.nearDensities.getImportedMemory(),
-        .pressures = _particleBuffer.pressures.getImportedMemory(),
         .radiuses = _particleBuffer.radiuses.getImportedMemory(),
         .smoothingRadiuses = _particleBuffer.smoothingRadiuses.getImportedMemory(),
         .masses = _particleBuffer.masses.getImportedMemory(),

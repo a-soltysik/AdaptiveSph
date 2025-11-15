@@ -16,6 +16,7 @@
 
 #include "SphSimulation.cuh"
 #include "algorithm/Algorithm.cuh"
+#include "algorithm/kernels/Kernel.cuh"
 #include "memory/ImportedParticleMemory.cuh"
 #include "utils/DeviceValue.cuh"
 
@@ -33,6 +34,7 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
       _particleCapacity {maxParticleCapacity}
 {
     const auto velocitiesVec = std::vector(positions.size(), glm::vec4 {});
+    const auto accelerationsVec = std::vector(positions.size(), glm::vec4 {});
     const auto radiusesVec = std::vector(positions.size(), initialParameters.baseParticleRadius);
     const auto smoothingRadiusesVec = std::vector(positions.size(), initialParameters.baseSmoothingRadius);
     const auto massesVec = std::vector(positions.size(), initialParameters.baseParticleMass);
@@ -47,9 +49,9 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
                velocitiesVec.size() * sizeof(glm::vec4),
                cudaMemcpyHostToDevice);
 
-    cudaMemcpy(_particleBuffer.predictedPositions.getData<glm::vec4>(),
-               positions.data(),
-               positions.size() * sizeof(glm::vec4),
+    cudaMemcpy(_particleBuffer.accelerations.getData<glm::vec4>(),
+               accelerationsVec.data(),
+               accelerationsVec.size() * sizeof(glm::vec4),
                cudaMemcpyHostToDevice);
 
     cudaMemcpy(_particleBuffer.radiuses.getData<float>(),
@@ -79,11 +81,9 @@ SphSimulation::~SphSimulation()
 auto SphSimulation::toInternalBuffer(const ParticlesDataBuffer& memory) -> ParticlesInternalDataBuffer
 {
     return {.positions = dynamic_cast<const ImportedParticleMemory&>(memory.positions),
-            .predictedPositions = dynamic_cast<const ImportedParticleMemory&>(memory.predictedPositions),
             .velocities = dynamic_cast<const ImportedParticleMemory&>(memory.velocities),
+            .accelerations = dynamic_cast<const ImportedParticleMemory&>(memory.accelerations),
             .densities = dynamic_cast<const ImportedParticleMemory&>(memory.densities),
-            .nearDensities = dynamic_cast<const ImportedParticleMemory&>(memory.nearDensities),
-            .pressures = dynamic_cast<const ImportedParticleMemory&>(memory.pressures),
             .radiuses = dynamic_cast<const ImportedParticleMemory&>(memory.radiuses),
             .smoothingRadiuses = dynamic_cast<const ImportedParticleMemory&>(memory.smoothingRadiuses),
             .masses = dynamic_cast<const ImportedParticleMemory&>(memory.masses)};
@@ -91,15 +91,22 @@ auto SphSimulation::toInternalBuffer(const ParticlesDataBuffer& memory) -> Parti
 
 void SphSimulation::update(float deltaTime)
 {
-    computeExternalForces(deltaTime);
+    halfKickVelocities(deltaTime / 2.F);
+    updatePositions(deltaTime);
+
     resetGrid();
     assignParticlesToCells();
     sortParticles();
     calculateCellStartAndEndIndices();
+
     computeDensities();
-    computePressureForce(deltaTime);
-    computeViscosityForce(deltaTime);
-    integrateMotion(deltaTime);
+
+    computeExternalAccelerations();
+    computePressureAccelerations();
+    computeViscosityAccelerations();
+    computeSurfaceTensionAccelerations();
+
+    halfKickVelocities(deltaTime / 2.F);
     handleCollisions();
 
     cudaDeviceSynchronize();
@@ -112,7 +119,7 @@ auto SphSimulation::createGrid(const Parameters& data, size_t particleCapacity) 
     int32_t* cellStartIndices {};
     int32_t* cellEndIndices {};
 
-    const auto gridCellWidth = 2 * data.baseSmoothingRadius;
+    const auto gridCellWidth = 2 * data.baseSmoothingRadius * device::constant::wendlandRangeRatio;
     const auto gridCellCount = glm::ivec3 {glm::ceil((data.domain.max - data.domain.min) / gridCellWidth)};
 
     cudaMalloc(&particleIndices, particleCapacity * sizeof(int32_t));
@@ -150,13 +157,10 @@ auto SphSimulation::getParticles() const -> ParticlesData
 {
     return {
         .positions = _particleBuffer.positions.getData<std::remove_pointer_t<decltype(ParticlesData::positions)>>(),
-        .predictedPositions = _particleBuffer.predictedPositions
-                                  .getData<std::remove_pointer_t<decltype(ParticlesData::predictedPositions)>>(),
         .velocities = _particleBuffer.velocities.getData<std::remove_pointer_t<decltype(ParticlesData::velocities)>>(),
+        .accelerations =
+            _particleBuffer.accelerations.getData<std::remove_pointer_t<decltype(ParticlesData::accelerations)>>(),
         .densities = _particleBuffer.densities.getData<std::remove_pointer_t<decltype(ParticlesData::densities)>>(),
-        .nearDensities =
-            _particleBuffer.nearDensities.getData<std::remove_pointer_t<decltype(ParticlesData::nearDensities)>>(),
-        .pressures = _particleBuffer.pressures.getData<std::remove_pointer_t<decltype(ParticlesData::pressures)>>(),
         .radiuses = _particleBuffer.radiuses.getData<std::remove_pointer_t<decltype(ParticlesData::radiuses)>>(),
         .smoothingRadiuses = _particleBuffer.smoothingRadiuses
                                  .getData<std::remove_pointer_t<decltype(ParticlesData::smoothingRadiuses)>>(),
@@ -164,11 +168,11 @@ auto SphSimulation::getParticles() const -> ParticlesData
         .particleCount = _particleCount};
 }
 
-void SphSimulation::computeExternalForces(float deltaTime) const
+void SphSimulation::computeExternalAccelerations() const
 {
-    kernel::computeExternalForces<<<getBlocksPerGridForParticles(), _simulationData.threadsPerBlock>>>(getParticles(),
-                                                                                                       _simulationData,
-                                                                                                       deltaTime);
+    kernel::computeExternalAccelerations<<<getBlocksPerGridForParticles(), _simulationData.threadsPerBlock>>>(
+        getParticles(),
+        _simulationData);
 }
 
 void SphSimulation::resetGrid() const
@@ -206,33 +210,46 @@ void SphSimulation::computeDensities() const
                                                                                                   _simulationData);
 }
 
-void SphSimulation::computePressureForce(float deltaTime) const
+void SphSimulation::computePressureAccelerations() const
 {
-    kernel::computePressureForce<<<getBlocksPerGridForParticles(), _simulationData.threadsPerBlock>>>(getParticles(),
-                                                                                                      _grid,
-                                                                                                      _simulationData,
-                                                                                                      deltaTime);
+    kernel::computePressureAccelerations<<<getBlocksPerGridForParticles(), _simulationData.threadsPerBlock>>>(
+        getParticles(),
+        _grid,
+        _simulationData);
 }
 
-void SphSimulation::computeViscosityForce(float deltaTime) const
+void SphSimulation::computeViscosityAccelerations() const
 {
-    kernel::computeViscosityForce<<<getBlocksPerGridForParticles(), _simulationData.threadsPerBlock>>>(getParticles(),
-                                                                                                       _grid,
-                                                                                                       _simulationData,
-                                                                                                       deltaTime);
+    kernel::computeViscosityAccelerations<<<getBlocksPerGridForParticles(), _simulationData.threadsPerBlock>>>(
+        getParticles(),
+        _grid,
+        _simulationData);
 }
 
-void SphSimulation::integrateMotion(float deltaTime) const
+void SphSimulation::computeSurfaceTensionAccelerations() const
 {
-    kernel::integrateMotion<<<getBlocksPerGridForParticles(), _simulationData.threadsPerBlock>>>(getParticles(),
-                                                                                                 _simulationData,
-                                                                                                 deltaTime);
+    kernel::computeSurfaceTensionAccelerations<<<getBlocksPerGridForParticles(), _simulationData.threadsPerBlock>>>(
+        getParticles(),
+        _grid,
+        _simulationData);
 }
 
 void SphSimulation::handleCollisions() const
 {
     kernel::handleCollisions<<<getBlocksPerGridForParticles(), _simulationData.threadsPerBlock>>>(getParticles(),
                                                                                                   _simulationData);
+}
+
+void SphSimulation::halfKickVelocities(float halfDt) const
+{
+    kernel::halfKickVelocities<<<getBlocksPerGridForParticles(), _simulationData.threadsPerBlock>>>(getParticles(),
+                                                                                                    _simulationData,
+                                                                                                    halfDt);
+}
+
+void SphSimulation::updatePositions(float dt) const
+{
+    kernel::updatePositions<<<getBlocksPerGridForParticles(), _simulationData.threadsPerBlock>>>(getParticles(), dt);
 }
 
 auto SphSimulation::calculateAverageNeighborCount() const -> float
@@ -256,7 +273,7 @@ auto SphSimulation::getDensityInfo(float threshold) const -> DensityInfo
         getParticles().densities + getParticlesCount(),
         [threshold, restDensity = _simulationData.restDensity] __device__(const float density) -> DensityInfo {
             const auto ratio = density / restDensity - 1.0F;
-            return DensityInfo {.restDensity = density,
+            return DensityInfo {.restDensity = restDensity,
                                 .minDensity = density,
                                 .maxDensity = density,
                                 .averageDensity = density,

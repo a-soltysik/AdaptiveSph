@@ -40,6 +40,7 @@
 #include "ui/SimulationDataGui.hpp"
 #include "utils/Configuration.hpp"
 #include "utils/FrameTimeManager.hpp"
+#include "utils/TaskScheduler.hpp"
 
 namespace
 {
@@ -135,11 +136,7 @@ auto App::run() -> int
         std::make_unique<Window>(glm::uvec2 {defaultWidth, defaultHeight}, std::string {config::project_name}.data());
     _api = std::make_unique<panda::gfx::Context>(*_window);
 
-    auto redTexture = panda::gfx::Texture::getDefaultTexture(*_api, {1, 0, 0, 1});
-
     _scene = std::make_unique<panda::gfx::Scene>();
-
-    _api->registerTexture(std::move(redTexture));
 
     setDefaultScene(simulationParameters, initialParameters);
 
@@ -155,7 +152,8 @@ auto App::run() -> int
                                                return std::nullopt;
                                            })
                                            .value_or(initialParameters.getScalarCount())),
-        config.refinementParameters);
+        config.refinementParameters,
+        initialParameters.getScalarCount());
 
     mainLoop();
     return 0;
@@ -185,6 +183,17 @@ auto App::mainLoop() const -> void
     auto gui = SimulationDataGui {};
 
     auto timeManager = utils::FrameTimeManager {};
+    auto taskScheduler = utils::TaskScheduler {};
+    taskScheduler.addTask(std::make_unique<utils::PerTimeTask>(
+        [&gui, this] {
+            gui.setAverageNeighbourCount(_simulation->calculateAverageNeighborCount());
+        },
+        std::chrono::seconds {1}));
+    taskScheduler.addTask(std::make_unique<utils::PerTimeTask>(
+        [&gui, this] {
+            gui.setDensityInfo(_simulation->getDensityInfo(0.1F));
+        },
+        std::chrono::seconds {1}));
     const std::vector densityDeviations(_simulation->getParticlesCount(), 0.F);
     while (!_window->shouldClose()) [[likely]]
     {
@@ -194,9 +203,8 @@ auto App::mainLoop() const -> void
             _window->processInput();
 
             timeManager.update();
-            _simulation->update(timeManager.getDelta());
-            gui.setAverageNeighbourCount(_simulation->calculateAverageNeighborCount());
-            gui.setDensityInfo(_simulation->getDensityInfo(0.1F));
+            _simulation->update(0.0002F);
+            taskScheduler.update(std::chrono::milliseconds {static_cast<uint32_t>(timeManager.getDelta() * 1000)}, 1);
             _scene->setParticleCount(_simulation->getParticlesCount());
             _scene->getCamera().setPerspectiveProjection(
                 panda::gfx::projection::Perspective {.fovY = glm::radians(50.F),
@@ -252,7 +260,7 @@ void App::setDefaultScene(const cuda::Simulation::Parameters& simulationParamete
 
 void App::createDomainBoundaries(cuda::Simulation::Parameters::Domain domain) const
 {
-    auto blueTexture = panda::gfx::Texture::getDefaultTexture(*_api, {0, 0, 1, 0.3F});
+    auto blueTexture = panda::gfx::Texture::getDefaultTexture(*_api, {0.25, 0.25, 0.3, 1.F});
     auto invertedCubeMesh = mesh::inverted_cube::create(*_api, "InvertedCube");
 
     auto& object = _scene->setDomain("Domain",

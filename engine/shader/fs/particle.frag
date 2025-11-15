@@ -124,7 +124,7 @@ void main() {
         totalLight += calculateSpotLight(ubo.spotLights[i], normal, intersectionPoint);
     }
 
-    outColor = vec4(getSpeedColor(length(velocity), 0.F, 5.F)) * vec4(totalLight, 1.0);
+    outColor = vec4(getSpeedColor(length(velocity), 0.F, 10.F)) * vec4(totalLight, 1.0);
 }
 
 bool raySphereIntersection(vec3 rayOrigin, vec3 rayDir, vec3 sphereCenter, float radius, out vec3 intersectionPoint, out vec3 normal) {

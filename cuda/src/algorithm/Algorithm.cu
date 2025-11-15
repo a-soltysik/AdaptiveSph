@@ -1,6 +1,5 @@
 #include <device_atomic_functions.h>
 
-#include <cmath>
 #include <cstdint>
 #include <cuda/Simulation.cuh>
 #include <glm/exponential.hpp>
@@ -49,7 +48,7 @@ __global__ void assignParticlesToCells(ParticlesData particles,
     if (idx < particles.particleCount)
     {
         grid.particleArrayIndices[idx] = idx;
-        const auto cellPosition = calculateCellIndex(particles.predictedPositions[idx], simulationData, grid);
+        const auto cellPosition = calculateCellIndex(particles.positions[idx], simulationData, grid);
         const auto cellIndex = flattenCellIndex(cellPosition, grid.gridSize);
         grid.particleGridIndices[idx] = cellIndex;
     }
@@ -94,22 +93,22 @@ __global__ void computeDensities(ParticlesData particles,
         return;
     }
 
-    const auto position = particles.predictedPositions[idx];
+    const auto position = particles.positions[idx];
     const auto smoothingRadius = particles.smoothingRadiuses[idx];
-    auto density = 0.F;
-    auto nearDensity = 0.F;
+    auto density = float {};
 
     forEachNeighbour(position,
-                     particles,
-                     simulationData,
+                     particles.positions,
+                     simulationData.domain,
                      grid,
-                     smoothingRadius,
-                     [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
-                         const auto offsetToNeighbour = adjustedPos - position;
+                     device::constant::wendlandRangeRatio * smoothingRadius,
+                     [position, &particles, &density](const auto neighbourIdx, const auto neighborPosition) {
+                         const auto offsetToNeighbour = neighborPosition - position;
                          const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
 
                          const auto neighbourSmoothingRadius = particles.smoothingRadiuses[neighbourIdx];
-                         const auto radiusSquared = neighbourSmoothingRadius * neighbourSmoothingRadius;
+                         const auto radiusSquared = (device::constant::wendlandRangeRatio * neighbourSmoothingRadius) *
+                                                    (device::constant::wendlandRangeRatio * neighbourSmoothingRadius);
 
                          if (distanceSquared > radiusSquared)
                          {
@@ -119,86 +118,79 @@ __global__ void computeDensities(ParticlesData particles,
                          const auto distance = glm::sqrt(distanceSquared);
                          const auto neighbourMass = particles.masses[neighbourIdx];
 
-                         density += neighbourMass * device::densityKernel(distance, neighbourSmoothingRadius);
-                         nearDensity += neighbourMass * device::nearDensityKernel(distance, neighbourSmoothingRadius);
+                         density += neighbourMass * device::wendlandKernel(distance, neighbourSmoothingRadius);
                      });
 
     particles.densities[idx] = density;
-    particles.nearDensities[idx] = nearDensity;
 }
 
-__global__ void computePressureForce(ParticlesData particles,
-                                     SphSimulation::Grid grid,
-                                     Simulation::Parameters simulationData,
-                                     float dt)
+__device__ auto computeTaitPressure(float density, float restDensity, float speedOfSound) -> float
+{
+    static constexpr auto gamma = 7.F;
+    const auto B = restDensity * speedOfSound * speedOfSound / gamma;
+    const auto densityRatio = density / restDensity;
+    return B * (powf(densityRatio, gamma) - 1.F);
+}
+
+__global__ void computePressureAccelerations(ParticlesData particles,
+                                             SphSimulation::Grid grid,
+                                             Simulation::Parameters simulationData)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx >= particles.particleCount)
     {
         return;
     }
-    const auto position = particles.predictedPositions[idx];
+    const auto position = particles.positions[idx];
     const auto density = particles.densities[idx];
-    const auto nearDensity = particles.nearDensities[idx];
-    const auto pressure = (density - simulationData.restDensity) * simulationData.pressureConstant;
-    const auto nearPressure = nearDensity * simulationData.nearPressureConstant;
     const auto smoothingRadius = particles.smoothingRadiuses[idx];
+    const auto pressure = computeTaitPressure(density, simulationData.restDensity, simulationData.speedOfSound);
 
-    auto pressureForce = glm::vec4 {};
+    auto acceleration = glm::vec4 {};
 
-    forEachNeighbour(position,
-                     particles,
-                     simulationData,
-                     grid,
-                     smoothingRadius,
-                     [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
-                         if (neighbourIdx == idx)
-                         {
-                             return;
-                         }
+    forEachNeighbour(
+        position,
+        particles.positions,
+        simulationData.domain,
+        grid,
+        device::constant::wendlandRangeRatio * smoothingRadius,
+        [position, &particles, &simulationData, pressure, density, &acceleration, idx](const auto neighbourIdx,
+                                                                                       const auto neighborPosition) {
+            if (neighbourIdx == idx)
+            {
+                return;
+            }
 
-                         const auto offsetToNeighbour = adjustedPos - position;
-                         const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
-                         const auto neighbourSmoothingRadius = particles.smoothingRadiuses[neighbourIdx];
-                         const auto radiusSquared = neighbourSmoothingRadius * neighbourSmoothingRadius;
+            const auto offsetToNeighbour = position - neighborPosition;
+            const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
+            const auto neighbourSmoothingRadius = particles.smoothingRadiuses[neighbourIdx];
+            const auto radiusSquared = (device::constant::wendlandRangeRatio * neighbourSmoothingRadius) *
+                                       (device::constant::wendlandRangeRatio * neighbourSmoothingRadius);
 
-                         if (distanceSquared > radiusSquared)
-                         {
-                             return;
-                         }
-                         const auto densityNeighbour = particles.densities[neighbourIdx];
-                         const auto nearDensityNeighbour = particles.nearDensities[neighbourIdx];
-                         const auto pressureNeighbour =
-                             (densityNeighbour - simulationData.restDensity) * simulationData.pressureConstant;
-                         const auto nearPressureNeighbour = nearDensityNeighbour * simulationData.nearPressureConstant;
+            if (distanceSquared > radiusSquared)
+            {
+                return;
+            }
+            const auto densityNeighbor = particles.densities[neighbourIdx];
+            const auto distance = glm::sqrt(distanceSquared);
+            const auto direction = distance > 0.F ? offsetToNeighbour / distance : glm::vec4(0.F, 1.F, 0.F, 0.F);
+            const auto pressureNeighbor =
+                computeTaitPressure(densityNeighbor, simulationData.restDensity, simulationData.speedOfSound);
 
-                         const auto sharedPressure = (pressure + pressureNeighbour) / 2.F;
-                         const auto sharedNearPressure = (nearPressure + nearPressureNeighbour) / 2.F;
+            const auto neighbourMass = particles.masses[neighbourIdx];
 
-                         const auto distance = glm::sqrt(distanceSquared);
-                         const auto direction =
-                             distance > 0.F ? offsetToNeighbour / distance : glm::vec4(0.F, 1.F, 0.F, 0.F);
+            const auto pressureTerm =
+                pressure / (density * density) + (pressureNeighbor / (densityNeighbor * densityNeighbor));
+            acceleration -= neighbourMass * direction *
+                            device::wendlandDerivativeKernel(distance, neighbourSmoothingRadius) * pressureTerm;
+        });
 
-                         const auto neighbourMass = particles.masses[neighbourIdx];
-
-                         pressureForce += neighbourMass * direction *
-                                          device::densityDerivativeKernel(distance, neighbourSmoothingRadius) *
-                                          sharedPressure / densityNeighbour;
-                         pressureForce += neighbourMass * direction *
-                                          device::nearDensityDerivativeKernel(distance, neighbourSmoothingRadius) *
-                                          sharedNearPressure / nearDensityNeighbour;
-                     });
-
-    const auto particleMass = particles.masses[idx];
-    const auto acceleration = (pressureForce / particleMass) / particles.densities[idx];
-
-    particles.velocities[idx] += acceleration * dt;
+    particles.accelerations[idx] += acceleration;
 }
 
-__global__ void computeViscosityForce(ParticlesData particles,
-                                      SphSimulation::Grid grid,
-                                      Simulation::Parameters simulationData,
-                                      float dt)
+__global__ void computeViscosityAccelerations(ParticlesData particles,
+                                              SphSimulation::Grid grid,
+                                              Simulation::Parameters simulationData)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx >= particles.particleCount)
@@ -206,47 +198,67 @@ __global__ void computeViscosityForce(ParticlesData particles,
         return;
     }
 
-    const auto position = particles.predictedPositions[idx];
+    const auto position = particles.positions[idx];
     const auto velocity = particles.velocities[idx];
-
-    auto viscosityForce = glm::vec4 {};
-    const auto radiusSquared = particles.smoothingRadiuses[idx] * particles.smoothingRadiuses[idx];
     const auto smoothingRadius = particles.smoothingRadiuses[idx];
+    const auto density = particles.densities[idx];
 
-    forEachNeighbour(position,
-                     particles,
-                     simulationData,
-                     grid,
-                     smoothingRadius,
-                     [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
-                         if (neighbourIdx == idx)
-                         {
-                             return;
-                         }
+    auto acceleration = glm::vec4 {};
 
-                         const auto offsetToNeighbour = adjustedPos - position;
-                         const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
+    static constexpr auto epsilon = 0.01F;
 
-                         if (distanceSquared > radiusSquared)
-                         {
-                             return;
-                         }
+    forEachNeighbour(
+        position,
+        particles.positions,
+        simulationData.domain,
+        grid,
+        device::constant::wendlandRangeRatio * smoothingRadius,
+        [position, velocity, &particles, &acceleration, &simulationData, density, smoothingRadius, idx](
+            const auto neighborIdx,
+            const auto neighborPosition) {
+            if (neighborIdx == idx)
+            {
+                return;
+            }
 
-                         const auto distance = glm::sqrt(distanceSquared);
-                         const auto neighbourVelocity = particles.velocities[neighbourIdx];
-                         const auto neighbourMass = particles.masses[neighbourIdx];
-                         const auto neighbourDensity = particles.densities[neighbourIdx];
+            const auto offsetToNeighbour = position - neighborPosition;
+            const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
+            const auto neighborSmoothingRadius = particles.smoothingRadiuses[neighborIdx];
+            const auto radiusSquared = (device::constant::wendlandRangeRatio * neighborSmoothingRadius) *
+                                       (device::constant::wendlandRangeRatio * neighborSmoothingRadius);
 
-                         viscosityForce += neighbourMass * (neighbourVelocity - velocity) / neighbourDensity *
-                                           device::viscosityLaplacianKernel(distance, particles.smoothingRadiuses[idx]);
-                     });
+            if (distanceSquared > radiusSquared)
+            {
+                return;
+            }
 
-    const auto particleMass = particles.masses[idx];
-    const auto acceleration = simulationData.viscosityConstant * viscosityForce / particleMass;
-    particles.velocities[idx] += acceleration * dt;
+            const auto neighborVelocity = particles.velocities[neighborIdx];
+            const auto velocityDifference = velocity - neighborVelocity;
+            const auto compression = glm::dot(velocityDifference, offsetToNeighbour);
+            if (compression >= 0.F)
+            {
+                return;
+            }
+
+            const auto distance = glm::sqrt(distanceSquared);
+            const auto neighborMass = particles.masses[neighborIdx];
+            const auto neighborDensity = particles.densities[neighborIdx];
+            const auto nu = 2.F * simulationData.viscosityConstant * smoothingRadius * simulationData.speedOfSound /
+                            (density + neighborDensity);
+
+            const auto pi = -nu * compression / (distanceSquared + epsilon * smoothingRadius * smoothingRadius);
+            const auto direction = distance > 0.F ? offsetToNeighbour / distance : glm::vec4(0.F, 1.F, 0.F, 0.F);
+
+            acceleration -=
+                neighborMass * pi * device::wendlandDerivativeKernel(distance, neighborSmoothingRadius) * direction;
+        });
+
+    particles.accelerations[idx] += acceleration;
 }
 
-__global__ void integrateMotion(ParticlesData particles, Simulation::Parameters simulationData, float dt)
+__global__ void computeSurfaceTensionAccelerations(ParticlesData particles,
+                                                   SphSimulation::Grid grid,
+                                                   Simulation::Parameters simulationData)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx >= particles.particleCount)
@@ -254,12 +266,43 @@ __global__ void integrateMotion(ParticlesData particles, Simulation::Parameters 
         return;
     }
 
-    const auto velocityMagnitude = glm::length(particles.velocities[idx]);
-    if (velocityMagnitude > simulationData.maxVelocity)
-    {
-        particles.velocities[idx] *= simulationData.maxVelocity / velocityMagnitude;
-    }
-    particles.positions[idx] += particles.velocities[idx] * dt;
+    const auto position = particles.positions[idx];
+    const auto smoothingRadius = particles.smoothingRadiuses[idx];
+    const auto mass = particles.masses[idx];
+
+    auto acceleration = glm::vec4 {};
+
+    forEachNeighbour(
+        position,
+        particles.positions,
+        simulationData.domain,
+        grid,
+        device::constant::wendlandRangeRatio * smoothingRadius,
+        [position, &particles, &acceleration, idx](const auto neighborIdx, const glm::vec4& adjustedPos) {
+            if (neighborIdx == idx)
+            {
+                return;
+            }
+
+            const auto offsetToNeighbour = adjustedPos - position;
+            const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
+            const auto neighborSmoothingRadius = particles.smoothingRadiuses[neighborIdx];
+            const auto radiusSquared = (device::constant::wendlandRangeRatio * neighborSmoothingRadius) *
+                                       (device::constant::wendlandRangeRatio * neighborSmoothingRadius);
+
+            if (distanceSquared > radiusSquared)
+            {
+                return;
+            }
+
+            const auto distance = glm::sqrt(distanceSquared);
+            const auto neighborMass = particles.masses[neighborIdx];
+            const auto direction = distance > 0.F ? offsetToNeighbour / distance : glm::vec4(0.F, 1.F, 0.F, 0.F);
+
+            acceleration -= neighborMass * device::wendlandKernel(distance, neighborSmoothingRadius) * direction;
+        });
+
+    particles.accelerations[idx] += (simulationData.surfaceTensionConstant / mass) * acceleration;
 }
 
 __device__ void handleCollision(ParticlesData particles, uint32_t id, const Simulation::Parameters& simulationData)
@@ -291,7 +334,7 @@ __device__ void handleStandardBoundariesForAxis(ParticlesData particles,
     }
 }
 
-__global__ void computeExternalForces(ParticlesData particles, Simulation::Parameters simulationData, float deltaTime)
+__global__ void computeExternalAccelerations(ParticlesData particles, Simulation::Parameters simulationData)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx >= particles.particleCount)
@@ -299,8 +342,7 @@ __global__ void computeExternalForces(ParticlesData particles, Simulation::Param
         return;
     }
 
-    particles.velocities[idx] += glm::vec4 {simulationData.gravity, 0.F} * deltaTime;
-    particles.predictedPositions[idx] = particles.positions[idx] + particles.velocities[idx] * deltaTime;
+    particles.accelerations[idx] = glm::vec4 {simulationData.gravity, 0.F};
 }
 
 __global__ void sumAllNeighbors(ParticlesData particles,
@@ -314,23 +356,25 @@ __global__ void sumAllNeighbors(ParticlesData particles,
         return;
     }
     const auto position = particles.positions[idx];
-    const auto radiusSquared = particles.smoothingRadiuses[idx] * particles.smoothingRadiuses[idx];
     const auto smoothingRadius = particles.smoothingRadiuses[idx];
     auto count = uint32_t {0};
 
     forEachNeighbour(position,
-                     particles,
-                     simulationData,
+                     particles.positions,
+                     simulationData.domain,
                      grid,
-                     smoothingRadius,
-                     [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
-                         if (idx == neighbourIdx)
+                     device::constant::wendlandRangeRatio * smoothingRadius,
+                     [position, &particles, &count, idx](const auto neighborIdx, const glm::vec4& adjustedPos) {
+                         if (idx == neighborIdx)
                          {
                              return;
                          }
 
                          const auto offsetToNeighbour = adjustedPos - position;
                          const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
+                         const auto neighborSmoothingRadius = particles.smoothingRadiuses[neighborIdx];
+                         const auto radiusSquared = (device::constant::wendlandRangeRatio * neighborSmoothingRadius) *
+                                                    (device::constant::wendlandRangeRatio * neighborSmoothingRadius);
 
                          if (distanceSquared <= radiusSquared)
                          {
@@ -340,4 +384,31 @@ __global__ void sumAllNeighbors(ParticlesData particles,
 
     atomicAdd(totalNeighborCount, count);
 }
+
+__global__ void halfKickVelocities(ParticlesData particles, Simulation::Parameters simulationData, float halfDt)
+{
+    const auto idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= particles.particleCount)
+    {
+        return;
+    }
+    particles.velocities[idx] += particles.accelerations[idx] * halfDt;
+
+    const auto velocityMagnitude = glm::length(particles.velocities[idx]);
+    if (velocityMagnitude > simulationData.maxVelocity)
+    {
+        particles.velocities[idx] *= simulationData.maxVelocity / velocityMagnitude;
+    }
+}
+
+__global__ void updatePositions(ParticlesData particles, float dt)
+{
+    const auto idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= particles.particleCount)
+    {
+        return;
+    }
+    particles.positions[idx] += particles.velocities[idx] * dt;
+}
+
 }

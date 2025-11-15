@@ -54,11 +54,9 @@ protected:
     struct ParticlesInternalDataBuffer
     {
         const ImportedParticleMemory& positions;
-        const ImportedParticleMemory& predictedPositions;
         const ImportedParticleMemory& velocities;
+        const ImportedParticleMemory& accelerations;
         const ImportedParticleMemory& densities;
-        const ImportedParticleMemory& nearDensities;
-        const ImportedParticleMemory& pressures;
         const ImportedParticleMemory& radiuses;
         const ImportedParticleMemory& smoothingRadiuses;
         const ImportedParticleMemory& masses;
@@ -102,16 +100,18 @@ protected:
     [[nodiscard]] auto getBlocksPerGridForParticles() const -> dim3;
     [[nodiscard]] auto getBlocksPerGridForGrid() const -> dim3;
 
-    void computeExternalForces(float deltaTime) const;
+    void computeExternalAccelerations() const;
     void resetGrid() const;
     void assignParticlesToCells() const;
     void sortParticles() const;
     void calculateCellStartAndEndIndices() const;
     void computeDensities() const;
-    void computePressureForce(float deltaTime) const;
-    void computeViscosityForce(float deltaTime) const;
-    void integrateMotion(float deltaTime) const;
+    void computePressureAccelerations() const;
+    void computeViscosityAccelerations() const;
+    void computeSurfaceTensionAccelerations() const;
     void handleCollisions() const;
+    void halfKickVelocities(float halfDt) const;
+    void updatePositions(float deltaTime) const;
 
 private:
     ParticlesInternalDataBuffer _particleBuffer;
