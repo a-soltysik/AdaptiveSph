@@ -4,9 +4,7 @@
 #include "panda/utils/Assert.h" // NOLINT(misc-include-cleaner)
 // clang-format on
 
-#include <cstddef>
 #include <cuda/Simulation.cuh>
-#include <glm/ext/vector_float3.hpp>
 #include <memory>
 #include <type_traits>
 #include <vulkan/vulkan.hpp>
@@ -51,11 +49,9 @@ private:
     struct ParticlesDataBuffer
     {
         SharedBuffer positions;
-        SharedBuffer predictedPositions;
         SharedBuffer velocities;
+        SharedBuffer accelerations;
         SharedBuffer densities;
-        SharedBuffer nearDensities;
-        SharedBuffer pressures;
         SharedBuffer radiuses;
         SharedBuffer smoothingRadiuses;
         SharedBuffer masses;

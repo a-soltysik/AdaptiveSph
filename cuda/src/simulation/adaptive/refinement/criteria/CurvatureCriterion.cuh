@@ -66,8 +66,8 @@ inline __device__ auto SplitCriterionGenerator::operator()(ParticlesData particl
     auto validNeighbors = uint32_t {};
 
     forEachNeighbour(position,
-                     particles,
-                     simulationData,
+                     particles.positions,
+                     simulationData.domain,
                      grid,
                      smoothingRadius,
                      [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
@@ -82,7 +82,7 @@ inline __device__ auto SplitCriterionGenerator::operator()(ParticlesData particl
                          {
                              const auto neighborDensity = particles.densities[neighbourIdx];
                              const auto densityDiff = neighborDensity - density;
-                             const auto lapW = device::densityLaplacianKernel(dist, smoothingRadius);
+                             const auto lapW = device::wendlandLaplacianKernel(dist, smoothingRadius);
                              const auto weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
                              densityLaplacian += weight * densityDiff * lapW;
                              totalWeight += weight * lapW;
@@ -126,8 +126,8 @@ inline __device__ auto MergeCriterionGenerator::operator()(ParticlesData particl
     auto totalWeight = 0.F;
     auto validNeighbors = uint32_t {};
     forEachNeighbour(position,
-                     particles,
-                     simulationData,
+                     particles.positions,
+                     simulationData.domain,
                      grid,
                      smoothingRadius,
                      [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
@@ -143,7 +143,7 @@ inline __device__ auto MergeCriterionGenerator::operator()(ParticlesData particl
                              const auto neighborDensity = particles.densities[neighbourIdx];
                              const auto densityDiff = neighborDensity - density;
 
-                             const auto lapW = device::densityLaplacianKernel(dist, smoothingRadius);
+                             const auto lapW = device::wendlandLaplacianKernel(dist, smoothingRadius);
                              const auto weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
                              densityLaplacian += weight * densityDiff * lapW;
                              totalWeight += weight * glm::abs(lapW);

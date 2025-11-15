@@ -13,19 +13,17 @@ namespace sph::cuda
 
 template <typename Func>
 __device__ void forEachNeighbour(glm::vec4 position,
-                                 const ParticlesData& particles,
-                                 const SphSimulation::Parameters& simulationData,
+                                 const glm::vec4* positions,
+                                 const SphSimulation::Parameters::Domain& domain,
                                  const SphSimulation::Grid& grid,
                                  float smoothingRadius,
                                  Func&& func)
 {
-    const auto min =
-        glm::max(glm::ivec3 {(glm::vec3 {position} - simulationData.domain.min - smoothingRadius) / grid.cellSize},
-                 glm::ivec3 {0, 0, 0});
+    const auto min = glm::max(glm::ivec3 {(glm::vec3 {position} - domain.min - smoothingRadius) / grid.cellSize},
+                              glm::ivec3 {0, 0, 0});
 
     const auto max =
-        glm::min(glm::ivec3 {(glm::vec3 {position} - simulationData.domain.min + smoothingRadius) / grid.cellSize},
-                 grid.gridSize - 1);
+        glm::min(glm::ivec3 {(glm::vec3 {position} - domain.min + smoothingRadius) / grid.cellSize}, grid.gridSize - 1);
 
     for (auto x = min.x; x <= max.x; x++)
     {
@@ -45,11 +43,12 @@ __device__ void forEachNeighbour(glm::vec4 position,
                 for (auto i = startIdx; i <= endIdx; i++)
                 {
                     const auto neighborIdx = grid.particleArrayIndices[i];
-                    const auto neighborPos = particles.predictedPositions[neighborIdx];
+                    const auto neighborPos = positions[neighborIdx];
                     func(neighborIdx, neighborPos);
                 }
             }
         }
     }
 }
+
 }

@@ -53,26 +53,17 @@ __device__ auto calculateMergedSmoothingLength(std::pair<glm::vec4, glm::vec4> p
                                                std::pair<float, float> masses,
                                                std::pair<float, float> smoothingRadiuses,
                                                glm::vec4 mergedPos,
-                                               float mergedMass,
-                                               float weightNormal = 0.7F,
-                                               float weightNear = 0.3F) -> float
+                                               float mergedMass) -> float
 {
     const auto distances = std::pair {glm::length(glm::vec3 {positions.first - mergedPos}),
                                       glm::length(glm::vec3 {positions.second - mergedPos})};
 
-    const auto kernelValues = std::pair {device::densityKernel(distances.first, smoothingRadiuses.first),
-                                         device::densityKernel(distances.second, smoothingRadiuses.second)};
+    const auto kernelValues = std::pair {device::wendlandKernel(distances.first, smoothingRadiuses.first),
+                                         device::wendlandKernel(distances.second, smoothingRadiuses.second)};
 
     const auto denomNormal = (masses.first * kernelValues.first) + (masses.second * kernelValues.second);
 
-    const auto nearKernelValues = std::pair {device::nearDensityKernel(distances.first, smoothingRadiuses.first),
-                                             device::nearDensityKernel(distances.second, smoothingRadiuses.second)};
-    const auto denomNear = (masses.first * nearKernelValues.first) + (masses.second * nearKernelValues.second);
-
-    const auto normalSmoothingRadius = std::cbrt((16.0F * glm::pi<float>() * mergedMass) / (21.F * denomNormal));
-    const auto nearSmoothingRadius = std::cbrt((15.0F * mergedMass) / (glm::pi<float>() * denomNear));
-
-    return ((weightNormal * normalSmoothingRadius) + (weightNear * nearSmoothingRadius));
+    return std::cbrt((16.0F * glm::pi<float>() * mergedMass) / (21.F * denomNormal));
 }
 
 __global__ void splitParticles(ParticlesData particles,
@@ -96,6 +87,7 @@ __global__ void splitParticles(ParticlesData particles,
     }
     const auto originalPosition = particles.positions[particleIdx];
     const auto originalVelocity = particles.velocities[particleIdx];
+    const auto originalAcceleration = particles.accelerations[particleIdx];
     const auto originalMass = particles.masses[particleIdx];
     const auto originalRadius = particles.radiuses[particleIdx];
     const auto originalSmoothingLength = particles.smoothingRadiuses[particleIdx];
@@ -114,15 +106,13 @@ __global__ void splitParticles(ParticlesData particles,
 
         const auto offset = icosahedronVertices[i] * params.epsilon * originalSmoothingLength;
         particles.positions[newIdx] = originalPosition + glm::vec4(offset.x, offset.y, offset.z, 0.0F);
-        particles.predictedPositions[newIdx] = particles.positions[newIdx];
         particles.velocities[newIdx] = originalVelocity;
+        particles.accelerations[newIdx] = originalAcceleration;
         particles.masses[newIdx] = daughterMass;
         particles.radiuses[newIdx] = newRadius;
         particles.smoothingRadiuses[newIdx] = newSmoothingLength;
 
         particles.densities[newIdx] = 0.0F;
-        particles.nearDensities[newIdx] = 0.0F;
-        particles.pressures[newIdx] = 0.0F;
     }
 }
 
@@ -150,14 +140,12 @@ __global__ void compactParticles(ParticlesData particles, RefinementDataView ref
         const auto newIdx = idx - refinementData.merge.prefixSums[idx];
 
         particles.positions[newIdx] = particles.positions[idx];
-        particles.predictedPositions[newIdx] = particles.predictedPositions[idx];
         particles.velocities[newIdx] = particles.velocities[idx];
+        particles.accelerations[newIdx] = particles.accelerations[idx];
         particles.masses[newIdx] = particles.masses[idx];
         particles.radiuses[newIdx] = particles.radiuses[idx];
         particles.smoothingRadiuses[newIdx] = particles.smoothingRadiuses[idx];
         particles.densities[newIdx] = particles.densities[idx];
-        particles.nearDensities[newIdx] = particles.nearDensities[idx];
-        particles.pressures[newIdx] = particles.pressures[idx];
     }
 
     if (blockIdx.x == 0 && threadIdx.x == 0)
@@ -187,8 +175,8 @@ __global__ void identifyMergeCandidates(ParticlesData particles,
     auto closestIdx = UINT_MAX;
 
     forEachNeighbour(position,
-                     particles,
-                     simulationData,
+                     particles.positions,
+                     simulationData.domain,
                      grid,
                      smoothingRadius,
                      [&](const auto neighborIdx, const glm::vec4& adjustedPos) {
@@ -273,14 +261,16 @@ __global__ void performMerges(ParticlesData particles,
     const auto smoothingRadiuses =
         std::pair {particles.smoothingRadiuses[keepIdx], particles.smoothingRadiuses[removeIdx]};
     const auto velocities = std::pair {particles.velocities[keepIdx], particles.velocities[removeIdx]};
+    const auto accelerations = std::pair {particles.accelerations[keepIdx], particles.accelerations[removeIdx]};
 
     const auto newMass = masses.first + masses.second;
     const auto newPos = (masses.first * positions.first + masses.second * positions.second) / newMass;
     const auto newVel = (masses.first * velocities.first + masses.second * velocities.second) / newMass;
+    const auto newAcc = (masses.first * accelerations.first + masses.second * accelerations.second) / newMass;
 
     particles.positions[keepIdx] = newPos;
-    particles.predictedPositions[keepIdx] = newPos;
     particles.velocities[keepIdx] = newVel;
+    particles.accelerations[keepIdx] = newAcc;
     particles.masses[keepIdx] = newMass;
     particles.radiuses[keepIdx] =
         simulationData.baseParticleRadius * std::cbrt(newMass / simulationData.baseParticleMass);
@@ -288,8 +278,6 @@ __global__ void performMerges(ParticlesData particles,
         calculateMergedSmoothingLength(positions, masses, smoothingRadiuses, newPos, newMass);
 
     particles.densities[keepIdx] = 0.0F;
-    particles.nearDensities[keepIdx] = 0.0F;
-    particles.pressures[keepIdx] = 0.0F;
 }
 
 }

@@ -74,8 +74,8 @@ inline __device__ auto SplitCriterionGenerator::operator()(ParticlesData particl
     auto validNeighbors = 0;
 
     forEachNeighbour(position,
-                     particles,
-                     simulationData,
+                     particles.positions,
+                     simulationData.domain,
                      grid,
                      smoothingRadius,
                      [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
@@ -90,7 +90,7 @@ inline __device__ auto SplitCriterionGenerator::operator()(ParticlesData particl
                          {
                              const auto neighborVel = particles.velocities[neighbourIdx];
                              const auto velDiff = glm::vec3(neighborVel - particles.velocities[id]);
-                             const auto gradW = device::densityDerivativeKernel(dist, smoothingRadius);
+                             const auto gradW = device::wendlandDerivativeKernel(dist, smoothingRadius);
                              const auto weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
                              const auto gradDir = r / dist;
 
@@ -157,8 +157,8 @@ inline __device__ auto MergeCriterionGenerator::operator()(ParticlesData particl
     auto totalWeight = 0.0F;
     auto validNeighbors = uint32_t {};
     forEachNeighbour(position,
-                     particles,
-                     simulationData,
+                     particles.positions,
+                     simulationData.domain,
                      grid,
                      smoothingRadius,
                      [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
@@ -173,7 +173,7 @@ inline __device__ auto MergeCriterionGenerator::operator()(ParticlesData particl
                          {
                              const auto neighborVel = particles.velocities[neighbourIdx];
                              const auto velDiff = glm::vec3(neighborVel - particles.velocities[id]);
-                             const auto gradW = device::densityDerivativeKernel(dist, smoothingRadius);
+                             const auto gradW = device::wendlandDerivativeKernel(dist, smoothingRadius);
                              const auto weight = particles.masses[neighbourIdx] / particles.densities[neighbourIdx];
                              const auto gradDir = r / dist;
                              dvx_dx += weight * velDiff.x * gradDir.x * gradW;

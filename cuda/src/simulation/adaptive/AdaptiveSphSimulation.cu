@@ -49,17 +49,16 @@ AdaptiveSphSimulation::AdaptiveSphSimulation(const Parameters& initialParameters
 {
 }
 
-void AdaptiveSphSimulation::update(float deltaTime)
+void AdaptiveSphSimulation::update([[maybe_unused]] float deltaTime)
 {
-    computeExternalForces(deltaTime);
+    computeExternalAccelerations();
     resetGrid();
     assignParticlesToCells();
     sortParticles();
     calculateCellStartAndEndIndices();
     computeDensities();
-    computePressureForce(deltaTime);
-    computeViscosityForce(deltaTime);
-    integrateMotion(deltaTime);
+    computePressureAccelerations();
+    computeViscosityAccelerations();
 
     if (_frameCounter == _refinementParams.initialCooldown ||
         (_frameCounter > _refinementParams.initialCooldown && _frameCounter % _refinementParams.cooldown == 0))

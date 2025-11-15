@@ -17,11 +17,9 @@ namespace sph::cuda
 struct ParticlesData
 {
     glm::vec4* positions;
-    glm::vec4* predictedPositions;
     glm::vec4* velocities;
+    glm::vec4* accelerations;
     float* densities;
-    float* nearDensities;
-    float* pressures;
     float* radiuses;
     float* smoothingRadiuses;
     float* masses;
@@ -32,11 +30,9 @@ struct ParticlesData
 struct ParticlesDataBuffer
 {
     const ImportedMemory& positions;
-    const ImportedMemory& predictedPositions;
     const ImportedMemory& velocities;
+    const ImportedMemory& accelerations;
     const ImportedMemory& densities;
-    const ImportedMemory& nearDensities;
-    const ImportedMemory& pressures;
     const ImportedMemory& radiuses;
     const ImportedMemory& smoothingRadiuses;
     const ImportedMemory& masses;
@@ -76,11 +72,11 @@ public:
 
         Domain domain;
         glm::vec3 gravity;
+        float speedOfSound;
         float restDensity;
-        float pressureConstant;
-        float nearPressureConstant;
         float restitution;
         float viscosityConstant;
+        float surfaceTensionConstant;
         float maxVelocity;
         float baseSmoothingRadius;
         float baseParticleRadius;
@@ -114,6 +110,6 @@ public:
 SPH_CUDA_API auto createSimulation(const Simulation::Parameters& parameters,
                                    const std::vector<glm::vec4>& positions,
                                    const ParticlesDataBuffer& memory,
-                                   const std::optional<refinement::RefinementParameters>& refinementParams)
-    -> std::unique_ptr<Simulation>;
+                                   const std::optional<refinement::RefinementParameters>& refinementParams,
+                                   uint32_t initialParticleCount) -> std::unique_ptr<Simulation>;
 }
