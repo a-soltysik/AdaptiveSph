@@ -21,15 +21,20 @@ class DescriptorSetLayout;
 class Device;
 struct FrameInfo;
 
-class ParticleRenderSystem
+class BoundaryParticleRenderSystem
 {
 public:
-    ParticleRenderSystem(const Device& device, vk::RenderPass renderPass, size_t particleCount);
-    PD_DELETE_ALL(ParticleRenderSystem);
-    ~ParticleRenderSystem() noexcept;
+    BoundaryParticleRenderSystem(const Device& device,
+                                 vk::RenderPass renderPass,
+                                 size_t particleCount,
+                                 bool shouldRender);
+    PD_DELETE_ALL(BoundaryParticleRenderSystem);
+    ~BoundaryParticleRenderSystem() noexcept;
 
     auto render(const FrameInfo& frameInfo) const -> void;
-    [[nodiscard]] auto getImportedMemory() const -> sph::cuda::ParticlesDataBuffer;
+    [[nodiscard]] auto getImportedMemory() const -> sph::cuda::BoundaryParticlesDataImportedBuffer;
+    static auto createImportedMemory(const Device& device, size_t particleCount)
+        -> sph::cuda::BoundaryParticlesDataImportedBuffer;
 
 private:
     static auto createPipelineLayout(const Device& device, vk::DescriptorSetLayout setLayout) -> vk::PipelineLayout;
@@ -49,12 +54,8 @@ private:
     struct ParticlesDataBuffer
     {
         SharedBuffer positions;
-        SharedBuffer velocities;
-        SharedBuffer accelerations;
-        SharedBuffer densities;
-        SharedBuffer radiuses;
-        SharedBuffer smoothingRadiuses;
-        SharedBuffer masses;
+        SharedBuffer radii;
+        SharedBuffer colors;
     };
 
     const Device& _device;
@@ -62,6 +63,7 @@ private:
     vk::PipelineLayout _pipelineLayout;
     std::unique_ptr<Pipeline> _pipeline;
     ParticlesDataBuffer _particleBuffer;
+    bool _shouldRender;
 };
 
 }

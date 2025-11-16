@@ -19,11 +19,17 @@ struct InitialParameters
     }
 };
 
+struct RenderingParameters
+{
+    bool renderBoundaryParticles = false;  // Render boundary particles as points (not meshes)
+};
+
 struct Configuration
 {
     std::optional<InitialParameters> initialParameters;
     std::optional<cuda::Simulation::Parameters> simulationParameters;
     std::optional<cuda::refinement::RefinementParameters> refinementParameters;
+    std::optional<RenderingParameters> renderingParameters;
 };
 
 auto loadConfigurationFromFile(const std::string& filePath) -> std::optional<Configuration>;

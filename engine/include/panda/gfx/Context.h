@@ -30,7 +30,8 @@ class Renderer;
 class Scene;
 class Mesh;
 class Texture;
-class ParticleRenderSystem;
+class BoundaryParticleRenderSystem;
+class FluidParticleRenderSystem;
 class RenderSystem;
 
 class Context
@@ -42,7 +43,9 @@ public:
 
     static constexpr auto maxFramesInFlight = size_t {2};
 
-    auto initializeParticleSystem(size_t particleCount) -> sph::cuda::ParticlesDataBuffer;
+    auto initializeParticleSystem(size_t particleCount) -> sph::cuda::FluidParticlesDataImportedBuffer;
+    auto initializeBoundaryParticleSystem(size_t particleCount, bool shouldRender)
+        -> sph::cuda::BoundaryParticlesDataImportedBuffer;
     auto makeFrame(Scene& scene) const -> void;
     [[nodiscard]] auto getDevice() const noexcept -> const Device&;
     auto registerTexture(std::unique_ptr<Texture> texture) -> void;
@@ -81,7 +84,8 @@ private:
     std::unique_ptr<Device> _device;
     std::unique_ptr<Renderer> _renderer;
     std::unique_ptr<RenderSystem> _renderSystem;
-    std::unique_ptr<ParticleRenderSystem> _particleRenderSystem;
+    std::unique_ptr<FluidParticleRenderSystem> _particleRenderSystem;
+    std::unique_ptr<BoundaryParticleRenderSystem> _boundaryParticleRenderSystem;
     std::optional<vk::DebugUtilsMessengerEXT> _debugMessenger;
     std::vector<std::unique_ptr<Texture>> _textures;
     std::vector<std::unique_ptr<Mesh>> _meshes;

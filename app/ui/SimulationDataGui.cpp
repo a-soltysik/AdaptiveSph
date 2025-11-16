@@ -8,6 +8,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <utility>
 
 #include "cuda/Simulation.cuh"
 
@@ -29,7 +30,7 @@ SimulationDataGui::SimulationDataGui()
     });
 }
 
-auto SimulationDataGui::render() const -> void
+auto SimulationDataGui::render() -> void
 {
     static float lastFps = 0.0F;
     static auto lastUpdate = std::chrono::steady_clock::now();
@@ -60,6 +61,7 @@ auto SimulationDataGui::render() const -> void
 
     displayAverageNeighborCount(_averageNeighbourCount);
     displayDensityStatistics(_densityInfo);
+    displayDomainControls();
 }
 
 void SimulationDataGui::displayAverageNeighborCount(float averageNeighbors) const
@@ -114,6 +116,55 @@ auto SimulationDataGui::setAverageNeighbourCount(float neighbourCount) -> void
 void SimulationDataGui::setDensityInfo(const cuda::Simulation::DensityInfo& densityInfo)
 {
     _densityInfo = densityInfo;
+}
+
+void SimulationDataGui::setDomain(const cuda::Simulation::Parameters::Domain& domain)
+{
+    _domain = domain;
+}
+
+void SimulationDataGui::onDomainChanged(DomainChangedCallback callback)
+{
+    _domainChangedCallback = std::move(callback);
+}
+
+void SimulationDataGui::displayDomainControls()
+{
+    ImGui::Begin("Domain Controls");
+
+    auto domainMin = _domain.min;
+    auto domainMax = _domain.max;
+    auto friction = _domain.friction;
+
+    bool domainChanged = false;
+
+    //NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
+    ImGui::Text("Domain Min:");
+    domainChanged |= ImGui::SliderFloat("Min X", &domainMin.x, -10.0F, 0.0F);
+    domainChanged |= ImGui::SliderFloat("Min Y", &domainMin.y, -10.0F, 0.0F);
+    domainChanged |= ImGui::SliderFloat("Min Z", &domainMin.z, -10.0F, 0.0F);
+
+    ImGui::Separator();
+
+    //NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
+    ImGui::Text("Domain Max:");
+    domainChanged |= ImGui::SliderFloat("Max X", &domainMax.x, 0.0F, 10.0F);
+    domainChanged |= ImGui::SliderFloat("Max Y", &domainMax.y, 0.0F, 10.0F);
+    domainChanged |= ImGui::SliderFloat("Max Z", &domainMax.z, 0.0F, 10.0F);
+
+    ImGui::Separator();
+
+    domainChanged |= ImGui::SliderFloat("Friction", &friction, 0.0F, 1.0F);
+
+    if (domainChanged && _domainChangedCallback)
+    {
+        const auto newDomain =
+            cuda::Simulation::Parameters::Domain {.min = domainMin, .max = domainMax, .friction = friction};
+        _domain = newDomain;
+        _domainChangedCallback(newDomain);
+    }
+
+    ImGui::End();
 }
 
 }

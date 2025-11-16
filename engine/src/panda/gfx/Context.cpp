@@ -41,11 +41,12 @@
 #include "panda/gfx/Scene.h"
 #include "panda/gfx/object/Mesh.h"
 #include "panda/gfx/object/Texture.h"
-#include "panda/gfx/systems/ParticleRenderSystem.h"
+#include "panda/gfx/systems/FluidParticleRenderSystem.h"
 #include "panda/internal/config.h"
 #include "panda/utils/Signal.h"
 #include "panda/utils/Signals.h"
 #include "panda/utils/format/gfx/api/ResultFormatter.h"  // NOLINT(misc-include-cleaner)
+#include "systems/BoundaryParticleRenderSystem.hpp"
 #include "systems/RenderSystem.h"
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE  // cppcheck-suppress unknownMacro
@@ -156,12 +157,23 @@ Context::~Context() noexcept
     }
 }
 
-auto Context::initializeParticleSystem(size_t particleCount) -> sph::cuda::ParticlesDataBuffer
+auto Context::initializeParticleSystem(size_t particleCount) -> sph::cuda::FluidParticlesDataImportedBuffer
 {
     _particleRenderSystem =
-        std::make_unique<ParticleRenderSystem>(*_device, _renderer->getSwapChainRenderPass(), particleCount);
+        std::make_unique<FluidParticleRenderSystem>(*_device, _renderer->getSwapChainRenderPass(), particleCount);
 
     return _particleRenderSystem->getImportedMemory();
+}
+
+auto Context::initializeBoundaryParticleSystem(size_t particleCount, bool shouldRender)
+    -> sph::cuda::BoundaryParticlesDataImportedBuffer
+{
+    _boundaryParticleRenderSystem = std::make_unique<BoundaryParticleRenderSystem>(*_device,
+                                                                                   _renderer->getSwapChainRenderPass(),
+                                                                                   particleCount,
+                                                                                   shouldRender);
+
+    return _boundaryParticleRenderSystem->getImportedMemory();
 }
 
 auto Context::createInstance(const Window& window) -> std::unique_ptr<vk::Instance, InstanceDeleter>
@@ -372,6 +384,15 @@ auto Context::makeFrame(Scene& scene) const -> void
                                                  .vertUbo = *_uboVertBuffers[frameIndex],
                                                  .commandBuffer = commandBuffer,
                                                  .frameIndex = frameIndex});
+    }
+
+    if (_boundaryParticleRenderSystem != nullptr)
+    {
+        _boundaryParticleRenderSystem->render(FrameInfo {.scene = scene,
+                                                         .fragUbo = *_uboFragBuffers[frameIndex],
+                                                         .vertUbo = *_uboVertBuffers[frameIndex],
+                                                         .commandBuffer = commandBuffer,
+                                                         .frameIndex = frameIndex});
     }
 
     utils::signals::beginGuiRender.registerSender()(

@@ -40,6 +40,9 @@ public:
     auto setParticleCount(uint32_t count) -> void;
     auto getParticleCount() const -> uint32_t;
 
+    auto setBoundaryParticleCount(uint32_t count) -> void;
+    auto getBoundaryParticleCount() const -> uint32_t;
+
     auto addObject(std::string name, const std::vector<Surface>& surfaces) -> Object&;
     auto removeObjectByName(std::string_view name) -> bool;
     [[nodiscard]] auto findObjectByName(std::string_view name) -> std::optional<Object*>;
@@ -123,6 +126,7 @@ private:
     Lights _lights;
     Camera _camera;
     uint32_t _particleCount = 0;
+    uint32_t _boundaryParticleCount = 0;
 };
 
 }

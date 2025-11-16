@@ -2,7 +2,7 @@
 #include "panda/utils/Assert.h"
 // clang-format on
 
-#include "ParticleRenderSystem.h"
+#include "FluidParticleRenderSystem.h"
 
 #include <cstddef>
 #include <cuda/Simulation.cuh>
@@ -23,7 +23,9 @@
 
 namespace panda::gfx
 {
-ParticleRenderSystem::ParticleRenderSystem(const Device& device, vk::RenderPass renderPass, size_t particleCount)
+FluidParticleRenderSystem::FluidParticleRenderSystem(const Device& device,
+                                                     vk::RenderPass renderPass,
+                                                     size_t particleCount)
     : _device {device},
       _descriptorLayout {DescriptorSetLayout::Builder(_device)
                              .addBinding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eVertex)
@@ -31,50 +33,42 @@ ParticleRenderSystem::ParticleRenderSystem(const Device& device, vk::RenderPass 
                              .addBinding(2, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eVertex)
                              .addBinding(3, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eVertex)
                              .addBinding(4, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eVertex)
-                             .addBinding(5, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eVertex)
                              .build(vk::DescriptorSetLayoutCreateFlagBits::ePushDescriptorKHR)},
       _pipelineLayout {createPipelineLayout(_device, _descriptorLayout->getDescriptorSetLayout())},
       _pipeline {createPipeline(_device, renderPass, _pipelineLayout)},
       _particleBuffer {
           .positions =
-              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::positions)>(_device, particleCount),
+              createSharedBufferFromPointerType<decltype(sph::cuda::FluidParticlesDataImportedBuffer::positions)>(
+                  _device, particleCount),
           .velocities =
-              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::velocities)>(_device, particleCount),
-          .accelerations = createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::accelerations)>(
-              _device, particleCount),
+              createSharedBufferFromPointerType<decltype(sph::cuda::FluidParticlesDataImportedBuffer::velocities)>(
+                  _device, particleCount),
           .densities =
-              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::densities)>(_device, particleCount),
-          .radiuses =
-              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::radiuses)>(_device, particleCount),
-          .smoothingRadiuses = createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::smoothingRadiuses)>(
-              _device, particleCount),
-          .masses =
-              createSharedBufferFromPointerType<decltype(sph::cuda::ParticlesData::masses)>(_device, particleCount),
-      }
+              createSharedBufferFromPointerType<decltype(sph::cuda::FluidParticlesDataImportedBuffer::densities)>(
+                  _device, particleCount),
+          .radii = createSharedBufferFromPointerType<decltype(sph::cuda::FluidParticlesDataImportedBuffer::radii)>(
+              _device, particleCount)}
 {
 }
 
-ParticleRenderSystem::~ParticleRenderSystem() noexcept
+FluidParticleRenderSystem::~FluidParticleRenderSystem() noexcept
 {
     _device.logicalDevice.destroyPipelineLayout(_pipelineLayout);
 }
 
-auto ParticleRenderSystem::getImportedMemory() const -> sph::cuda::ParticlesDataBuffer
+auto FluidParticleRenderSystem::getImportedMemory() const -> sph::cuda::FluidParticlesDataImportedBuffer
 {
     return {
         .positions = _particleBuffer.positions.getImportedMemory(),
         .velocities = _particleBuffer.velocities.getImportedMemory(),
-        .accelerations = _particleBuffer.accelerations.getImportedMemory(),
         .densities = _particleBuffer.densities.getImportedMemory(),
-        .radiuses = _particleBuffer.radiuses.getImportedMemory(),
-        .smoothingRadiuses = _particleBuffer.smoothingRadiuses.getImportedMemory(),
-        .masses = _particleBuffer.masses.getImportedMemory(),
+        .radii = _particleBuffer.radii.getImportedMemory(),
     };
 }
 
-auto ParticleRenderSystem::createPipeline(const Device& device,
-                                          vk::RenderPass renderPass,
-                                          vk::PipelineLayout pipelineLayout) -> std::unique_ptr<Pipeline>
+auto FluidParticleRenderSystem::createPipeline(const Device& device,
+                                               vk::RenderPass renderPass,
+                                               vk::PipelineLayout pipelineLayout) -> std::unique_ptr<Pipeline>
 {
     static constexpr auto inputAssemblyInfo =
         vk::PipelineInputAssemblyStateCreateInfo {.topology = vk::PrimitiveTopology::eTriangleList,
@@ -117,23 +111,24 @@ auto ParticleRenderSystem::createPipeline(const Device& device,
                                                  .depthBoundsTestEnable = vk::False,
                                                  .stencilTestEnable = vk::False};
 
-    return std::make_unique<Pipeline>(device,
-                                      PipelineConfig {.vertexShaderPath = config::shaderPath / "particle.vert.spv",
-                                                      .fragmentShaderPath = config::shaderPath / "particle.frag.spv",
-                                                      .vertexBindingDescriptions = {},
-                                                      .vertexAttributeDescriptions = {},
-                                                      .inputAssemblyInfo = inputAssemblyInfo,
-                                                      .viewportInfo = viewportInfo,
-                                                      .rasterizationInfo = rasterizationInfo,
-                                                      .multisamplingInfo = multisamplingInfo,
-                                                      .colorBlendInfo = colorBlendInfo,
-                                                      .depthStencilInfo = depthStencilInfo,
-                                                      .pipelineLayout = pipelineLayout,
-                                                      .renderPass = renderPass,
-                                                      .subpass = 0});
+    return std::make_unique<Pipeline>(
+        device,
+        PipelineConfig {.vertexShaderPath = config::shaderPath / "FluidParticle.vert.spv",
+                        .fragmentShaderPath = config::shaderPath / "FluidParticle.frag.spv",
+                        .vertexBindingDescriptions = {},
+                        .vertexAttributeDescriptions = {},
+                        .inputAssemblyInfo = inputAssemblyInfo,
+                        .viewportInfo = viewportInfo,
+                        .rasterizationInfo = rasterizationInfo,
+                        .multisamplingInfo = multisamplingInfo,
+                        .colorBlendInfo = colorBlendInfo,
+                        .depthStencilInfo = depthStencilInfo,
+                        .pipelineLayout = pipelineLayout,
+                        .renderPass = renderPass,
+                        .subpass = 0});
 }
 
-auto ParticleRenderSystem::createPipelineLayout(const Device& device, vk::DescriptorSetLayout setLayout)
+auto FluidParticleRenderSystem::createPipelineLayout(const Device& device, vk::DescriptorSetLayout setLayout)
     -> vk::PipelineLayout
 {
     const auto pipelineLayoutInfo = vk::PipelineLayoutCreateInfo {.setLayoutCount = 1, .pSetLayouts = &setLayout};
@@ -142,7 +137,7 @@ auto ParticleRenderSystem::createPipelineLayout(const Device& device, vk::Descri
                   "Can't create pipeline layout");
 }
 
-auto ParticleRenderSystem::render(const FrameInfo& frameInfo) const -> void
+auto FluidParticleRenderSystem::render(const FrameInfo& frameInfo) const -> void
 {
     frameInfo.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, _pipeline->getHandle());
 
@@ -151,7 +146,7 @@ auto ParticleRenderSystem::render(const FrameInfo& frameInfo) const -> void
         .writeBuffer(1, frameInfo.fragUbo.getDescriptorInfo())
         .writeBuffer(2, _particleBuffer.positions.getDescriptorInfo())
         .writeBuffer(3, _particleBuffer.velocities.getDescriptorInfo())
-        .writeBuffer(4, _particleBuffer.radiuses.getDescriptorInfo())
+        .writeBuffer(4, _particleBuffer.radii.getDescriptorInfo())
         .push(frameInfo.commandBuffer, _pipelineLayout);
 
     frameInfo.commandBuffer.draw(6, frameInfo.scene.getParticleCount(), 0, 0);
