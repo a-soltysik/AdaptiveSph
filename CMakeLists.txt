@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
+set(CMAKE_OBJECT_PATH_MAX 500)
+
 include(cmake/Setup.cmake)
 include(ProjectOptions.cmake)
 include(Dependencies.cmake)
@@ -55,7 +57,7 @@ endif ()
 set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT AdaptiveSph)
 
 message(STATUS "╔════════════════════════════════════════════════════╗")
-message(STATUS "║ Adaptive SPH Configuration Summary ║")
+message(STATUS "║ Adaptive SPH Configuration Summary                 ║")
 message(STATUS "╠════════════════════════════════════════════════════╣")
 message(STATUS " CMake version: ${CMAKE_VERSION}")
 message(STATUS " Build type: ${CMAKE_BUILD_TYPE}")

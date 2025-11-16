@@ -95,7 +95,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::RefinementParameters,
                                    curvature,
                                    interfaceParameters)
 
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::Simulation::Parameters::Domain, min, max)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::Simulation::Parameters::Domain, min, max, friction)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::Simulation::Parameters,
                                    domain,
                                    gravity,
@@ -111,6 +111,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::Simulation::Parameters,
                                    threadsPerBlock)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::utils::InitialParameters, particleCount)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::utils::RenderingParameters, renderBoundaryParticles)
 
 template <>
 struct adl_serializer<sph::utils::Configuration>
@@ -120,7 +121,8 @@ struct adl_serializer<sph::utils::Configuration>
         j = json {
             {"initialParameters",    c.initialParameters   },
             {"simulationParameters", c.simulationParameters},
-            {"refinementParameters", c.refinementParameters}
+            {"refinementParameters", c.refinementParameters},
+            {"renderingParameters",  c.renderingParameters }
         };
     }
 
@@ -130,6 +132,7 @@ struct adl_serializer<sph::utils::Configuration>
         c.simulationParameters = j.value("simulationParameters", std::optional<sph::cuda::Simulation::Parameters> {});
         c.refinementParameters =
             j.value("refinementParameters", std::optional<sph::cuda::refinement::RefinementParameters> {});
+        c.renderingParameters = j.value("renderingParameters", std::optional<sph::utils::RenderingParameters> {});
     }
 };
 

@@ -9,6 +9,10 @@ function(sph_setup_dependencies)
     CPMAddPackage("gh:g-truc/glm#1.0.1")
     CPMAddPackage("gh:nlohmann/json@3.12.0")
     CPMAddPackage(
+            URI "gh:jlblancoc/nanoflann@1.8.0"
+            OPTIONS
+            "MASTER_PROJECT_HAS_TARGET_UNINSTALL ON")
+    CPMAddPackage(
             NAME
             ctre
             VERSION

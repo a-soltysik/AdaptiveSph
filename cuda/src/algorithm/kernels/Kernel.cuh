@@ -13,17 +13,17 @@ constexpr auto wendlandLaplacianCoefficient = 105.F / (16.F * pi);
 constexpr auto wendlandDerivativeCoefficient = -5.F * wendlandCoefficient;
 }
 
-__device__ __forceinline__ auto pow2(float x) -> float
+__device__ __host__ __forceinline__ auto pow2(float x) -> float
 {
     return x * x;
 }
 
-__device__ __forceinline__ auto pow3(float x) -> float
+__device__ __host__ __forceinline__ auto pow3(float x) -> float
 {
     return x * x * x;
 }
 
-__device__ __forceinline__ auto pow5(float x) -> float
+__device__ __host__ __forceinline__ auto pow5(float x) -> float
 {
     const auto x2 = pow2(x);
     return x2 * x2 * x;
@@ -36,7 +36,7 @@ namespace constant
 constexpr auto wendlandRangeRatio = 2.F;
 }
 
-__forceinline__ __device__ auto wendlandKernel(float distance, float smoothingRadius) -> float
+__forceinline__ __device__ __host__ auto wendlandKernel(float distance, float smoothingRadius) -> float
 {
     const float q = distance / smoothingRadius;
     if (q > 2.0F)
@@ -51,7 +51,7 @@ __forceinline__ __device__ auto wendlandKernel(float distance, float smoothingRa
     return (detail::constants::wendlandCoefficient / h3) * tmp4 * (2.0F * q + 1.0F);
 }
 
-__forceinline__ __device__ auto wendlandLaplacianKernel(float distance, float smoothingRadius) -> float
+__forceinline__ __device__ __host__ auto wendlandLaplacianKernel(float distance, float smoothingRadius) -> float
 {
     if (distance < smoothingRadius)
     {
@@ -66,7 +66,7 @@ __forceinline__ __device__ auto wendlandLaplacianKernel(float distance, float sm
     return 0.0F;
 }
 
-__forceinline__ __device__ auto wendlandDerivativeKernel(float distance, float smoothingRadius) -> float
+__forceinline__ __device__ __host__ auto wendlandDerivativeKernel(float distance, float smoothingRadius) -> float
 {
     const float q = distance / smoothingRadius;
     if (q > 2.0F)

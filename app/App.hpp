@@ -28,25 +28,22 @@ private:
 
     static auto registerSignalHandlers() -> void;
 
-    static auto calculateParticleSpacing(const glm::vec3& domainSize, const glm::uvec3& gridSize) -> glm::vec3;
-
     static auto loadConfigurationFromFile(const std::string& configPath) -> utils::Configuration;
 
-    auto mainLoop() const -> void;
+    auto mainLoop() -> void;
 
     auto setDefaultScene(const cuda::Simulation::Parameters& simulationParameters,
                          const utils::InitialParameters& initialParameters) -> void;
 
-    void createDomainBoundaries(cuda::Simulation::Parameters::Domain domain) const;
+    void createDomainBoundaries(const cuda::Simulation::Parameters::Domain& domain) const;
 
-    void createParticleDistribution(const cuda::Simulation::Parameters& simulationParameters,
-                                    const utils::InitialParameters& initialParameters);
+    void createParticleDistribution(const utils::InitialParameters& initialParameters);
 
     void setupLighting() const;
 
-    void createParticlesInGrid(const glm::vec3& startPos,
-                               const utils::InitialParameters& initialParameters,
-                               const glm::vec3& spacing);
+    void createParticlesInGrid(const utils::InitialParameters& initialParameters);
+
+    void updateDomain(const cuda::Simulation::Parameters::Domain& newDomain);
 
     std::vector<glm::vec4> _particles;
     std::unique_ptr<panda::gfx::Scene> _scene;
@@ -55,5 +52,6 @@ private:
     std::unique_ptr<cuda::Simulation> _simulation;
 
     std::string _configPath;
+    cuda::Simulation::Parameters _simulationParameters {};
 };
 }

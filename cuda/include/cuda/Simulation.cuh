@@ -14,28 +14,48 @@
 
 namespace sph::cuda
 {
-struct ParticlesData
+namespace physics
+{
+class StaticBoundaryDomain;
+}
+
+struct FluidParticlesData
 {
     glm::vec4* positions;
     glm::vec4* velocities;
     glm::vec4* accelerations;
     float* densities;
-    float* radiuses;
-    float* smoothingRadiuses;
+    float* radii;
+    float* smoothingRadii;
     float* masses;
 
     uint32_t particleCount;
 };
 
-struct ParticlesDataBuffer
+struct BoundaryParticlesData
+{
+    glm::vec4* positions;
+    glm::vec4* colors;
+    float* psiValues;
+    float* viscosityCoefficients;
+    float* radii;
+
+    uint32_t particleCount;
+};
+
+struct FluidParticlesDataImportedBuffer
 {
     const ImportedMemory& positions;
     const ImportedMemory& velocities;
-    const ImportedMemory& accelerations;
     const ImportedMemory& densities;
-    const ImportedMemory& radiuses;
-    const ImportedMemory& smoothingRadiuses;
-    const ImportedMemory& masses;
+    const ImportedMemory& radii;
+};
+
+struct BoundaryParticlesDataImportedBuffer
+{
+    const ImportedMemory& positions;
+    const ImportedMemory& radii;
+    const ImportedMemory& colors;
 };
 
 class SPH_CUDA_API Simulation
@@ -47,6 +67,7 @@ public:
         {
             glm::vec3 min = {-1.F, -1.F, -1.F};
             glm::vec3 max = {1.F, 1.F, 1.F};
+            float friction = 0.01F;
 
             [[nodiscard]] auto getTranslation() const noexcept -> glm::vec3
             {
@@ -55,7 +76,7 @@ public:
 
             [[nodiscard]] auto getScale() const noexcept -> glm::vec3
             {
-                return glm::abs(max - min);
+                return max - min;
             }
 
             [[nodiscard]] auto getVolume() const noexcept -> float
@@ -68,6 +89,8 @@ public:
             {
                 return {.min = translation - scale / 2.F, .max = translation + scale / 2.F};
             }
+
+            auto operator==(const Domain& rhs) const -> bool = default;
         };
 
         Domain domain;
@@ -99,17 +122,22 @@ public:
     virtual ~Simulation() = default;
 
     virtual void update(float deltaTime) = 0;
+    virtual void updateDomain(const Parameters::Domain& domain,
+                              const physics::StaticBoundaryDomain& boundaryDomain) = 0;
 
-    [[nodiscard]] virtual auto getParticlesCount() const -> uint32_t = 0;
+    [[nodiscard]] virtual auto getFluidParticlesCount() const -> uint32_t = 0;
+    [[nodiscard]] virtual auto getBoundaryParticlesCount() const -> uint32_t = 0;
 
-    [[nodiscard]] virtual auto calculateAverageNeighborCount() const -> float = 0;
+    [[nodiscard]] virtual auto calculateAverageNeighborCount() -> float = 0;
 
-    [[nodiscard]] virtual auto getDensityInfo(float threshold) const -> DensityInfo = 0;
+    [[nodiscard]] virtual auto getDensityInfo(float threshold) -> DensityInfo = 0;
 };
 
 SPH_CUDA_API auto createSimulation(const Simulation::Parameters& parameters,
                                    const std::vector<glm::vec4>& positions,
-                                   const ParticlesDataBuffer& memory,
+                                   const FluidParticlesDataImportedBuffer& fluidParticleMemory,
+                                   const BoundaryParticlesDataImportedBuffer& boundaryParticleMemory,
+                                   const physics::StaticBoundaryDomain& boundaryDomain,
                                    const std::optional<refinement::RefinementParameters>& refinementParams,
                                    uint32_t initialParticleCount) -> std::unique_ptr<Simulation>;
 }

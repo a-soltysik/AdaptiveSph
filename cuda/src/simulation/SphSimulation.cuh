@@ -1,5 +1,6 @@
 #pragma once
 
+#include <thrust/device_vector.h>
 #include <vector_types.h>
 
 #include <cstdint>
@@ -7,10 +8,17 @@
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
 #include <glm/glm.hpp>
+#include <memory>
 #include <span>
 #include <vector>
 
+#include "algorithm/NeighborGrid.cuh"
 #include "memory/ImportedParticleMemory.cuh"
+
+namespace sph::cuda::physics
+{
+class StaticBoundaryDomain;
+}
 
 namespace sph::cuda
 {
@@ -18,56 +26,78 @@ namespace sph::cuda
 class SphSimulation : public Simulation
 {
 public:
-    struct Grid
-    {
-        glm::ivec3 gridSize;
-        glm::vec3 cellSize;
-        std::span<int32_t> cellStartIndices;
-        std::span<int32_t> cellEndIndices;
-        std::span<int32_t> particleGridIndices;
-        std::span<int32_t> particleArrayIndices;
-    };
-
     SphSimulation(const Parameters& initialParameters,
                   const std::vector<glm::vec4>& positions,
-                  const ParticlesDataBuffer& memory,
+                  const FluidParticlesDataImportedBuffer& fluidParticleMemory,
+                  const BoundaryParticlesDataImportedBuffer& boundaryParticleMemory,
+                  const physics::StaticBoundaryDomain& boundaryDomain,
                   uint32_t maxParticleCapacity);
 
-    SphSimulation(const SphSimulation&) = delete;
-    SphSimulation(SphSimulation&&) = delete;
-
-    auto operator=(const SphSimulation&) -> SphSimulation& = delete;
-    auto operator=(SphSimulation&&) -> SphSimulation& = delete;
-    ~SphSimulation() override;
-
     void update(float deltaTime) override;
+    void updateDomain(const Parameters::Domain& domain, const physics::StaticBoundaryDomain& boundaryDomain) override;
 
-    [[nodiscard]] auto getParticlesCount() const -> uint32_t override
+    [[nodiscard]] auto getFluidParticlesCount() const -> uint32_t final
     {
         return _particleCount;
     }
 
-    [[nodiscard]] auto calculateAverageNeighborCount() const -> float override;
-    [[nodiscard]] auto getDensityInfo(float threshold) const -> DensityInfo override;
+    [[nodiscard]] auto getBoundaryParticlesCount() const -> uint32_t final
+    {
+        return _boundaryParticleCount;
+    }
+
+    [[nodiscard]] auto calculateAverageNeighborCount() -> float override;
+    [[nodiscard]] auto getDensityInfo(float threshold) -> DensityInfo override;
 
 protected:
-    struct ParticlesInternalDataBuffer
+    struct FluidParticlesDataBuffer
     {
-        const ImportedParticleMemory& positions;
-        const ImportedParticleMemory& velocities;
-        const ImportedParticleMemory& accelerations;
-        const ImportedParticleMemory& densities;
-        const ImportedParticleMemory& radiuses;
-        const ImportedParticleMemory& smoothingRadiuses;
-        const ImportedParticleMemory& masses;
+        struct Imported
+        {
+            const ImportedParticleMemory& positions;
+            const ImportedParticleMemory& velocities;
+            const ImportedParticleMemory& densities;
+            const ImportedParticleMemory& radii;
+        };
+
+        struct Internal
+        {
+            thrust::device_vector<glm::vec4> accelerations;
+            thrust::device_vector<float> smoothingRadii;
+            thrust::device_vector<float> masses;
+        };
+
+        Imported imported;
+        Internal internal;
     };
 
-    static auto createGrid(const Parameters& data, size_t particleCapacity) -> Grid;
-    static auto toInternalBuffer(const ParticlesDataBuffer& memory) -> ParticlesInternalDataBuffer;
+    struct BoundaryParticlesDataBuffer
+    {
+        struct Imported
+        {
+            const ImportedParticleMemory& positions;
+            const ImportedParticleMemory& radii;
+            const ImportedParticleMemory& colors;
+        };
 
-    [[nodiscard]] auto getParticles() const -> ParticlesData;
+        struct Internal
+        {
+            thrust::device_vector<float> psiValues;
+            thrust::device_vector<float> viscosityCoefficients;
+        };
 
-    [[nodiscard]] auto getGrid() const -> const Grid&
+        Imported imported;
+        Internal internal;
+    };
+
+    static auto toInternalBuffer(const FluidParticlesDataImportedBuffer& memory) -> FluidParticlesDataBuffer::Imported;
+    static auto toInternalBuffer(const BoundaryParticlesDataImportedBuffer& memory)
+        -> BoundaryParticlesDataBuffer::Imported;
+
+    [[nodiscard]] auto getFluidParticles() -> FluidParticlesData;
+    [[nodiscard]] auto getBoundaryParticles() -> BoundaryParticlesData;
+
+    [[nodiscard]] auto getGrid() const -> const NeighborGrid&
     {
         return _grid;
     }
@@ -97,27 +127,28 @@ protected:
         return _particleCapacity;
     }
 
-    [[nodiscard]] auto getBlocksPerGridForParticles() const -> dim3;
-    [[nodiscard]] auto getBlocksPerGridForGrid() const -> dim3;
+    [[nodiscard]] auto getBlocksPerGridForFluidParticles() const -> dim3;
+    [[nodiscard]] auto getBlocksPerGridForBoundaryParticles() const -> dim3;
 
-    void computeExternalAccelerations() const;
-    void resetGrid() const;
-    void assignParticlesToCells() const;
-    void sortParticles() const;
-    void calculateCellStartAndEndIndices() const;
-    void computeDensities() const;
-    void computePressureAccelerations() const;
-    void computeViscosityAccelerations() const;
-    void computeSurfaceTensionAccelerations() const;
-    void handleCollisions() const;
-    void halfKickVelocities(float halfDt) const;
-    void updatePositions(float deltaTime) const;
+    void computeExternalAccelerations();
+    void computeDensities();
+    void computePressureAccelerations();
+    void computeViscosityAccelerations();
+    void computeSurfaceTensionAccelerations();
+    void halfKickVelocities(float halfDt);
+    void updatePositions(float deltaTime);
+    void computeBoundaryDensityContribution();
+    void computeBoundaryForces();
 
 private:
-    ParticlesInternalDataBuffer _particleBuffer;
+    void initializeBoundaryParticles(const physics::StaticBoundaryDomain& boundaryDomain);
+
+    FluidParticlesDataBuffer _fluidParticlesData;
+    BoundaryParticlesDataBuffer _boundaryParticlesData;
     Parameters _simulationData;
-    Grid _grid;
-    uint32_t _particleCount = 0;
-    uint32_t _particleCapacity = 0;
+    uint32_t _boundaryParticleCount;
+    uint32_t _particleCount;
+    uint32_t _particleCapacity;
+    NeighborGrid _grid;
 };
 }

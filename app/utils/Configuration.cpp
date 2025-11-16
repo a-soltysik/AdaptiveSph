@@ -58,7 +58,8 @@ auto dumpTemplateConfiguration(const std::string& filePath) -> void
 
         const json jsonFile = Configuration {.initialParameters = InitialParameters {},
                                              .simulationParameters = cuda::Simulation::Parameters {},
-                                             .refinementParameters = cuda::refinement::RefinementParameters {}};
+                                             .refinementParameters = cuda::refinement::RefinementParameters {},
+                                             .renderingParameters = RenderingParameters {}};
         file << jsonFile.dump(4);
 
         panda::log::Info("Configuration file saved: {}", filePath);

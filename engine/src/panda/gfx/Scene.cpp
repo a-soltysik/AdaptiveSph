@@ -246,4 +246,14 @@ auto Scene::getParticleCount() const -> uint32_t
     return _particleCount;
 }
 
+auto Scene::setBoundaryParticleCount(uint32_t count) -> void
+{
+    _boundaryParticleCount = count;
+}
+
+auto Scene::getBoundaryParticleCount() const -> uint32_t
+{
+    return _boundaryParticleCount;
+}
+
 }

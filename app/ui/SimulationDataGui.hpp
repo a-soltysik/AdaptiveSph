@@ -2,6 +2,8 @@
 #include <panda/utils/Signals.h>
 
 #include <cuda/Simulation.cuh>
+#include <functional>
+#include <glm/ext/vector_float3.hpp>
 
 namespace sph
 {
@@ -10,19 +12,27 @@ class Window;
 class SimulationDataGui
 {
 public:
+    using DomainChangedCallback = std::function<void(const cuda::Simulation::Parameters::Domain&)>;
+
     explicit SimulationDataGui();
 
     void setAverageNeighbourCount(float neighbourCount);
     void setDensityInfo(const cuda::Simulation::DensityInfo& densityInfo);
+    void setDomain(const cuda::Simulation::Parameters::Domain& domain);
+
+    void onDomainChanged(DomainChangedCallback callback);
 
 private:
-    void render() const;
+    void render();
 
     void displayAverageNeighborCount(float averageNeighbors) const;
     static void displayDensityStatistics(const cuda::Simulation::DensityInfo& densityInfo);
+    void displayDomainControls();
 
     panda::utils::signals::BeginGuiRender::ReceiverT _beginGuiReceiver;
     float _averageNeighbourCount = 0.F;
     cuda::Simulation::DensityInfo _densityInfo {};
+    cuda::Simulation::Parameters::Domain _domain {};
+    DomainChangedCallback _domainChangedCallback;
 };
 }

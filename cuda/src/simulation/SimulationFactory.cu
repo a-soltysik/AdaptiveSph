@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "SphSimulation.cuh"
-#include "adaptive/AdaptiveSphSimulation.cuh"
 #include "cuda/Simulation.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
 
@@ -13,15 +12,28 @@ namespace sph::cuda
 
 auto createSimulation(const Simulation::Parameters& parameters,
                       const std::vector<glm::vec4>& positions,
-                      const ParticlesDataBuffer& memory,
-                      const std::optional<refinement::RefinementParameters>& refinementParams,
+                      const FluidParticlesDataImportedBuffer& fluidParticleMemory,
+                      const BoundaryParticlesDataImportedBuffer& boundaryParticleMemory,
+                      const physics::StaticBoundaryDomain& boundaryDomain,
+                      [[maybe_unused]] const std::optional<refinement::RefinementParameters>& refinementParams,
                       uint32_t initialParticleCount) -> std::unique_ptr<Simulation>
 {
-    if (refinementParams.has_value() && refinementParams->enabled == true)
-    {
-        return std::make_unique<AdaptiveSphSimulation>(parameters, positions, memory, refinementParams.value());
-    }
-    return std::make_unique<SphSimulation>(parameters, positions, memory, initialParticleCount);
+    // TMP
+    //if (refinementParams.has_value() && refinementParams->enabled == true)
+    //{
+    //    return std::make_unique<AdaptiveSphSimulation>(parameters,
+    //                                                   positions,
+    //                                                   fluidParticleMemory,
+    //                                                   boundaryParticleMemory,
+    //                                                   boundaryDomain,
+    //                                                   refinementParams.value());
+    //}
+    return std::make_unique<SphSimulation>(parameters,
+                                           positions,
+                                           fluidParticleMemory,
+                                           boundaryParticleMemory,
+                                           boundaryDomain,
+                                           initialParticleCount);
 }
 
 }

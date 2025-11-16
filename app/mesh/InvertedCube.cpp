@@ -47,4 +47,4 @@ auto create(const panda::gfx::Context& context, std::string name) -> std::unique
     return std::make_unique<panda::gfx::Mesh>(std::move(name), context.getDevice(), vertices, indices);
 }
 
-};
+}  // namespace sph::mesh::inverted_cube

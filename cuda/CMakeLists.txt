@@ -3,11 +3,15 @@ include("${CMAKE_SOURCE_DIR}/cmake/Cuda.cmake")
 add_library(
         AdaptiveSphCuda SHARED
         src/algorithm/Algorithm.cu
+        src/algorithm/BoundaryAlgorithm.cu
         src/simulation/SphSimulation.cu
         src/memory/ImportedParticleMemory.cu
-        src/algorithm/adaptive/AdaptiveAlgorithm.cu
-        src/simulation/adaptive/AdaptiveSphSimulation.cu
+        #src/algorithm/adaptive/AdaptiveAlgorithm.cu  TMP
+        #src/simulation/adaptive/AdaptiveSphSimulation.cu TMP
         src/simulation/SimulationFactory.cu
+        src/physics/StaticBoundaryDomain.cu
+        src/algorithm/NeighborGrid.cu
+        src/algorithm/neighbors/NeighborKernels.cu
 )
 
 add_library(AdaptiveSph::Cuda ALIAS AdaptiveSphCuda)
@@ -20,7 +24,7 @@ target_include_directories(AdaptiveSphCuda
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 target_link_libraries(AdaptiveSphCuda PRIVATE sph_options sph_warnings)
-target_link_system_libraries(AdaptiveSphCuda PRIVATE glm)
+target_link_system_libraries(AdaptiveSphCuda PRIVATE glm::glm nanoflann::nanoflann)
 sph_target_link_cuda(AdaptiveSphCuda)
 
 target_compile_definitions(AdaptiveSphCuda
