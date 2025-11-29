@@ -1,12 +1,12 @@
 #include <cstdint>
-#include <cuda/Simulation.cuh>
+#include <cuda/simulation/Simulation.cuh>
 #include <glm/exponential.hpp>
 #include <glm/ext/vector_float4.hpp>
 #include <glm/geometric.hpp>
 
 #include "BoundaryAlgorithm.cuh"
 #include "Common.cuh"
-#include "kernels/Kernel.cuh"
+#include "WendlandKernel.cuh"
 #include "simulation/SphSimulation.cuh"
 
 namespace sph::cuda::kernel
@@ -92,11 +92,6 @@ __global__ void computeBoundaryPressureAcceleration(FluidParticlesData fluidPart
             const auto psi = boundaryParticles.psiValues[boundaryIdx];
             const auto pressureTerm = pressure / (density * density);
 
-            // Prevent kernel gradient from becoming zero at very small distances
-            //static constexpr auto minDistanceRatio = 0.1F;
-            //const auto minDistance = minDistanceRatio * smoothingRadius;
-            //const auto effectiveDistance = glm::max(distance, minDistance);
-
             acceleration -=
                 psi * pressureTerm * device::wendlandDerivativeKernel(distance, smoothingRadius) * direction;
         });
@@ -159,11 +154,6 @@ __global__ void computeBoundaryFrictionAcceleration(FluidParticlesData fluidPart
             const auto nu = (frictionCoefficient * smoothingRadius * simulationData.speedOfSound) / (2.0F * density);
             const auto pi = -nu * compression / (distanceSquared + epsilon * smoothingRadius * smoothingRadius);
             const auto direction = distance > 0.F ? offsetToNeighbour / distance : glm::vec4(0.F, 1.F, 0.F, 0.F);
-
-            // Prevent kernel gradient from becoming zero at very small distances
-            //static constexpr auto minDistanceRatio = 0.1F;
-            //const auto minDistance = minDistanceRatio * smoothingRadius;
-            //const auto effectiveDistance = glm::max(distance, minDistance);
 
             acceleration -= direction * psi * pi * device::wendlandDerivativeKernel(distance, smoothingRadius);
         });

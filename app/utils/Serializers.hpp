@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cuda/Simulation.cuh>
+#include <../../cuda/include/cuda/simulation/Simulation.cuh>
 #include <cuda/refinement/RefinementParameters.cuh>
 #include <glm/detail/qualifier.hpp>
 #include <nlohmann/adl_serializer.hpp>
@@ -77,7 +77,6 @@ NLOHMANN_JSON_SERIALIZE_ENUM(sph::cuda::refinement::RefinementParameters::Criter
                              {
                                  {sph::cuda::refinement::RefinementParameters::Criterion::Velocity,  "velocity" },
                                  {sph::cuda::refinement::RefinementParameters::Criterion::Interface, "interface"},
-                                 {sph::cuda::refinement::RefinementParameters::Criterion::Curvature, "curvature"},
                                  {sph::cuda::refinement::RefinementParameters::Criterion::Vorticity, "vorticity"}
 })
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::RefinementParameters,

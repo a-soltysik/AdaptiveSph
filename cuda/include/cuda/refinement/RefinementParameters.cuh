@@ -83,7 +83,6 @@ struct RefinementParameters
     {
         Velocity,
         Interface,
-        Curvature,
         Vorticity
     };
 

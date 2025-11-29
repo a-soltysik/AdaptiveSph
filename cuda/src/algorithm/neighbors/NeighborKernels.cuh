@@ -1,6 +1,6 @@
 #pragma once
 
-#include "algorithm/NeighborGrid.cuh"
+#include "../../simulation/neighbors/NeighborGrid.cuh"
 #include "simulation/SphSimulation.cuh"
 
 namespace sph::cuda::kernel

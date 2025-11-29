@@ -1,22 +1,20 @@
 #include <device_atomic_functions.h>
 
 #include <cstdint>
-#include <cuda/Simulation.cuh>
+#include <cuda/simulation/Simulation.cuh>
 #include <glm/exponential.hpp>
 #include <glm/ext/vector_float4.hpp>
 
 #include "Algorithm.cuh"
 #include "Common.cuh"
+#include "WendlandKernel.cuh"
 #include "glm/geometric.hpp"
-#include "kernels/Kernel.cuh"
 #include "simulation/SphSimulation.cuh"
 
 namespace sph::cuda::kernel
 {
 
-__global__ void computeDensities(FluidParticlesData particles,
-                                 NeighborGrid::Device grid,
-                                 Simulation::Parameters simulationData)
+__global__ void computeDensities(FluidParticlesData particles, NeighborGrid::Device grid)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx >= particles.particleCount)
@@ -285,7 +283,7 @@ __global__ void halfKickVelocities(FluidParticlesData particles, Simulation::Par
     }
 }
 
-__global__ void updatePositions(FluidParticlesData particles, float dt)
+__global__ void updatePositions(FluidParticlesData particles, Simulation::Parameters::Domain domain, float dt)
 {
     const auto idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= particles.particleCount)
@@ -293,6 +291,10 @@ __global__ void updatePositions(FluidParticlesData particles, float dt)
         return;
     }
     particles.positions[idx] += particles.velocities[idx] * dt;
+
+    const auto position = glm::vec3 {particles.positions[idx]};
+    const auto clampedPosition = glm::clamp(position, domain.min, domain.max);
+    particles.positions[idx] = glm::vec4 {clampedPosition, particles.positions[idx].w};
 }
 
 }

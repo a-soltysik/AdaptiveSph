@@ -1,11 +1,12 @@
 // clang-format off
+#include "panda/Logger.h"
 #include "panda/utils/Assert.h"
 // clang-format on
 
 #include "BoundaryParticleRenderSystem.hpp"
 
 #include <cstddef>
-#include <cuda/Simulation.cuh>
+#include <cuda/simulation/Simulation.cuh>
 #include <filesystem>
 #include <memory>
 #include <vulkan/vulkan.hpp>
@@ -48,6 +49,7 @@ BoundaryParticleRenderSystem::BoundaryParticleRenderSystem(const Device& device,
       },
       _shouldRender {shouldRender}
 {
+    log::Info("Allocated {} boundary particles", particleCount);
 }
 
 BoundaryParticleRenderSystem::~BoundaryParticleRenderSystem() noexcept

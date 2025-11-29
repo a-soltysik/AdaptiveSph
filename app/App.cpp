@@ -12,15 +12,16 @@
 #include <panda/utils/Signals.h>
 
 #include <array>
+#include <chrono>
 #include <csignal>
 #include <cstdint>
 #include <cstdlib>
-#include <cuda/Simulation.cuh>
+#include <cuda/simulation/Simulation.cuh>
+#include <cuda/simulation/physics/StaticBoundaryDomain.cuh>
 #include <filesystem>
 #include <glm/common.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_uint2.hpp>
-#include <glm/ext/vector_uint3.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtx/string_cast.hpp>
@@ -32,7 +33,6 @@
 #include <utility>
 #include <vector>
 
-#include "cuda/physics/StaticBoundaryDomain.cuh"
 #include "input/MouseHandler.hpp"
 #include "internal/config.hpp"
 #include "mesh/InvertedCube.hpp"
@@ -149,6 +149,8 @@ auto App::run() -> int
 
     panda::log::Info("Generated {} boundary particles for static domain", boundaryDomain.getParticleCount());
 
+    const auto maxBoundaryCapacity = boundaryDomain.getParticleCount() * 10;
+
     _simulation = cuda::createSimulation(
         _simulationParameters,
         _particles,
@@ -162,11 +164,12 @@ auto App::run() -> int
                                            })
                                            .value_or(initialParameters.getScalarCount())),
         _api->initializeBoundaryParticleSystem(
-            boundaryDomain.getParticleCount(),
+            maxBoundaryCapacity,
             config.renderingParameters.value_or(utils::RenderingParameters {}).renderBoundaryParticles),
         boundaryDomain,
         config.refinementParameters,
-        initialParameters.getScalarCount());
+        initialParameters.getScalarCount(),
+        maxBoundaryCapacity);
 
     mainLoop();
     return 0;
@@ -198,6 +201,9 @@ auto App::mainLoop() -> void
     gui.onDomainChanged([this](const cuda::Simulation::Parameters::Domain& newDomain) {
         updateDomain(newDomain);
     });
+    gui.onEnableRefinement([this]() {
+        _simulation->enableAdaptiveRefinement();
+    });
 
     auto timeManager = utils::FrameTimeManager {};
     auto taskScheduler = utils::TaskScheduler {};
@@ -205,7 +211,7 @@ auto App::mainLoop() -> void
         [&gui, this] {
             gui.setAverageNeighbourCount(_simulation->calculateAverageNeighborCount());
         },
-        std::chrono::seconds {1}));
+        std::chrono::seconds {0}));
     taskScheduler.addTask(std::make_unique<utils::PerTimeTask>(
         [&gui, this] {
             gui.setDensityInfo(_simulation->getDensityInfo(0.1F));
@@ -370,7 +376,6 @@ void App::updateDomain(const cuda::Simulation::Parameters::Domain& newDomain)
 
     _simulation->updateDomain(newDomain, boundaryDomain);
 
-    // Update domain visualization
     auto& domainObject = _scene->getDomain();
     domainObject.transform.translation = newDomain.getTranslation();
     domainObject.transform.scale = newDomain.getScale();

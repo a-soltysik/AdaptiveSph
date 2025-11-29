@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <utility>
 
-#include "cuda/Simulation.cuh"
+#include "../../cuda/include/cuda/simulation/Simulation.cuh"
 
 namespace sph
 {
@@ -62,6 +62,7 @@ auto SimulationDataGui::render() -> void
     displayAverageNeighborCount(_averageNeighbourCount);
     displayDensityStatistics(_densityInfo);
     displayDomainControls();
+    displayRefinementControls();
 }
 
 void SimulationDataGui::displayAverageNeighborCount(float averageNeighbors) const
@@ -128,6 +129,11 @@ void SimulationDataGui::onDomainChanged(DomainChangedCallback callback)
     _domainChangedCallback = std::move(callback);
 }
 
+void SimulationDataGui::onEnableRefinement(EnableRefinementCallback callback)
+{
+    _enableRefinementCallback = std::move(callback);
+}
+
 void SimulationDataGui::displayDomainControls()
 {
     ImGui::Begin("Domain Controls");
@@ -154,14 +160,27 @@ void SimulationDataGui::displayDomainControls()
 
     ImGui::Separator();
 
-    domainChanged |= ImGui::SliderFloat("Friction", &friction, 0.0F, 1.0F);
-
     if (domainChanged && _domainChangedCallback)
     {
         const auto newDomain =
             cuda::Simulation::Parameters::Domain {.min = domainMin, .max = domainMax, .friction = friction};
         _domain = newDomain;
         _domainChangedCallback(newDomain);
+    }
+
+    ImGui::End();
+}
+
+void SimulationDataGui::displayRefinementControls()
+{
+    ImGui::Begin("Refinement Controls");
+
+    if (ImGui::Button("Enable Adaptive Refinement"))
+    {
+        if (_enableRefinementCallback)
+        {
+            _enableRefinementCallback();
+        }
     }
 
     ImGui::End();

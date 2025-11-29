@@ -2,7 +2,7 @@
 
 #include <panda/Logger.h>
 
-#include <cuda/Simulation.cuh>
+#include <../../cuda/include/cuda/simulation/Simulation.cuh>
 #include <cuda/refinement/RefinementParameters.cuh>
 #include <exception>
 #include <fstream>

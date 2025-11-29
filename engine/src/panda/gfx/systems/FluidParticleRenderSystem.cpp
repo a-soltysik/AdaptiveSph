@@ -5,7 +5,7 @@
 #include "FluidParticleRenderSystem.h"
 
 #include <cstddef>
-#include <cuda/Simulation.cuh>
+#include <cuda/simulation/Simulation.cuh>
 #include <filesystem>
 #include <memory>
 #include <vulkan/vulkan.hpp>

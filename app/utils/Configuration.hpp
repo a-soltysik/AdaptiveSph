@@ -1,7 +1,7 @@
 #pragma once
 
+#include <../../cuda/include/cuda/simulation/Simulation.cuh>
 #include <cstdint>
-#include <cuda/Simulation.cuh>
 #include <cuda/refinement/RefinementParameters.cuh>
 #include <glm/ext/vector_uint3.hpp>
 #include <optional>
@@ -21,7 +21,7 @@ struct InitialParameters
 
 struct RenderingParameters
 {
-    bool renderBoundaryParticles = false;  // Render boundary particles as points (not meshes)
+    bool renderBoundaryParticles = false;
 };
 
 struct Configuration

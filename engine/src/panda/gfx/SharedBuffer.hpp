@@ -4,8 +4,8 @@
 #include "panda/utils/Assert.h"
 // clang-format on
 
+#include <../../../../cuda/include/cuda/memory/ImportedMemory.cuh>
 #include <cstddef>
-#include <cuda/ImportedMemory.cuh>
 #include <memory>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_enums.hpp>

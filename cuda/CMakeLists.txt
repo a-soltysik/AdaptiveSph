@@ -6,11 +6,11 @@ add_library(
         src/algorithm/BoundaryAlgorithm.cu
         src/simulation/SphSimulation.cu
         src/memory/ImportedParticleMemory.cu
-        #src/algorithm/adaptive/AdaptiveAlgorithm.cu  TMP
-        #src/simulation/adaptive/AdaptiveSphSimulation.cu TMP
+        src/algorithm/AdaptiveAlgorithm.cu
+        src/simulation/AdaptiveSphSimulation.cu
         src/simulation/SimulationFactory.cu
-        src/physics/StaticBoundaryDomain.cu
-        src/algorithm/NeighborGrid.cu
+        src/simulation/physics/StaticBoundaryDomain.cu
+        src/simulation/neighbors/NeighborGrid.cu
         src/algorithm/neighbors/NeighborKernels.cu
 )
 
