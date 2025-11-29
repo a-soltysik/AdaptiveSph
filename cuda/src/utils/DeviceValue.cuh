@@ -10,11 +10,6 @@ template <typename T>
 class DeviceValue
 {
 public:
-    static auto fromDevice(T* devicePtr) -> DeviceValue
-    {
-        return DeviceValue {devicePtr};
-    }
-
     static auto fromHost(const T& value) -> DeviceValue
     {
         T* devicePtr {};

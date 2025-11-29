@@ -4,7 +4,7 @@
 #include "panda/utils/Assert.h" // NOLINT(misc-include-cleaner)
 // clang-format on
 
-#include <cuda/Simulation.cuh>
+#include <cuda/simulation/Simulation.cuh>
 #include <memory>
 #include <type_traits>
 #include <vulkan/vulkan.hpp>

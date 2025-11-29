@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cuda/Simulation.cuh>
+#include <cuda/simulation/Simulation.cuh>
 
 #include "simulation/SphSimulation.cuh"
 
@@ -21,4 +21,4 @@ __global__ void computeBoundaryFrictionAcceleration(FluidParticlesData fluidPart
                                                     NeighborGrid::Device grid,
                                                     Simulation::Parameters simulationData);
 
-}  // namespace sph::cuda::kernel
+}

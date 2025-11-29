@@ -5,7 +5,8 @@
 #include <thrust/sort.h>
 #include <vector_types.h>
 
-#include <cuda/Simulation.cuh>
+#include <cuda/simulation/Simulation.cuh>
+#include <cuda/simulation/physics/StaticBoundaryDomain.cuh>
 #include <glm/common.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
@@ -17,10 +18,9 @@
 #include "SphSimulation.cuh"
 #include "algorithm/Algorithm.cuh"
 #include "algorithm/BoundaryAlgorithm.cuh"
-#include "algorithm/NeighborGrid.cuh"
-#include "algorithm/kernels/Kernel.cuh"
-#include "cuda/physics/StaticBoundaryDomain.cuh"
+#include "algorithm/WendlandKernel.cuh"
 #include "memory/ImportedParticleMemory.cuh"
+#include "neighbors/NeighborGrid.cuh"
 #include "utils/DeviceValue.cuh"
 
 namespace sph::cuda
@@ -31,21 +31,22 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
                              const FluidParticlesDataImportedBuffer& fluidParticleMemory,
                              const BoundaryParticlesDataImportedBuffer& boundaryParticleMemory,
                              const physics::StaticBoundaryDomain& boundaryDomain,
-                             uint32_t maxParticleCapacity)
+                             uint32_t maxFluidParticleCapacity,
+                             uint32_t maxBoundaryParticleCapacity)
     : _fluidParticlesData {
           .imported = {toInternalBuffer(fluidParticleMemory)},
-          .internal = {.accelerations = thrust::device_vector<glm::vec4>(positions.size(),
+          .internal = {.accelerations = thrust::device_vector<glm::vec4>(maxFluidParticleCapacity,
                        glm::vec4 {initialParameters.gravity, 0.F}),
-                       .smoothingRadii = thrust::device_vector<float>(positions.size()),
-                       .masses = thrust::device_vector<float>(positions.size())}
+                       .smoothingRadii = thrust::device_vector<float>(maxFluidParticleCapacity),
+                       .masses = thrust::device_vector<float>(maxFluidParticleCapacity)}
 },
       _boundaryParticlesData {.imported = {toInternalBuffer(boundaryParticleMemory)}, .internal = {}},
       _simulationData {initialParameters}, _boundaryParticleCount {boundaryDomain.getParticleCount()},
-      _particleCount {static_cast<uint32_t>(positions.size())}, _particleCapacity {maxParticleCapacity},
+      _particleCount {static_cast<uint32_t>(positions.size())},
       _grid {initialParameters.domain,
              2 * initialParameters.baseSmoothingRadius* device::constant::wendlandRangeRatio,
-             _particleCapacity,
-             _boundaryParticleCount}
+             maxFluidParticleCapacity,
+             maxBoundaryParticleCapacity}
 
 {
     const auto velocitiesVec = std::vector(positions.size(), glm::vec4 {});
@@ -66,13 +67,11 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
                radiusesVec.size() * sizeof(float),
                cudaMemcpyHostToDevice);
 
-    thrust::fill(_fluidParticlesData.internal.smoothingRadii.begin(),
-                 _fluidParticlesData.internal.smoothingRadii.end(),
-                 initialParameters.baseSmoothingRadius);
+    thrust::fill_n(_fluidParticlesData.internal.smoothingRadii.begin(),
+                   positions.size(),
+                   initialParameters.baseSmoothingRadius);
 
-    thrust::fill(_fluidParticlesData.internal.masses.begin(),
-                 _fluidParticlesData.internal.masses.end(),
-                 initialParameters.baseParticleMass);
+    thrust::fill_n(_fluidParticlesData.internal.masses.begin(), positions.size(), initialParameters.baseParticleMass);
 
     initializeBoundaryParticles(boundaryDomain);
     _grid.updateBoundary({getBlocksPerGridForBoundaryParticles(), _simulationData.threadsPerBlock},
@@ -104,9 +103,7 @@ void SphSimulation::update(float deltaTime)
     halfKickVelocities(deltaTime / 2.F);
     updatePositions(deltaTime);
 
-    _grid.updateFluid({getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock},
-                      getFluidParticles().positions,
-                      getFluidParticlesCount());
+    updateGrid();
     computeDensities();
     computeBoundaryDensityContribution();
 
@@ -124,8 +121,11 @@ void SphSimulation::update(float deltaTime)
 
 void SphSimulation::updateDomain(const Parameters::Domain& domain, const physics::StaticBoundaryDomain& boundaryDomain)
 {
+    cudaDeviceSynchronize();
+    _simulationData.domain = domain;
     initializeBoundaryParticles(boundaryDomain);
     _grid.updateBoundarySize({getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock},
+                             {getBlocksPerGridForBoundaryParticles(), _simulationData.threadsPerBlock},
                              domain,
                              getFluidParticles().positions,
                              getFluidParticlesCount(),
@@ -185,8 +185,7 @@ void SphSimulation::computeDensities()
 {
     kernel::computeDensities<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
         getFluidParticles(),
-        _grid.toDevice(),
-        _simulationData);
+        _grid.toDevice());
 }
 
 void SphSimulation::computePressureAccelerations()
@@ -199,19 +198,24 @@ void SphSimulation::computePressureAccelerations()
 
 void SphSimulation::computeViscosityAccelerations()
 {
-    kernel::computeViscosityAccelerations<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
-        getFluidParticles(),
-        _grid.toDevice(),
-        _simulationData);
+    if (_simulationData.viscosityConstant != 0.F)
+    {
+        kernel::computeViscosityAccelerations<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
+            getFluidParticles(),
+            _grid.toDevice(),
+            _simulationData);
+    }
 }
 
 void SphSimulation::computeSurfaceTensionAccelerations()
 {
-    kernel::
-        computeSurfaceTensionAccelerations<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
-            getFluidParticles(),
-            _grid.toDevice(),
-            _simulationData);
+    if (_simulationData.surfaceTensionConstant != 0.F)
+    {
+        kernel::computeSurfaceTensionAccelerations<<<getBlocksPerGridForFluidParticles(),
+                                                     _simulationData.threadsPerBlock>>>(getFluidParticles(),
+                                                                                        _grid.toDevice(),
+                                                                                        _simulationData);
+    }
 }
 
 void SphSimulation::halfKickVelocities(float halfDt)
@@ -226,6 +230,7 @@ void SphSimulation::updatePositions(float dt)
 {
     kernel::updatePositions<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
         getFluidParticles(),
+        _simulationData.domain,
         dt);
 }
 
@@ -349,5 +354,14 @@ void SphSimulation::computeBoundaryForces()
         _grid.toDevice(),
         _simulationData);
 }
+
+void SphSimulation::updateGrid()
+{
+    _grid.updateFluid({getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock},
+                      getFluidParticles().positions,
+                      getFluidParticlesCount());
+}
+
+void SphSimulation::enableAdaptiveRefinement() { }
 
 }

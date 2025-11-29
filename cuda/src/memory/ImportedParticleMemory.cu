@@ -2,7 +2,7 @@
 #include <driver_types.h>
 
 #include <cstddef>
-#include <cuda/ImportedMemory.cuh>
+#include <cuda/memory/ImportedMemory.cuh>
 #include <memory>
 
 #include "ImportedParticleMemory.cuh"

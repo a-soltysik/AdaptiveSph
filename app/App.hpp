@@ -3,7 +3,7 @@
 #include <panda/gfx/Context.h>
 #include <panda/gfx/Scene.h>
 
-#include <cuda/Simulation.cuh>
+#include <../cuda/include/cuda/simulation/Simulation.cuh>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
 #include <glm/ext/vector_uint3.hpp>

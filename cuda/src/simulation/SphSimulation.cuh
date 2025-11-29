@@ -4,7 +4,7 @@
 #include <vector_types.h>
 
 #include <cstdint>
-#include <cuda/Simulation.cuh>
+#include <cuda/simulation/Simulation.cuh>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
 #include <glm/glm.hpp>
@@ -12,8 +12,8 @@
 #include <span>
 #include <vector>
 
-#include "algorithm/NeighborGrid.cuh"
 #include "memory/ImportedParticleMemory.cuh"
+#include "neighbors/NeighborGrid.cuh"
 
 namespace sph::cuda::physics
 {
@@ -31,7 +31,8 @@ public:
                   const FluidParticlesDataImportedBuffer& fluidParticleMemory,
                   const BoundaryParticlesDataImportedBuffer& boundaryParticleMemory,
                   const physics::StaticBoundaryDomain& boundaryDomain,
-                  uint32_t maxParticleCapacity);
+                  uint32_t maxFluidParticleCapacity,
+                  uint32_t maxBoundaryParticleCapacity);
 
     void update(float deltaTime) override;
     void updateDomain(const Parameters::Domain& domain, const physics::StaticBoundaryDomain& boundaryDomain) override;
@@ -48,6 +49,8 @@ public:
 
     [[nodiscard]] auto calculateAverageNeighborCount() -> float override;
     [[nodiscard]] auto getDensityInfo(float threshold) -> DensityInfo override;
+
+    void enableAdaptiveRefinement() override;
 
 protected:
     struct FluidParticlesDataBuffer
@@ -122,11 +125,6 @@ protected:
         _particleCount = count;
     }
 
-    [[nodiscard]] auto getParticlesCapacity() const -> uint32_t
-    {
-        return _particleCapacity;
-    }
-
     [[nodiscard]] auto getBlocksPerGridForFluidParticles() const -> dim3;
     [[nodiscard]] auto getBlocksPerGridForBoundaryParticles() const -> dim3;
 
@@ -139,6 +137,7 @@ protected:
     void updatePositions(float deltaTime);
     void computeBoundaryDensityContribution();
     void computeBoundaryForces();
+    void updateGrid();
 
 private:
     void initializeBoundaryParticles(const physics::StaticBoundaryDomain& boundaryDomain);
@@ -148,7 +147,6 @@ private:
     Parameters _simulationData;
     uint32_t _boundaryParticleCount;
     uint32_t _particleCount;
-    uint32_t _particleCapacity;
     NeighborGrid _grid;
 };
 }

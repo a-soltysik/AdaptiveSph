@@ -11,7 +11,7 @@
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_handles.hpp>
 
-#include "cuda/Simulation.cuh"
+#include "../../../../cuda/include/cuda/simulation/Simulation.cuh"
 #include "panda/Common.h"
 #include "panda/internal/config.h"
 

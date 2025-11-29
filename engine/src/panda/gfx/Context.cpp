@@ -9,11 +9,11 @@
 #include <vulkan/vk_platform.h>
 #include <vulkan/vulkan_core.h>
 
+#include <../../../../cuda/include/cuda/simulation/Simulation.cuh>
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <cuda/Simulation.cuh>
 #include <functional>
 #include <memory>
 #include <optional>
