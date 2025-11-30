@@ -56,10 +56,14 @@ auto dumpTemplateConfiguration(const std::string& filePath) -> void
             panda::log::Error("Failed to open file: {}", filePath);
         }
 
-        const json jsonFile = Configuration {.initialParameters = InitialParameters {},
-                                             .simulationParameters = cuda::Simulation::Parameters {},
-                                             .refinementParameters = cuda::refinement::RefinementParameters {},
-                                             .renderingParameters = RenderingParameters {}};
+        const json jsonFile = Configuration {
+            .initialParameters = InitialParameters {},
+            .simulationParameters = cuda::Simulation::Parameters {},
+            .refinementParameters = cuda::refinement::RefinementParameters {},
+            .renderingParameters = RenderingParameters {},
+            .scenarioParameters = cuda::ScenarioParameters {.lidDrivenCavity = cuda::LidDrivenCavityParameters {},
+                                                    .damBreak = cuda::DamBreakParameters {}}
+        };
         file << jsonFile.dump(4);
 
         panda::log::Info("Configuration file saved: {}", filePath);

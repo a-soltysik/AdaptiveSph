@@ -28,14 +28,16 @@ AdaptiveSphSimulation::AdaptiveSphSimulation(const Parameters& initialParameters
                                              const BoundaryParticlesDataImportedBuffer& boundaryParticleMemory,
                                              const physics::StaticBoundaryDomain& boundaryDomain,
                                              const refinement::RefinementParameters& refinementParams,
-                                             uint32_t maxBoundaryParticleCapacity)
+                                             uint32_t maxBoundaryParticleCapacity,
+                                             const ScenarioParameters& scenarioParams)
     : SphSimulation(initialParameters,
                     positions,
                     fluidParticleMemory,
                     boundaryParticleMemory,
                     boundaryDomain,
                     refinementParams.maxParticleCount,
-                    maxBoundaryParticleCapacity),
+                    maxBoundaryParticleCapacity,
+                    scenarioParams),
       _refinementParams(refinementParams),
       _refinementData {
           .split = {.criterionValues = {thrust::device_vector<float>(refinementParams.maxParticleCount)},

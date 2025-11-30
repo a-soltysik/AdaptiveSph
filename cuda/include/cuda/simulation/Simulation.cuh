@@ -8,9 +8,9 @@
 #include <optional>
 #include <vector>
 
-#include "../Api.cuh"
-#include "../memory/ImportedMemory.cuh"
-#include "../refinement/RefinementParameters.cuh"
+#include "cuda/Api.cuh"
+#include "cuda/memory/ImportedMemory.cuh"
+#include "cuda/refinement/RefinementParameters.cuh"
 
 namespace sph::cuda
 {
@@ -133,6 +133,40 @@ public:
     [[nodiscard]] virtual auto getDensityInfo(float threshold) -> DensityInfo = 0;
 
     virtual void enableAdaptiveRefinement() = 0;
+    virtual void setScenarioActivated(bool activated) = 0;
+};
+
+enum class ScenarioType
+{
+    None,
+    PoiseuilleFlow,
+    LidDrivenCavity,
+    DamBreak
+};
+
+struct LidDrivenCavityParameters
+{
+    float lidVelocity = 1.0F;
+};
+
+struct DamBreakParameters
+{
+    Simulation::Parameters::Domain expandedDomain;
+};
+
+struct PoiseuilleFlowParameters
+{
+    float drivingForce = 0.0F;
+};
+
+struct ScenarioParameters
+{
+    ScenarioType type = ScenarioType::None;
+    uint32_t cooldown = 1000;
+
+    std::optional<LidDrivenCavityParameters> lidDrivenCavity;
+    std::optional<DamBreakParameters> damBreak;
+    std::optional<PoiseuilleFlowParameters> poiseuilleFlow;
 };
 
 SPH_CUDA_API auto createSimulation(const Simulation::Parameters& parameters,
@@ -142,5 +176,6 @@ SPH_CUDA_API auto createSimulation(const Simulation::Parameters& parameters,
                                    const physics::StaticBoundaryDomain& boundaryDomain,
                                    const std::optional<refinement::RefinementParameters>& refinementParams,
                                    uint32_t maxFluidParticleCapacity,
-                                   uint32_t maxBoundaryParticleCapacity) -> std::unique_ptr<Simulation>;
+                                   uint32_t maxBoundaryParticleCapacity,
+                                   const ScenarioParameters& scenarioParams) -> std::unique_ptr<Simulation>;
 }

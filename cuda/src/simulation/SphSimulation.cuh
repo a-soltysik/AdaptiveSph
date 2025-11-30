@@ -15,11 +15,6 @@
 #include "memory/ImportedParticleMemory.cuh"
 #include "neighbors/NeighborGrid.cuh"
 
-namespace sph::cuda::physics
-{
-class StaticBoundaryDomain;
-}
-
 namespace sph::cuda
 {
 
@@ -32,7 +27,8 @@ public:
                   const BoundaryParticlesDataImportedBuffer& boundaryParticleMemory,
                   const physics::StaticBoundaryDomain& boundaryDomain,
                   uint32_t maxFluidParticleCapacity,
-                  uint32_t maxBoundaryParticleCapacity);
+                  uint32_t maxBoundaryParticleCapacity,
+                  const ScenarioParameters& scenarioParams);
 
     void update(float deltaTime) override;
     void updateDomain(const Parameters::Domain& domain, const physics::StaticBoundaryDomain& boundaryDomain) override;
@@ -51,6 +47,15 @@ public:
     [[nodiscard]] auto getDensityInfo(float threshold) -> DensityInfo override;
 
     void enableAdaptiveRefinement() override;
+    void setScenarioActivated(bool activated) override
+    {
+        _scenarioActivated = activated;
+    }
+
+    [[nodiscard]] auto getScenarioParameters() const -> const ScenarioParameters&
+    {
+        return _scenarioParams;
+    }
 
 protected:
     struct FluidParticlesDataBuffer
@@ -148,5 +153,7 @@ private:
     uint32_t _boundaryParticleCount;
     uint32_t _particleCount;
     NeighborGrid _grid;
+    ScenarioParameters _scenarioParams;
+    bool _scenarioActivated = false;
 };
 }

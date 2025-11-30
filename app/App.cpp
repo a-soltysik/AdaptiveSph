@@ -129,6 +129,7 @@ auto App::run() -> int
 
     const auto initialParameters = panda::expect(config.initialParameters, "Initial parameters couldn't be found");
     _simulationParameters = panda::expect(config.simulationParameters, "Simulation parameters couldn't be found");
+    _scenarioParameters = config.scenarioParameters.value_or(cuda::ScenarioParameters {});
 
     static constexpr auto defaultWidth = uint32_t {1920};
     static constexpr auto defaultHeight = uint32_t {1080};
@@ -141,11 +142,27 @@ auto App::run() -> int
     setDefaultScene(_simulationParameters, initialParameters);
 
     const auto particleSpacing = _simulationParameters.baseParticleRadius * 2;
-    const auto boundaryDomain =
-        cuda::physics::StaticBoundaryDomain::generate(_simulationParameters.domain,
-                                                      particleSpacing,
-                                                      _simulationParameters.restDensity,
-                                                      _simulationParameters.baseSmoothingRadius);
+
+    // Determine which walls to generate based on scenario
+    auto wallFlags = cuda::physics::StaticBoundaryDomain::WallFlags::All;
+    bool periodicX = false;
+    if (_scenarioParameters.type == cuda::ScenarioType::PoiseuilleFlow)
+    {
+        // For Poiseuille flow, exclude left and right walls (MinX and MaxX) for periodic boundaries
+        wallFlags = cuda::physics::StaticBoundaryDomain::WallFlags::MinY |
+                    cuda::physics::StaticBoundaryDomain::WallFlags::MaxY |
+                    cuda::physics::StaticBoundaryDomain::WallFlags::MinZ |
+                    cuda::physics::StaticBoundaryDomain::WallFlags::MaxZ;
+        periodicX = true;
+        panda::log::Info("Poiseuille flow scenario: using periodic boundaries in X direction");
+    }
+
+    const auto boundaryDomain = cuda::physics::StaticBoundaryDomain::generate(_simulationParameters.domain,
+                                                                              particleSpacing,
+                                                                              _simulationParameters.restDensity,
+                                                                              _simulationParameters.baseSmoothingRadius,
+                                                                              wallFlags,
+                                                                              periodicX);
 
     panda::log::Info("Generated {} boundary particles for static domain", boundaryDomain.getParticleCount());
 
@@ -169,7 +186,8 @@ auto App::run() -> int
         boundaryDomain,
         config.refinementParameters,
         initialParameters.getScalarCount(),
-        maxBoundaryCapacity);
+        maxBoundaryCapacity,
+        _scenarioParameters);
 
     mainLoop();
     return 0;
@@ -211,7 +229,7 @@ auto App::mainLoop() -> void
         [&gui, this] {
             gui.setAverageNeighbourCount(_simulation->calculateAverageNeighborCount());
         },
-        std::chrono::seconds {0}));
+        std::chrono::seconds {1}));
     taskScheduler.addTask(std::make_unique<utils::PerTimeTask>(
         [&gui, this] {
             gui.setDensityInfo(_simulation->getDensityInfo(0.1F));
@@ -228,6 +246,7 @@ auto App::mainLoop() -> void
 
             timeManager.update();
             _simulation->update(0.0002F);
+            updateScenario(_simulationStep++);
             taskScheduler.update(std::chrono::milliseconds {static_cast<uint32_t>(timeManager.getDelta() * 1000)}, 1);
             _scene->setParticleCount(_simulation->getFluidParticlesCount());
             _scene->setBoundaryParticleCount(_simulation->getBoundaryParticlesCount());
@@ -366,11 +385,25 @@ void App::updateDomain(const cuda::Simulation::Parameters::Domain& newDomain)
     _simulationParameters.domain = newDomain;
 
     const auto particleSpacing = _simulationParameters.baseParticleRadius * 2;
-    const auto boundaryDomain =
-        cuda::physics::StaticBoundaryDomain::generate(newDomain,
-                                                      particleSpacing,
-                                                      _simulationParameters.restDensity,
-                                                      _simulationParameters.baseSmoothingRadius);
+
+    // Determine which walls to generate based on scenario
+    auto wallFlags = cuda::physics::StaticBoundaryDomain::WallFlags::All;
+    bool periodicX = false;
+    if (_scenarioParameters.type == cuda::ScenarioType::PoiseuilleFlow)
+    {
+        wallFlags = cuda::physics::StaticBoundaryDomain::WallFlags::MinY |
+                    cuda::physics::StaticBoundaryDomain::WallFlags::MaxY |
+                    cuda::physics::StaticBoundaryDomain::WallFlags::MinZ |
+                    cuda::physics::StaticBoundaryDomain::WallFlags::MaxZ;
+        periodicX = true;
+    }
+
+    const auto boundaryDomain = cuda::physics::StaticBoundaryDomain::generate(newDomain,
+                                                                              particleSpacing,
+                                                                              _simulationParameters.restDensity,
+                                                                              _simulationParameters.baseSmoothingRadius,
+                                                                              wallFlags,
+                                                                              periodicX);
 
     panda::log::Info("Generated {} boundary particles for new domain", boundaryDomain.getParticleCount());
 
@@ -379,5 +412,28 @@ void App::updateDomain(const cuda::Simulation::Parameters::Domain& newDomain)
     auto& domainObject = _scene->getDomain();
     domainObject.transform.translation = newDomain.getTranslation();
     domainObject.transform.scale = newDomain.getScale();
+}
+
+void App::updateScenario(uint32_t simulationStep)
+{
+    // Check if cooldown has passed
+    if (!_scenarioActivated && simulationStep >= _scenarioParameters.cooldown)
+    {
+        _scenarioActivated = true;
+        _simulation->setScenarioActivated(true);
+
+        if (_scenarioParameters.type == cuda::ScenarioType::DamBreak)
+        {
+            panda::log::Info("Dam break scenario cooldown completed. Expanding domain");
+            if (_scenarioParameters.damBreak.has_value())
+            {
+                updateDomain(_scenarioParameters.damBreak->expandedDomain);
+            }
+        }
+        else if (_scenarioParameters.type == cuda::ScenarioType::PoiseuilleFlow)
+        {
+            panda::log::Info("Poiseuille flow scenario cooldown completed. Activating driving force");
+        }
+    }
 }
 }

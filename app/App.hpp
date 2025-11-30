@@ -45,6 +45,8 @@ private:
 
     void updateDomain(const cuda::Simulation::Parameters::Domain& newDomain);
 
+    void updateScenario(uint32_t simulationStep);
+
     std::vector<glm::vec4> _particles;
     std::unique_ptr<panda::gfx::Scene> _scene;
     std::unique_ptr<Window> _window;
@@ -53,5 +55,8 @@ private:
 
     std::string _configPath;
     cuda::Simulation::Parameters _simulationParameters {};
+    cuda::ScenarioParameters _scenarioParameters {};
+    uint32_t _simulationStep = 0;
+    bool _scenarioActivated = false;
 };
 }

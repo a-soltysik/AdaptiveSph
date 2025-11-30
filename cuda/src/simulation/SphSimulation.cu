@@ -23,6 +23,9 @@
 #include "neighbors/NeighborGrid.cuh"
 #include "utils/DeviceValue.cuh"
 
+// Include for ScenarioParameters
+#include "../../../app/utils/Configuration.hpp"
+
 namespace sph::cuda
 {
 
@@ -32,7 +35,8 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
                              const BoundaryParticlesDataImportedBuffer& boundaryParticleMemory,
                              const physics::StaticBoundaryDomain& boundaryDomain,
                              uint32_t maxFluidParticleCapacity,
-                             uint32_t maxBoundaryParticleCapacity)
+                             uint32_t maxBoundaryParticleCapacity,
+                             const ScenarioParameters& scenarioParams)
     : _fluidParticlesData {
           .imported = {toInternalBuffer(fluidParticleMemory)},
           .internal = {.accelerations = thrust::device_vector<glm::vec4>(maxFluidParticleCapacity,
@@ -46,7 +50,8 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
       _grid {initialParameters.domain,
              2 * initialParameters.baseSmoothingRadius* device::constant::wendlandRangeRatio,
              maxFluidParticleCapacity,
-             maxBoundaryParticleCapacity}
+             maxBoundaryParticleCapacity},
+      _scenarioParams {scenarioParams}
 
 {
     const auto velocitiesVec = std::vector(positions.size(), glm::vec4 {});
@@ -178,32 +183,64 @@ void SphSimulation::computeExternalAccelerations()
 {
     kernel::computeExternalAccelerations<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
         getFluidParticles(),
-        _simulationData);
+        _simulationData,
+        _scenarioParams,
+        _scenarioActivated);
 }
 
 void SphSimulation::computeDensities()
 {
-    kernel::computeDensities<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
-        getFluidParticles(),
-        _grid.toDevice());
+    if (_scenarioParams.type == ScenarioType::PoiseuilleFlow)
+    {
+        kernel::computeDensitiesPeriodic<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
+            getFluidParticles(),
+            _grid.toDevice());
+    }
+    else
+    {
+        kernel::computeDensities<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
+            getFluidParticles(),
+            _grid.toDevice());
+    }
 }
 
 void SphSimulation::computePressureAccelerations()
 {
-    kernel::computePressureAccelerations<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
-        getFluidParticles(),
-        _grid.toDevice(),
-        _simulationData);
+    if (_scenarioParams.type == ScenarioType::PoiseuilleFlow)
+    {
+        kernel::computePressureAccelerationsPeriodic<<<getBlocksPerGridForFluidParticles(),
+                                                       _simulationData.threadsPerBlock>>>(getFluidParticles(),
+                                                                                          _grid.toDevice(),
+                                                                                          _simulationData);
+    }
+    else
+    {
+        kernel::computePressureAccelerations<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
+            getFluidParticles(),
+            _grid.toDevice(),
+            _simulationData);
+    }
 }
 
 void SphSimulation::computeViscosityAccelerations()
 {
     if (_simulationData.viscosityConstant != 0.F)
     {
-        kernel::computeViscosityAccelerations<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
-            getFluidParticles(),
-            _grid.toDevice(),
-            _simulationData);
+        if (_scenarioParams.type == ScenarioType::PoiseuilleFlow)
+        {
+            kernel::computeViscosityAccelerationsPeriodic<<<getBlocksPerGridForFluidParticles(),
+                                                            _simulationData.threadsPerBlock>>>(getFluidParticles(),
+                                                                                               _grid.toDevice(),
+                                                                                               _simulationData);
+        }
+        else
+        {
+            kernel::
+                computeViscosityAccelerations<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
+                    getFluidParticles(),
+                    _grid.toDevice(),
+                    _simulationData);
+        }
     }
 }
 
@@ -211,10 +248,20 @@ void SphSimulation::computeSurfaceTensionAccelerations()
 {
     if (_simulationData.surfaceTensionConstant != 0.F)
     {
-        kernel::computeSurfaceTensionAccelerations<<<getBlocksPerGridForFluidParticles(),
-                                                     _simulationData.threadsPerBlock>>>(getFluidParticles(),
-                                                                                        _grid.toDevice(),
-                                                                                        _simulationData);
+        if (_scenarioParams.type == ScenarioType::PoiseuilleFlow)
+        {
+            kernel::computeSurfaceTensionAccelerationsPeriodic<<<getBlocksPerGridForFluidParticles(),
+                                                                 _simulationData.threadsPerBlock>>>(getFluidParticles(),
+                                                                                                    _grid.toDevice(),
+                                                                                                    _simulationData);
+        }
+        else
+        {
+            kernel::computeSurfaceTensionAccelerations<<<getBlocksPerGridForFluidParticles(),
+                                                         _simulationData.threadsPerBlock>>>(getFluidParticles(),
+                                                                                            _grid.toDevice(),
+                                                                                            _simulationData);
+        }
     }
 }
 
@@ -228,10 +275,20 @@ void SphSimulation::halfKickVelocities(float halfDt)
 
 void SphSimulation::updatePositions(float dt)
 {
-    kernel::updatePositions<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
-        getFluidParticles(),
-        _simulationData.domain,
-        dt);
+    if (_scenarioParams.type == ScenarioType::PoiseuilleFlow)
+    {
+        kernel::updatePositionsPeriodic<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
+            getFluidParticles(),
+            _simulationData.domain,
+            dt);
+    }
+    else
+    {
+        kernel::updatePositions<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
+            getFluidParticles(),
+            _simulationData.domain,
+            dt);
+    }
 }
 
 auto SphSimulation::calculateAverageNeighborCount() -> float
@@ -334,25 +391,59 @@ void SphSimulation::initializeBoundaryParticles(const physics::StaticBoundaryDom
 
 void SphSimulation::computeBoundaryDensityContribution()
 {
-    kernel::computeBoundaryDensityContribution<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
-        getFluidParticles(),
-        getBoundaryParticles(),
-        _grid.toDevice());
+    if (_scenarioParams.type == ScenarioType::PoiseuilleFlow)
+    {
+        kernel::computeBoundaryDensityContributionPeriodic<<<getBlocksPerGridForFluidParticles(),
+                                                             getThreadsPerBlock()>>>(getFluidParticles(),
+                                                                                     getBoundaryParticles(),
+                                                                                     _grid.toDevice());
+    }
+    else
+    {
+        kernel::computeBoundaryDensityContribution<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
+            getFluidParticles(),
+            getBoundaryParticles(),
+            _grid.toDevice());
+    }
 }
 
 void SphSimulation::computeBoundaryForces()
 {
-    kernel::computeBoundaryPressureAcceleration<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
-        getFluidParticles(),
-        getBoundaryParticles(),
-        _grid.toDevice(),
-        _simulationData);
+    if (_scenarioParams.type == ScenarioType::PoiseuilleFlow)
+    {
+        kernel::computeBoundaryPressureAccelerationPeriodic<<<getBlocksPerGridForFluidParticles(),
+                                                              getThreadsPerBlock()>>>(getFluidParticles(),
+                                                                                      getBoundaryParticles(),
+                                                                                      _grid.toDevice(),
+                                                                                      _simulationData);
 
-    kernel::computeBoundaryFrictionAcceleration<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
-        getFluidParticles(),
-        getBoundaryParticles(),
-        _grid.toDevice(),
-        _simulationData);
+        kernel::computeBoundaryFrictionAccelerationPeriodic<<<getBlocksPerGridForFluidParticles(),
+                                                              getThreadsPerBlock()>>>(getFluidParticles(),
+                                                                                      getBoundaryParticles(),
+                                                                                      _grid.toDevice(),
+                                                                                      _simulationData,
+                                                                                      0.0F);
+    }
+    else
+    {
+        kernel::computeBoundaryPressureAcceleration<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
+            getFluidParticles(),
+            getBoundaryParticles(),
+            _grid.toDevice(),
+            _simulationData);
+
+        const auto lidVelocity =
+            (_scenarioParams.type == ScenarioType::LidDrivenCavity && _scenarioParams.lidDrivenCavity.has_value())
+                ? _scenarioParams.lidDrivenCavity->lidVelocity
+                : 0.0F;
+
+        kernel::computeBoundaryFrictionAcceleration<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
+            getFluidParticles(),
+            getBoundaryParticles(),
+            _grid.toDevice(),
+            _simulationData,
+            lidVelocity);
+    }
 }
 
 void SphSimulation::updateGrid()

@@ -112,6 +112,62 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::Simulation::Parameters,
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::utils::InitialParameters, particleCount)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::utils::RenderingParameters, renderBoundaryParticles)
 
+NLOHMANN_JSON_SERIALIZE_ENUM(sph::cuda::ScenarioType,
+                             {
+                                 {sph::cuda::ScenarioType::None,            "none"             },
+                                 {sph::cuda::ScenarioType::PoiseuilleFlow,  "poiseuille_flow"  },
+                                 {sph::cuda::ScenarioType::LidDrivenCavity, "lid_driven_cavity"},
+                                 {sph::cuda::ScenarioType::DamBreak,        "dam_break"        }
+})
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::LidDrivenCavityParameters, lidVelocity)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::DamBreakParameters, expandedDomain)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::PoiseuilleFlowParameters, drivingForce)
+
+template <>
+struct adl_serializer<sph::cuda::ScenarioParameters>
+{
+    static void to_json(json& j, const sph::cuda::ScenarioParameters& s)
+    {
+        j = json {
+            {"type",     s.type    },
+            {"cooldown", s.cooldown}
+        };
+
+        if (s.lidDrivenCavity.has_value())
+        {
+            j["lidDrivenCavity"] = s.lidDrivenCavity.value();
+        }
+        if (s.damBreak.has_value())
+        {
+            j["damBreak"] = s.damBreak.value();
+        }
+        if (s.poiseuilleFlow.has_value())
+        {
+            j["poiseuilleFlow"] = s.poiseuilleFlow.value();
+        }
+    }
+
+    static void from_json(const json& j, sph::cuda::ScenarioParameters& s)
+    {
+        s.type = j.value("type", sph::cuda::ScenarioType::None);
+        s.cooldown = j.value("cooldown", 1000u);
+
+        if (j.contains("lidDrivenCavity"))
+        {
+            s.lidDrivenCavity = j["lidDrivenCavity"].get<sph::cuda::LidDrivenCavityParameters>();
+        }
+        if (j.contains("damBreak"))
+        {
+            s.damBreak = j["damBreak"].get<sph::cuda::DamBreakParameters>();
+        }
+        if (j.contains("poiseuilleFlow"))
+        {
+            s.poiseuilleFlow = j["poiseuilleFlow"].get<sph::cuda::PoiseuilleFlowParameters>();
+        }
+    }
+};
+
 template <>
 struct adl_serializer<sph::utils::Configuration>
 {
@@ -121,7 +177,8 @@ struct adl_serializer<sph::utils::Configuration>
             {"initialParameters",    c.initialParameters   },
             {"simulationParameters", c.simulationParameters},
             {"refinementParameters", c.refinementParameters},
-            {"renderingParameters",  c.renderingParameters }
+            {"renderingParameters",  c.renderingParameters },
+            {"scenarioParameters",   c.scenarioParameters  }
         };
     }
 
@@ -132,6 +189,7 @@ struct adl_serializer<sph::utils::Configuration>
         c.refinementParameters =
             j.value("refinementParameters", std::optional<sph::cuda::refinement::RefinementParameters> {});
         c.renderingParameters = j.value("renderingParameters", std::optional<sph::utils::RenderingParameters> {});
+        c.scenarioParameters = j.value("scenarioParameters", std::optional<sph::cuda::ScenarioParameters> {});
     }
 };
 

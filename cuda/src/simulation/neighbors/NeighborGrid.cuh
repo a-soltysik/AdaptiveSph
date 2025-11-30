@@ -1,8 +1,7 @@
 #pragma once
+#include <cuda/simulation/Simulation.cuh>
 #include <glm/vec3.hpp>
 #include <span>
-
-#include "../../../include/cuda/simulation/Simulation.cuh"
 
 namespace sph::cuda
 {
@@ -45,10 +44,22 @@ public:
                                              Func&& func) const;
 
         template <typename Func>
+        __device__ void forEachFluidNeighborPeriodic(glm::vec4 position,
+                                                     const glm::vec4* positions,
+                                                     float smoothingRadius,
+                                                     Func&& func) const;
+
+        template <typename Func>
         __device__ void forEachBoundaryNeighbor(glm::vec4 position,
                                                 const glm::vec4* boundaryPositions,
                                                 float smoothingRadius,
                                                 Func&& func) const;
+
+        template <typename Func>
+        __device__ void forEachBoundaryNeighborPeriodic(glm::vec4 position,
+                                                        const glm::vec4* boundaryPositions,
+                                                        float smoothingRadius,
+                                                        Func&& func) const;
 
         __device__ auto calculateCellIndex(glm::vec4 position) const -> glm::ivec3;
         __device__ auto flattenCellIndex(glm::ivec3 cellIndex) const -> uint32_t;
@@ -126,6 +137,106 @@ void __device__ NeighborGrid::Device::forEachFluidNeighbor(glm::vec4 position,
 }
 
 template <typename Func>
+void __device__ NeighborGrid::Device::forEachFluidNeighborPeriodic(glm::vec4 position,
+                                                                   const glm::vec4* positions,
+                                                                   float smoothingRadius,
+                                                                   Func&& func) const
+{
+    const auto min = glm::max(glm::ivec3 {(glm::vec3 {position} - domain.min - smoothingRadius) / grid.cellSize},
+                              glm::ivec3 {0, 0, 0});
+
+    const auto max =
+        glm::min(glm::ivec3 {(glm::vec3 {position} - domain.min + smoothingRadius) / grid.cellSize}, grid.gridSize - 1);
+
+    for (auto x = min.x; x <= max.x; x++)
+    {
+        for (auto y = min.y; y <= max.y; y++)
+        {
+            for (auto z = min.z; z <= max.z; z++)
+            {
+                const auto cellIdx = flattenCellIndex(glm::ivec3 {x, y, z});
+                const auto startIdx = fluid.cellStartIndices[cellIdx];
+                const auto endIdx = fluid.cellEndIndices[cellIdx];
+
+                if (startIdx == -1 || startIdx > endIdx)
+                {
+                    continue;
+                }
+
+                for (auto i = startIdx; i <= endIdx; i++)
+                {
+                    const auto neighborIdx = fluid.particleArrayIndices[i];
+                    const auto neighborPos = positions[neighborIdx];
+                    func(neighborIdx, neighborPos);
+                }
+            }
+        }
+    }
+
+    const auto xOutsideLeft =
+        static_cast<int32_t>(std::floor((position.x - domain.min.x - smoothingRadius) / grid.cellSize.x));
+    const auto xOutsideRight =
+        static_cast<int32_t>(std::floor((position.x - domain.min.x + smoothingRadius) / grid.cellSize.x));
+    const auto domainWidth = domain.max.x - domain.min.x;
+
+    if (xOutsideLeft < 0)
+    {
+        for (auto x = grid.gridSize.x + xOutsideLeft; x <= grid.gridSize.x - 1; x++)
+        {
+            for (auto y = min.y; y <= max.y; y++)
+            {
+                for (auto z = min.z; z <= max.z; z++)
+                {
+                    const auto cellIdx = flattenCellIndex(glm::ivec3 {x, y, z});
+                    const auto startIdx = fluid.cellStartIndices[cellIdx];
+                    const auto endIdx = fluid.cellEndIndices[cellIdx];
+
+                    if (startIdx == -1 || startIdx > endIdx)
+                    {
+                        continue;
+                    }
+
+                    for (auto i = startIdx; i <= endIdx; i++)
+                    {
+                        const auto neighborIdx = fluid.particleArrayIndices[i];
+                        const auto neighborPos = positions[neighborIdx];
+                        func(neighborIdx, neighborPos - glm::vec4 {domainWidth, 0, 0, 0});
+                    }
+                }
+            }
+        }
+    }
+
+    if (xOutsideRight >= grid.gridSize.x)
+    {
+        for (auto x = 0; x <= xOutsideRight - grid.gridSize.x; x++)
+        {
+            for (auto y = min.y; y <= max.y; y++)
+            {
+                for (auto z = min.z; z <= max.z; z++)
+                {
+                    const auto cellIdx = flattenCellIndex(glm::ivec3 {x, y, z});
+                    const auto startIdx = fluid.cellStartIndices[cellIdx];
+                    const auto endIdx = fluid.cellEndIndices[cellIdx];
+
+                    if (startIdx == -1 || startIdx > endIdx)
+                    {
+                        continue;
+                    }
+
+                    for (auto i = startIdx; i <= endIdx; i++)
+                    {
+                        const auto neighborIdx = fluid.particleArrayIndices[i];
+                        const auto neighborPos = positions[neighborIdx];
+                        func(neighborIdx, neighborPos + glm::vec4 {domainWidth, 0, 0, 0});
+                    }
+                }
+            }
+        }
+    }
+}
+
+template <typename Func>
 void __device__ NeighborGrid::Device::forEachBoundaryNeighbor(glm::vec4 position,
                                                               const glm::vec4* boundaryPositions,
                                                               float smoothingRadius,
@@ -157,6 +268,107 @@ void __device__ NeighborGrid::Device::forEachBoundaryNeighbor(glm::vec4 position
                     const auto boundaryIdx = boundary.particleArrayIndices[i];
                     const auto boundaryPos = boundaryPositions[boundaryIdx];
                     func(boundaryIdx, boundaryPos);
+                }
+            }
+        }
+    }
+}
+
+template <typename Func>
+void __device__ NeighborGrid::Device::forEachBoundaryNeighborPeriodic(glm::vec4 position,
+                                                                      const glm::vec4* boundaryPositions,
+                                                                      float smoothingRadius,
+                                                                      Func&& func) const
+{
+    const auto min = glm::max(glm::ivec3 {(glm::vec3 {position} - domain.min - smoothingRadius) / grid.cellSize},
+                              glm::ivec3 {0, 0, 0});
+
+    const auto max =
+        glm::min(glm::ivec3 {(glm::vec3 {position} - domain.min + smoothingRadius) / grid.cellSize}, grid.gridSize - 1);
+
+    for (auto x = min.x; x <= max.x; x++)
+    {
+        for (auto y = min.y; y <= max.y; y++)
+        {
+            for (auto z = min.z; z <= max.z; z++)
+            {
+                const auto cellIdx = flattenCellIndex(glm::ivec3 {x, y, z});
+                const auto startIdx = boundary.cellStartIndices[cellIdx];
+                const auto endIdx = boundary.cellEndIndices[cellIdx];
+
+                if (startIdx == -1 || startIdx > endIdx)
+                {
+                    continue;
+                }
+
+                for (auto i = startIdx; i <= endIdx; i++)
+                {
+                    const auto boundaryIdx = boundary.particleArrayIndices[i];
+                    const auto boundaryPos = boundaryPositions[boundaryIdx];
+                    func(boundaryIdx, boundaryPos);
+                }
+            }
+        }
+    }
+
+    const auto domainWidth = domain.max.x - domain.min.x;
+    const auto xOutsideLeft =
+        static_cast<int32_t>(std::floor((position.x - domain.min.x - smoothingRadius) / grid.cellSize.x));
+    const auto xOutsideRight =
+        static_cast<int32_t>(std::floor((position.x - domain.min.x + smoothingRadius) / grid.cellSize.x));
+
+    if (xOutsideLeft < 0)
+    {
+        for (auto x = grid.gridSize.x + xOutsideLeft; x <= grid.gridSize.x - 1; x++)
+        {
+            for (auto y = min.y; y <= max.y; y++)
+            {
+                for (auto z = min.z; z <= max.z; z++)
+                {
+                    const auto cellIdx = flattenCellIndex(glm::ivec3 {x, y, z});
+                    const auto startIdx = boundary.cellStartIndices[cellIdx];
+                    const auto endIdx = boundary.cellEndIndices[cellIdx];
+
+                    if (startIdx == -1 || startIdx > endIdx)
+                    {
+                        continue;
+                    }
+
+                    for (auto i = startIdx; i <= endIdx; i++)
+                    {
+                        const auto boundaryIdx = boundary.particleArrayIndices[i];
+                        const auto boundaryPos = boundaryPositions[boundaryIdx];
+                        func(boundaryIdx, boundaryPos - glm::vec4 {domainWidth, 0, 0, 0});
+                    }
+                }
+            }
+        }
+    }
+
+    if (xOutsideRight >= grid.gridSize.x)
+    {
+        for (auto x = 0; x <= xOutsideRight - grid.gridSize.x; x++)
+        {
+            for (auto y = min.y; y <= max.y; y++)
+            {
+                for (auto z = min.z; z <= max.z; z++)
+                {
+                    const auto cellIdx = flattenCellIndex(glm::ivec3 {x, y, z});
+                    const auto startIdx = boundary.cellStartIndices[cellIdx];
+                    const auto endIdx = boundary.cellEndIndices[cellIdx];
+
+                    if (startIdx == -1 || startIdx > endIdx)
+                    {
+                        continue;
+                    }
+
+                    for (auto i = startIdx; i <= endIdx; i++)
+                    {
+                        const auto boundaryIdx = boundary.particleArrayIndices[i];
+                        const auto boundaryPos = boundaryPositions[boundaryIdx];
+                        // Neighbors on the left side of domain, shift them right
+                        func(boundaryIdx, boundaryPos + glm::vec4 {domainWidth, 0, 0, 0});
+                    }
                 }
             }
         }
