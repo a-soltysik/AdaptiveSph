@@ -147,28 +147,36 @@ __global__ void computeBoundaryFrictionAcceleration(FluidParticlesData fluidPart
             const auto psi = boundaryParticles.psiValues[boundaryIdx];
             const auto frictionCoefficient = boundaryParticles.viscosityCoefficients[boundaryIdx];
 
-            // Check if this boundary particle is on the top wall (lid) for lid-driven cavity
             auto boundaryVelocity = glm::vec4(0.0F);
-            static constexpr auto tolerance = 0.1F;
-            if (lidVelocity > 0.0F && glm::abs(boundaryPosition.y - grid.domain.max.y) < tolerance)
+            if (lidVelocity > 0.0F && boundaryPosition.y < grid.domain.min.y)
             {
-                // Top wall moving with lid velocity in +x direction
                 boundaryVelocity = glm::vec4(lidVelocity, 0.0F, 0.0F, 0.0F);
             }
 
             const auto velocityDifference = velocity - boundaryVelocity;
-            const auto compression = glm::dot(velocityDifference, offsetToNeighbour);
-            if (compression >= 0.F)
-            {
-                return;
-            }
+            //const auto compression = glm::dot(velocityDifference, offsetToNeighbour);
+            //if (compression >= 0.F)
+            //{
+            //    return;
+            //}
+            //
+            //static constexpr auto epsilon = 0.01F;
+            //const auto nu = (frictionCoefficient * smoothingRadius * simulationData.speedOfSound) / (2.0F * density);
+            //const auto pi = -nu * compression / (distanceSquared + epsilon * smoothingRadius * smoothingRadius);
+            //const auto direction = distance > 0.F ? offsetToNeighbour / distance : glm::vec4(0.F, 1.F, 0.F, 0.F);
+            //
+            //acceleration -= direction * psi * pi * device::wendlandDerivativeKernel(distance, smoothingRadius);
 
-            static constexpr auto epsilon = 0.01F;
-            const auto nu = (frictionCoefficient * smoothingRadius * simulationData.speedOfSound) / (2.0F * density);
-            const auto pi = -nu * compression / (distanceSquared + epsilon * smoothingRadius * smoothingRadius);
-            const auto direction = distance > 0.F ? offsetToNeighbour / distance : glm::vec4(0.F, 1.F, 0.F, 0.F);
+            const auto neighborMass = boundaryParticles.psiValues[boundaryIdx];
+            const auto neighborDensity = simulationData.restDensity;
 
-            acceleration -= direction * psi * pi * device::wendlandDerivativeKernel(distance, smoothingRadius);
+            const auto meanKernel = (device::wendlandDerivativeKernel(distance, smoothingRadius) +
+                                     device::wendlandDerivativeKernel(distance, smoothingRadius)) /
+                                    2.F;
+            const auto meanDensity = (density + neighborDensity) / 2.F;
+            const auto nominator = 4 * simulationData.viscosityConstant * distance * meanKernel;
+            const auto denominator = meanDensity * distanceSquared;
+            acceleration += velocityDifference * neighborMass * nominator / denominator;
         });
 
     fluidParticles.accelerations[idx] += acceleration;

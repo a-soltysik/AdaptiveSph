@@ -86,7 +86,7 @@ __global__ void computePressureAccelerations(FluidParticlesData particles,
             const auto radiusSquared = (device::constant::wendlandRangeRatio * neighbourSmoothingRadius) *
                                        (device::constant::wendlandRangeRatio * neighbourSmoothingRadius);
 
-            if (distanceSquared > radiusSquared)
+            if (distanceSquared > radiusSquared && distanceSquared < constants::minimalDistance)
             {
                 return;
             }
@@ -142,7 +142,7 @@ __global__ void computeViscosityAccelerations(FluidParticlesData particles,
             const auto radiusSquared = (device::constant::wendlandRangeRatio * neighborSmoothingRadius) *
                                        (device::constant::wendlandRangeRatio * neighborSmoothingRadius);
 
-            if (distanceSquared > radiusSquared)
+            if (distanceSquared > radiusSquared && distanceSquared < constants::minimalDistance)
             {
                 return;
             }
@@ -197,7 +197,7 @@ __global__ void computeSurfaceTensionAccelerations(FluidParticlesData particles,
             const auto radiusSquared = (device::constant::wendlandRangeRatio * neighborSmoothingRadius) *
                                        (device::constant::wendlandRangeRatio * neighborSmoothingRadius);
 
-            if (distanceSquared > radiusSquared)
+            if (distanceSquared > radiusSquared && distanceSquared < constants::minimalDistance)
             {
                 return;
             }
@@ -225,7 +225,6 @@ __global__ void computeExternalAccelerations(FluidParticlesData particles,
 
     auto acceleration = glm::vec4 {simulationData.gravity, 0.F};
 
-    // Add Poiseuille flow driving force in X direction after cooldown
     if (scenarioActivated && scenarioParams.type == ScenarioType::PoiseuilleFlow &&
         scenarioParams.poiseuilleFlow.has_value())
     {
@@ -301,8 +300,6 @@ __global__ void updatePositions(FluidParticlesData particles, Simulation::Parame
     particles.positions[idx] = glm::vec4 {clampedPosition, particles.positions[idx].w};
 }
 
-// ========== Periodic Boundary Kernels ==========
-
 __global__ void computeDensitiesPeriodic(FluidParticlesData particles, NeighborGrid::Device grid)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
@@ -327,7 +324,7 @@ __global__ void computeDensitiesPeriodic(FluidParticlesData particles, NeighborG
             const auto radiusSquared = (device::constant::wendlandRangeRatio * neighbourSmoothingRadius) *
                                        (device::constant::wendlandRangeRatio * neighbourSmoothingRadius);
 
-            if (distanceSquared > radiusSquared)
+            if (distanceSquared > radiusSquared && distanceSquared < constants::minimalDistance)
             {
                 return;
             }
@@ -375,7 +372,7 @@ __global__ void computePressureAccelerationsPeriodic(FluidParticlesData particle
             const auto radiusSquared = (device::constant::wendlandRangeRatio * neighbourSmoothingRadius) *
                                        (device::constant::wendlandRangeRatio * neighbourSmoothingRadius);
 
-            if (distanceSquared > radiusSquared)
+            if (distanceSquared > radiusSquared && distanceSquared < constants::minimalDistance)
             {
                 return;
             }
@@ -431,7 +428,7 @@ __global__ void computeViscosityAccelerationsPeriodic(FluidParticlesData particl
             const auto radiusSquared = (device::constant::wendlandRangeRatio * neighborSmoothingRadius) *
                                        (device::constant::wendlandRangeRatio * neighborSmoothingRadius);
 
-            if (distanceSquared > radiusSquared)
+            if (distanceSquared > radiusSquared && distanceSquared < constants::minimalDistance)
             {
                 return;
             }
@@ -486,7 +483,7 @@ __global__ void computeSurfaceTensionAccelerationsPeriodic(FluidParticlesData pa
             const auto radiusSquared = (device::constant::wendlandRangeRatio * neighborSmoothingRadius) *
                                        (device::constant::wendlandRangeRatio * neighborSmoothingRadius);
 
-            if (distanceSquared > radiusSquared)
+            if (distanceSquared > radiusSquared && distanceSquared < constants::minimalDistance)
             {
                 return;
             }

@@ -97,7 +97,7 @@ auto StaticBoundaryDomain::generateWallParticles(const Simulation::Parameters::D
     positions.reserve(static_cast<size_t>(particlesCount.x * particlesCount.y * particlesCount.z));
 
     // For periodic boundaries in X, don't add offset in X direction
-    const auto offset = periodicX ? glm::vec3 {0.0F, 0.05F, 0.05F} : glm::vec3 {0.05F};
+    const auto offset = periodicX ? glm::vec3 {0.0F, 0.005F, 0.005F} : glm::vec3 {0.005F};
 
     const auto& min = bounds.min - offset;
     const auto& max = bounds.max + offset;

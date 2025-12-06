@@ -245,7 +245,7 @@ auto App::mainLoop() -> void
             _window->processInput();
 
             timeManager.update();
-            _simulation->update(0.0002F);
+            _simulation->update(0.0001F);
             updateScenario(_simulationStep++);
             taskScheduler.update(std::chrono::milliseconds {static_cast<uint32_t>(timeManager.getDelta() * 1000)}, 1);
             _scene->setParticleCount(_simulation->getFluidParticlesCount());
@@ -333,7 +333,7 @@ void App::createParticlesInGrid(const utils::InitialParameters& initialParameter
     _particles.clear();
     _particles.reserve(initialParameters.getScalarCount());
 
-    static constexpr auto margin = 0.15F;
+    static constexpr auto margin = 0.001F;
 
     const auto domainSize = _simulationParameters.domain.max - _simulationParameters.domain.min;
     const auto availableSize = domainSize - 2.0F * margin;
@@ -424,16 +424,13 @@ void App::updateScenario(uint32_t simulationStep)
 
         if (_scenarioParameters.type == cuda::ScenarioType::DamBreak)
         {
-            panda::log::Info("Dam break scenario cooldown completed. Expanding domain");
             if (_scenarioParameters.damBreak.has_value())
             {
                 updateDomain(_scenarioParameters.damBreak->expandedDomain);
             }
         }
-        else if (_scenarioParameters.type == cuda::ScenarioType::PoiseuilleFlow)
-        {
-            panda::log::Info("Poiseuille flow scenario cooldown completed. Activating driving force");
-        }
+
+        panda::log::Info("Scenario activated");
     }
 }
 }
