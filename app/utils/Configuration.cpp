@@ -61,8 +61,13 @@ auto dumpTemplateConfiguration(const std::string& filePath) -> void
             .simulationParameters = cuda::Simulation::Parameters {},
             .refinementParameters = cuda::refinement::RefinementParameters {},
             .renderingParameters = RenderingParameters {},
-            .scenarioParameters = cuda::ScenarioParameters {.lidDrivenCavity = cuda::LidDrivenCavityParameters {},
-                                                    .damBreak = cuda::DamBreakParameters {}}
+            .scenarioParameters =
+                cuda::ScenarioParameters {
+                                                    .lidDrivenCavity = cuda::LidDrivenCavityParameters {},
+                                                    .damBreak = cuda::DamBreakParameters {},
+                                                    .poiseuilleFlow = cuda::PoiseuilleFlowParameters {},
+                                                    },
+            .experimentConfig = ExperimentConfig {}
         };
         file << jsonFile.dump(4);
 

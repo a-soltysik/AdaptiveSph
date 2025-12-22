@@ -137,9 +137,13 @@ inline __device__ auto MergeCriterionGenerator::operator()(FluidParticlesData pa
     {
         return -1;
     }
+    const auto smoothingRadius = particles.smoothingRadii[id];
+    if (!checkIfParticleCanBeSplitInsideDomain(simulationData.domain, particles.positions[id], smoothingRadius, 1.F))
+    {
+        return -1;
+    }
 
     const auto position = particles.positions[id];
-    const auto smoothingRadius = particles.smoothingRadii[id];
     auto dvx_dx = 0.0F, dvx_dy = 0.0F, dvx_dz = 0.0F;
     auto dvy_dx = 0.0F, dvy_dy = 0.0F, dvy_dz = 0.0F;
     auto dvz_dx = 0.0F, dvz_dy = 0.0F, dvz_dz = 0.0F;

@@ -6,7 +6,7 @@ namespace sph::cuda::kernel
 namespace constants
 {
 
-constexpr auto minimalDistance = 0.00001F;
+constexpr auto minimalDistance = 0.F;
 
 }
 

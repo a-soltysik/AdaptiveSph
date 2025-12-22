@@ -68,11 +68,15 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::VorticityParameters, s
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::CurvatureParameters::Split, minimalCurvatureThreshold)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::CurvatureParameters::Merge, maximalCurvatureThreshold)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::CurvatureParameters, split, merge)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::InterfaceParameters::Split, distanceRatioThreshold)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::InterfaceParameters::Merge, distanceRatioThreshold)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::InterfaceParameters::Split, proximityMagnitudeThreshold)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::InterfaceParameters::Merge, proximityMagnitudeThreshold)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::InterfaceParameters, split, merge)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(
     sph::cuda::refinement::SplittingParameters, epsilon, alpha, centerMassRatio, vertexMassRatio)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::ShiftingParameters,
+                                   enabled,
+                                   diffusionCoefficient,
+                                   maxShiftRatio)
 NLOHMANN_JSON_SERIALIZE_ENUM(sph::cuda::refinement::RefinementParameters::Criterion,
                              {
                                  {sph::cuda::refinement::RefinementParameters::Criterion::Velocity,  "velocity" },
@@ -111,6 +115,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::Simulation::Parameters,
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::utils::InitialParameters, particleCount)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::utils::RenderingParameters, renderBoundaryParticles)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::utils::ExperimentConfig, enabled, samplingInterval, duration)
 
 NLOHMANN_JSON_SERIALIZE_ENUM(sph::cuda::ScenarioType,
                              {
@@ -134,6 +139,10 @@ struct adl_serializer<sph::cuda::ScenarioParameters>
             {"cooldown", s.cooldown}
         };
 
+        if (s.simulationTime.has_value())
+        {
+            j["simulationTime"] = s.simulationTime.value();
+        }
         if (s.lidDrivenCavity.has_value())
         {
             j["lidDrivenCavity"] = s.lidDrivenCavity.value();
@@ -151,8 +160,12 @@ struct adl_serializer<sph::cuda::ScenarioParameters>
     static void from_json(const json& j, sph::cuda::ScenarioParameters& s)
     {
         s.type = j.value("type", sph::cuda::ScenarioType::None);
-        s.cooldown = j.value("cooldown", 1000u);
+        s.cooldown = j.value("cooldown", 2.5F);
 
+        if (j.contains("simulationTime"))
+        {
+            s.simulationTime = j["simulationTime"].get<float>();
+        }
         if (j.contains("lidDrivenCavity"))
         {
             s.lidDrivenCavity = j["lidDrivenCavity"].get<sph::cuda::LidDrivenCavityParameters>();
@@ -178,7 +191,8 @@ struct adl_serializer<sph::utils::Configuration>
             {"simulationParameters", c.simulationParameters},
             {"refinementParameters", c.refinementParameters},
             {"renderingParameters",  c.renderingParameters },
-            {"scenarioParameters",   c.scenarioParameters  }
+            {"scenarioParameters",   c.scenarioParameters  },
+            {"experimentConfig",     c.experimentConfig    }
         };
     }
 
@@ -190,6 +204,7 @@ struct adl_serializer<sph::utils::Configuration>
             j.value("refinementParameters", std::optional<sph::cuda::refinement::RefinementParameters> {});
         c.renderingParameters = j.value("renderingParameters", std::optional<sph::utils::RenderingParameters> {});
         c.scenarioParameters = j.value("scenarioParameters", std::optional<sph::cuda::ScenarioParameters> {});
+        c.experimentConfig = j.value("experimentConfig", std::optional<sph::utils::ExperimentConfig> {});
     }
 };
 

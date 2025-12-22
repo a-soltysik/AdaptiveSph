@@ -134,6 +134,14 @@ public:
 
     virtual void enableAdaptiveRefinement() = 0;
     virtual void setScenarioActivated(bool activated) = 0;
+
+    // Experiment data collection API
+    [[nodiscard]] virtual auto getCurrentSimulationTime() const -> float = 0;
+    [[nodiscard]] virtual auto getCurrentIteration() const -> uint32_t = 0;
+    [[nodiscard]] virtual auto calculateDensityRMSE() const -> float = 0;
+
+    virtual auto copyParticlePositionsToHost(std::vector<glm::vec3>& output) const -> void = 0;
+    virtual auto copyParticleVelocitiesToHost(std::vector<glm::vec3>& output) const -> void = 0;
 };
 
 enum class ScenarioType
@@ -162,7 +170,8 @@ struct PoiseuilleFlowParameters
 struct ScenarioParameters
 {
     ScenarioType type = ScenarioType::None;
-    uint32_t cooldown = 1000;
+    float cooldown = 2.5F;  // Cooldown time in seconds (physical time)
+    std::optional<float> simulationTime;
 
     std::optional<LidDrivenCavityParameters> lidDrivenCavity;
     std::optional<DamBreakParameters> damBreak;

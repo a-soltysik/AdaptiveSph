@@ -33,6 +33,7 @@
 #include <utility>
 #include <vector>
 
+#include "experiment/ExperimentDataCollector.hpp"
 #include "input/MouseHandler.hpp"
 #include "internal/config.hpp"
 #include "mesh/InvertedCube.hpp"
@@ -118,6 +119,7 @@ namespace sph
 App::App(std::string configPath)
     : _configPath(std::move(configPath))
 {
+    utils::dumpTemplateConfiguration("tmp.json");
 }
 
 auto App::run() -> int
@@ -130,6 +132,8 @@ auto App::run() -> int
     const auto initialParameters = panda::expect(config.initialParameters, "Initial parameters couldn't be found");
     _simulationParameters = panda::expect(config.simulationParameters, "Simulation parameters couldn't be found");
     _scenarioParameters = config.scenarioParameters.value_or(cuda::ScenarioParameters {});
+    _refinementParameters = config.refinementParameters;
+    _experimentConfig = config.experimentConfig.value_or(utils::ExperimentConfig {});
 
     static constexpr auto defaultWidth = uint32_t {1920};
     static constexpr auto defaultHeight = uint32_t {1080};
@@ -223,6 +227,53 @@ auto App::mainLoop() -> void
         _simulation->enableAdaptiveRefinement();
     });
 
+    std::string scenarioType = "none";
+    switch (_scenarioParameters.type)
+    {
+    case cuda::ScenarioType::PoiseuilleFlow:
+        scenarioType = "poiseuille";
+        break;
+    case cuda::ScenarioType::LidDrivenCavity:
+        scenarioType = "lid_driven_cavity";
+        break;
+    case cuda::ScenarioType::DamBreak:
+        scenarioType = "dam_break";
+        break;
+    case cuda::ScenarioType::None:
+        scenarioType = "none";
+        break;
+    }
+
+    bool refinementEnabled = _refinementParameters.has_value() && _refinementParameters->enabled;
+    std::string refinementCriterion = "none";
+    if (refinementEnabled)
+    {
+        switch (_refinementParameters->criterionType)
+        {
+        case cuda::refinement::RefinementParameters::Criterion::Velocity:
+            refinementCriterion = "velocity";
+            break;
+        case cuda::refinement::RefinementParameters::Criterion::Interface:
+            refinementCriterion = "interface";
+            break;
+        case cuda::refinement::RefinementParameters::Criterion::Vorticity:
+            refinementCriterion = "vorticity";
+            break;
+        }
+    }
+
+    const float cooldownTime = _scenarioParameters.cooldown;
+
+    auto experimentCollector = std::make_unique<experiment::ExperimentDataCollector>(_simulation.get(),
+                                                                                     _configPath,
+                                                                                     _experimentConfig,
+                                                                                     scenarioType,
+                                                                                     refinementEnabled,
+                                                                                     refinementCriterion,
+                                                                                     cooldownTime);
+
+    const float targetSimulationTime = cooldownTime + _experimentConfig.duration;
+
     auto timeManager = utils::FrameTimeManager {};
     auto taskScheduler = utils::TaskScheduler {};
     taskScheduler.addTask(std::make_unique<utils::PerTimeTask>(
@@ -235,6 +286,29 @@ auto App::mainLoop() -> void
             gui.setDensityInfo(_simulation->getDensityInfo(0.1F));
         },
         std::chrono::seconds {1}));
+
+    taskScheduler.addTask(std::make_unique<utils::PerTimeTask>(
+        [this, targetSimulationTime, cooldownTime] {
+            const float currentTime = _simulation->getCurrentSimulationTime();
+
+            if (currentTime < cooldownTime)
+            {
+                const float cooldownProgress = (currentTime / cooldownTime) * 100.0F;
+                panda::log::Info("Cooldown: {:.2f}s / {:.2f}s ({:.1f}%)", currentTime, cooldownTime, cooldownProgress);
+            }
+            else
+            {
+                const float experimentTime = currentTime - cooldownTime;
+                const float experimentDuration = _experimentConfig.duration;
+                const float experimentProgress = (experimentTime / experimentDuration) * 100.0F;
+                panda::log::Info("Experiment: {:.2f}s / {:.2f}s ({:.1f}%) ",
+                                 experimentTime,
+                                 experimentDuration,
+                                 experimentProgress);
+            }
+        },
+        std::chrono::seconds {10}));
+
     const std::vector densityDeviations(_simulation->getFluidParticlesCount(), 0.F);
 
     while (!_window->shouldClose()) [[likely]]
@@ -245,8 +319,25 @@ auto App::mainLoop() -> void
             _window->processInput();
 
             timeManager.update();
+
+            // Measure simulation time
+            auto startTime = std::chrono::high_resolution_clock::now();
             _simulation->update(0.0001F);
+            auto endTime = std::chrono::high_resolution_clock::now();
+            float computationTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+
             updateScenario(_simulationStep++);
+
+            // Collect experiment data
+            experimentCollector->onFrameCompleted(computationTimeMs);
+
+            // Check simulation time limit
+            if (_simulation->getCurrentSimulationTime() >= targetSimulationTime)
+            {
+                panda::log::Info("Simulation time limit reached: {:.2f}s", targetSimulationTime);
+                break;
+            }
+
             taskScheduler.update(std::chrono::milliseconds {static_cast<uint32_t>(timeManager.getDelta() * 1000)}, 1);
             _scene->setParticleCount(_simulation->getFluidParticlesCount());
             _scene->setBoundaryParticleCount(_simulation->getBoundaryParticlesCount());
@@ -265,6 +356,9 @@ auto App::mainLoop() -> void
             _window->waitForInput();
         }
     }
+
+    // Finalize experiment data collection
+    experimentCollector->finalize();
 
     panda::log::Info("Main loop ended. Average frame rate: {} FPS", timeManager.getMeanFrameRate());
 }
@@ -337,6 +431,7 @@ void App::createParticlesInGrid(const utils::InitialParameters& initialParameter
 
     const auto domainSize = _simulationParameters.domain.max - _simulationParameters.domain.min;
     const auto availableSize = domainSize - 2.0F * margin;
+    //const auto availableSize = glm::vec3 {domainSize.x - 0.2F, domainSize.y, domainSize.z} - 2.F * margin;
 
     const auto spacingPerDim = glm::vec3 {availableSize.x / static_cast<float>(initialParameters.particleCount.x - 1),
                                           availableSize.y / static_cast<float>(initialParameters.particleCount.y - 1),
@@ -416,11 +511,13 @@ void App::updateDomain(const cuda::Simulation::Parameters::Domain& newDomain)
 
 void App::updateScenario(uint32_t simulationStep)
 {
-    // Check if cooldown has passed
-    if (!_scenarioActivated && simulationStep >= _scenarioParameters.cooldown)
+    // Check if cooldown has passed (using physical time instead of steps)
+    const float currentTime = _simulation->getCurrentSimulationTime();
+    if (!_scenarioActivated && currentTime >= _scenarioParameters.cooldown)
     {
         _scenarioActivated = true;
         _simulation->setScenarioActivated(true);
+        panda::log::Info("Scenario activated after cooldown of {:.2f}s", _scenarioParameters.cooldown);
 
         if (_scenarioParameters.type == cuda::ScenarioType::DamBreak)
         {
@@ -429,8 +526,6 @@ void App::updateScenario(uint32_t simulationStep)
                 updateDomain(_scenarioParameters.damBreak->expandedDomain);
             }
         }
-
-        panda::log::Info("Scenario activated");
     }
 }
 }

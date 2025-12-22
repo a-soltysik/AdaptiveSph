@@ -3,6 +3,8 @@
 #include <glm/vec3.hpp>
 #include <span>
 
+#include "glm/gtx/compatibility.hpp"
+
 namespace sph::cuda
 {
 class NeighborGrid
@@ -129,7 +131,10 @@ void __device__ NeighborGrid::Device::forEachFluidNeighbor(glm::vec4 position,
                 {
                     const auto neighborIdx = fluid.particleArrayIndices[i];
                     const auto neighborPos = positions[neighborIdx];
-                    func(neighborIdx, neighborPos);
+                    if (glm::isfinite(neighborPos.x) && glm::isfinite(neighborPos.y) && glm::isfinite(neighborPos.z))
+                    {
+                        func(neighborIdx, neighborPos);
+                    }
                 }
             }
         }
@@ -167,7 +172,10 @@ void __device__ NeighborGrid::Device::forEachFluidNeighborPeriodic(glm::vec4 pos
                 {
                     const auto neighborIdx = fluid.particleArrayIndices[i];
                     const auto neighborPos = positions[neighborIdx];
-                    func(neighborIdx, neighborPos);
+                    if (glm::isfinite(neighborPos.x) && glm::isfinite(neighborPos.y) && glm::isfinite(neighborPos.z))
+                    {
+                        func(neighborIdx, neighborPos);
+                    }
                 }
             }
         }
@@ -200,7 +208,11 @@ void __device__ NeighborGrid::Device::forEachFluidNeighborPeriodic(glm::vec4 pos
                     {
                         const auto neighborIdx = fluid.particleArrayIndices[i];
                         const auto neighborPos = positions[neighborIdx];
-                        func(neighborIdx, neighborPos - glm::vec4 {domainWidth, 0, 0, 0});
+                        if (glm::isfinite(neighborPos.x) && glm::isfinite(neighborPos.y) &&
+                            glm::isfinite(neighborPos.z))
+                        {
+                            func(neighborIdx, neighborPos - glm::vec4 {domainWidth, 0, 0, 0});
+                        }
                     }
                 }
             }
@@ -228,7 +240,11 @@ void __device__ NeighborGrid::Device::forEachFluidNeighborPeriodic(glm::vec4 pos
                     {
                         const auto neighborIdx = fluid.particleArrayIndices[i];
                         const auto neighborPos = positions[neighborIdx];
-                        func(neighborIdx, neighborPos + glm::vec4 {domainWidth, 0, 0, 0});
+                        if (glm::isfinite(neighborPos.x) && glm::isfinite(neighborPos.y) &&
+                            glm::isfinite(neighborPos.z))
+                        {
+                            func(neighborIdx, neighborPos + glm::vec4 {domainWidth, 0, 0, 0});
+                        }
                     }
                 }
             }
@@ -267,7 +283,10 @@ void __device__ NeighborGrid::Device::forEachBoundaryNeighbor(glm::vec4 position
                 {
                     const auto boundaryIdx = boundary.particleArrayIndices[i];
                     const auto boundaryPos = boundaryPositions[boundaryIdx];
-                    func(boundaryIdx, boundaryPos);
+                    if (glm::isfinite(boundaryPos.x) && glm::isfinite(boundaryPos.y) && glm::isfinite(boundaryPos.z))
+                    {
+                        func(boundaryIdx, boundaryPos);
+                    }
                 }
             }
         }
@@ -305,7 +324,10 @@ void __device__ NeighborGrid::Device::forEachBoundaryNeighborPeriodic(glm::vec4 
                 {
                     const auto boundaryIdx = boundary.particleArrayIndices[i];
                     const auto boundaryPos = boundaryPositions[boundaryIdx];
-                    func(boundaryIdx, boundaryPos);
+                    if (glm::isfinite(boundaryPos.x) && glm::isfinite(boundaryPos.y) && glm::isfinite(boundaryPos.z))
+                    {
+                        func(boundaryIdx, boundaryPos);
+                    }
                 }
             }
         }
@@ -338,7 +360,11 @@ void __device__ NeighborGrid::Device::forEachBoundaryNeighborPeriodic(glm::vec4 
                     {
                         const auto boundaryIdx = boundary.particleArrayIndices[i];
                         const auto boundaryPos = boundaryPositions[boundaryIdx];
-                        func(boundaryIdx, boundaryPos - glm::vec4 {domainWidth, 0, 0, 0});
+                        if (glm::isfinite(boundaryPos.x) && glm::isfinite(boundaryPos.y) &&
+                            glm::isfinite(boundaryPos.z))
+                        {
+                            func(boundaryIdx, boundaryPos - glm::vec4 {domainWidth, 0, 0, 0});
+                        }
                     }
                 }
             }
@@ -367,7 +393,11 @@ void __device__ NeighborGrid::Device::forEachBoundaryNeighborPeriodic(glm::vec4 
                         const auto boundaryIdx = boundary.particleArrayIndices[i];
                         const auto boundaryPos = boundaryPositions[boundaryIdx];
                         // Neighbors on the left side of domain, shift them right
-                        func(boundaryIdx, boundaryPos + glm::vec4 {domainWidth, 0, 0, 0});
+                        if (glm::isfinite(boundaryPos.x) && glm::isfinite(boundaryPos.y) &&
+                            glm::isfinite(boundaryPos.z))
+                        {
+                            func(boundaryIdx, boundaryPos + glm::vec4 {domainWidth, 0, 0, 0});
+                        }
                     }
                 }
             }
@@ -378,9 +408,10 @@ void __device__ NeighborGrid::Device::forEachBoundaryNeighborPeriodic(glm::vec4 
 inline __device__ auto NeighborGrid::Device::calculateCellIndex(glm::vec4 position) const -> glm::ivec3
 {
     const auto relativePosition = glm::vec3 {position} - domain.min;
-    const auto clampedPosition = glm::clamp(relativePosition, glm::vec3(0.F), domain.max - domain.min);
+    const auto cellIndex = glm::ivec3 {relativePosition / grid.cellSize};
 
-    return glm::min(glm::ivec3 {clampedPosition / grid.cellSize}, grid.gridSize - 1);
+    // Clamp to valid grid range [0, gridSize-1]
+    return glm::clamp(cellIndex, glm::ivec3 {0}, grid.gridSize - 1);
 }
 
 inline __device__ auto NeighborGrid::Device::flattenCellIndex(glm::ivec3 cellIndex) const -> uint32_t

@@ -3,8 +3,10 @@
 #include <driver_types.h>
 #include <thrust/execution_policy.h>
 #include <thrust/sort.h>
+#include <thrust/transform_reduce.h>
 #include <vector_types.h>
 
+#include <cmath>
 #include <cuda/simulation/Simulation.cuh>
 #include <cuda/simulation/physics/StaticBoundaryDomain.cuh>
 #include <glm/common.hpp>
@@ -29,6 +31,15 @@
 namespace sph::cuda
 {
 
+namespace
+{
+struct RMSEAccumulator
+{
+    float sumSquaredErrors;
+    uint32_t validCount;
+};
+}  // namespace
+
 SphSimulation::SphSimulation(const Parameters& initialParameters,
                              const std::vector<glm::vec4>& positions,
                              const FluidParticlesDataImportedBuffer& fluidParticleMemory,
@@ -36,7 +47,7 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
                              const physics::StaticBoundaryDomain& boundaryDomain,
                              uint32_t maxFluidParticleCapacity,
                              uint32_t maxBoundaryParticleCapacity,
-                             const ScenarioParameters& scenarioParams)
+                             const ScenarioParameters& scenarioParams, float multiplier)
     : _fluidParticlesData {
           .imported = {toInternalBuffer(fluidParticleMemory)},
           .internal = {.accelerations = thrust::device_vector<glm::vec4>(maxFluidParticleCapacity,
@@ -48,7 +59,7 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
       _simulationData {initialParameters}, _boundaryParticleCount {boundaryDomain.getParticleCount()},
       _particleCount {static_cast<uint32_t>(positions.size())},
       _grid {initialParameters.domain,
-             2 * initialParameters.baseSmoothingRadius* device::constant::wendlandRangeRatio,
+             2 * initialParameters.baseSmoothingRadius* device::constant::wendlandRangeRatio * multiplier,
              maxFluidParticleCapacity,
              maxBoundaryParticleCapacity},
       _scenarioParams {scenarioParams}
@@ -122,6 +133,9 @@ void SphSimulation::update(float deltaTime)
     halfKickVelocities(deltaTime / 2.F);
 
     cudaDeviceSynchronize();
+
+    _accumulatedSimulationTime += deltaTime;
+    _iterationCounter++;
 }
 
 void SphSimulation::updateDomain(const Parameters::Domain& domain, const physics::StaticBoundaryDomain& boundaryDomain)
@@ -310,6 +324,16 @@ auto SphSimulation::getDensityInfo(float threshold) -> DensityInfo
         getFluidParticles().densities,
         getFluidParticles().densities + getFluidParticlesCount(),
         [threshold, restDensity = _simulationData.restDensity] __device__(const float density) -> DensityInfo {
+            if (!isfinite(density))
+            {
+                return DensityInfo {.restDensity = restDensity,
+                                    .minDensity = std::numeric_limits<float>::max(),
+                                    .maxDensity = std::numeric_limits<float>::lowest(),
+                                    .averageDensity = 0.0F,
+                                    .underDensityCount = 0U,
+                                    .normalDensityCount = 0U,
+                                    .overDensityCount = 0U};
+            }
             const auto ratio = density / restDensity - 1.0F;
             return DensityInfo {.restDensity = restDensity,
                                 .minDensity = density,
@@ -337,7 +361,15 @@ auto SphSimulation::getDensityInfo(float threshold) -> DensityInfo
                                 .overDensityCount = a.overDensityCount + b.overDensityCount};
         });
 
-    info.averageDensity /= static_cast<float>(getFluidParticlesCount());
+    const auto validParticleCount = info.underDensityCount + info.normalDensityCount + info.overDensityCount;
+    if (validParticleCount > 0U)
+    {
+        info.averageDensity /= static_cast<float>(validParticleCount);
+    }
+    else
+    {
+        info.averageDensity = 0.0F;
+    }
     return info;
 }
 
@@ -457,5 +489,78 @@ void SphSimulation::updateGrid()
 }
 
 void SphSimulation::enableAdaptiveRefinement() { }
+
+auto SphSimulation::getCurrentSimulationTime() const -> float
+{
+    return _accumulatedSimulationTime;
+}
+
+auto SphSimulation::getCurrentIteration() const -> uint32_t
+{
+    return _iterationCounter;
+}
+
+auto SphSimulation::calculateDensityRMSE() const -> float
+{
+    const auto restDensity = _simulationData.restDensity;
+    const auto count = getFluidParticlesCount();
+    const auto* densities = _fluidParticlesData.imported.densities.getData<float>();
+
+    const auto result = thrust::transform_reduce(
+        thrust::device,
+        densities,
+        densities + count,
+        [restDensity] __device__ __host__(float density) -> RMSEAccumulator {
+            if (!isfinite(density))
+            {
+                return {0.0F, 0U};
+            }
+            const auto error = density - restDensity;
+            return {error * error, 1U};
+        },
+        RMSEAccumulator {0.0F, 0U},
+        [] __device__ __host__(const RMSEAccumulator& a, const RMSEAccumulator& b) -> RMSEAccumulator {
+            return {a.sumSquaredErrors + b.sumSquaredErrors, a.validCount + b.validCount};
+        });
+
+    if (result.validCount == 0U)
+    {
+        return 0.0F;
+    }
+
+    return std::sqrt(result.sumSquaredErrors / static_cast<float>(result.validCount));
+}
+
+auto SphSimulation::copyParticlePositionsToHost(std::vector<glm::vec3>& output) const -> void
+{
+    output.resize(getFluidParticlesCount());
+
+    std::vector<glm::vec4> temp(getFluidParticlesCount());
+    cudaMemcpy(temp.data(),
+               _fluidParticlesData.imported.positions.getData<glm::vec4>(),
+               getFluidParticlesCount() * sizeof(glm::vec4),
+               cudaMemcpyDeviceToHost);
+
+    for (size_t i = 0; i < output.size(); ++i)
+    {
+        output[i] = glm::vec3(temp[i]);
+    }
+}
+
+auto SphSimulation::copyParticleVelocitiesToHost(std::vector<glm::vec3>& output) const -> void
+{
+    output.resize(getFluidParticlesCount());
+
+    std::vector<glm::vec4> temp(getFluidParticlesCount());
+    cudaMemcpy(temp.data(),
+               _fluidParticlesData.imported.velocities.getData<glm::vec4>(),
+               getFluidParticlesCount() * sizeof(glm::vec4),
+               cudaMemcpyDeviceToHost);
+
+    for (size_t i = 0; i < output.size(); ++i)
+    {
+        output[i] = glm::vec3(temp[i]);
+    }
+}
 
 }

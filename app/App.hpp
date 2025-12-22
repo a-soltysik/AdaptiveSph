@@ -4,10 +4,12 @@
 #include <panda/gfx/Scene.h>
 
 #include <../cuda/include/cuda/simulation/Simulation.cuh>
+#include <cuda/refinement/RefinementParameters.cuh>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
 #include <glm/ext/vector_uint3.hpp>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -56,6 +58,8 @@ private:
     std::string _configPath;
     cuda::Simulation::Parameters _simulationParameters {};
     cuda::ScenarioParameters _scenarioParameters {};
+    std::optional<cuda::refinement::RefinementParameters> _refinementParameters;
+    utils::ExperimentConfig _experimentConfig {};
     uint32_t _simulationStep = 0;
     bool _scenarioActivated = false;
 };

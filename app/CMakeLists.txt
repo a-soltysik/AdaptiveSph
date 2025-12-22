@@ -12,6 +12,7 @@ target_sources(
         ui/SimulationDataGui.cpp
         utils/FrameTimeManager.cpp
         utils/Configuration.cpp
+        experiment/ExperimentDataCollector.cpp
         App.cpp)
 
 target_link_libraries(

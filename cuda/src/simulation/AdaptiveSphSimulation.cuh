@@ -42,6 +42,7 @@ private:
     refinement::RefinementParameters _refinementParams;
     refinement::RefinementData _refinementData;
     uint32_t _frameCounter = 0;
+    float _deltaTime = 0.0F;
 };
 
 }

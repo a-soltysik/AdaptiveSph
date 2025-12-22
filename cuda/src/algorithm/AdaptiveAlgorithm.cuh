@@ -35,7 +35,13 @@ __global__ auto performMerges(FluidParticlesData particles,
                               RefinementDataView refinementData,
                               Simulation::Parameters simulationData) -> void;
 
-__global__ auto updateParticleCount(RefinementData refinementData, uint32_t particleCount) -> void;
+__global__ auto updateParticleCount(RefinementDataView refinementData, uint32_t particleCount) -> void;
+
+__global__ auto shiftParticles(FluidParticlesData particles,
+                                NeighborGrid::Device grid,
+                                Simulation::Parameters simulationData,
+                                ShiftingParameters shiftingParams,
+                                float deltaTime) -> void;
 
 template <typename CriterionGenerator>
 __global__ void getCriterionValues(FluidParticlesData particles,

@@ -8,15 +8,14 @@ __device__ auto checkIfParticleCanBeSplitInsideDomain(Simulation::Parameters::Do
                                                       float smoothingRadius,
                                                       float epsilon) -> bool
 {
-    const auto maxOffset = epsilon * smoothingRadius;
+    const auto maxOffset = epsilon * smoothingRadius * 2.F;
 
-    if (position.x - maxOffset < domain.min.x || position.x + maxOffset > domain.max.x ||
-        position.y - maxOffset < domain.min.y || position.y + maxOffset > domain.max.y ||
-        position.z - maxOffset < domain.min.z || position.z + maxOffset > domain.max.z)
-    {
-        return false;
-    }
+    //if (position.x - maxOffset < domain.min.x || position.x + maxOffset > domain.max.x)
+    //{
+    //    return false;
+    //}
     return true;
+    //return true;
 }
 
 }

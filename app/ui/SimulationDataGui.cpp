@@ -80,30 +80,63 @@ void SimulationDataGui::displayDensityStatistics(const cuda::Simulation::Density
 {
     ImGui::Begin("Density Statistics");
 
-    const auto minDeviation =
-        static_cast<double>((densityInfo.minDensity - densityInfo.restDensity) / densityInfo.restDensity);
-    const auto maxDeviation =
-        static_cast<double>((densityInfo.maxDensity - densityInfo.restDensity) / densityInfo.restDensity);
-    const auto avgDeviation =
-        static_cast<double>((densityInfo.averageDensity - densityInfo.restDensity) / densityInfo.restDensity);
     const auto particleCount =
         densityInfo.underDensityCount + densityInfo.normalDensityCount + densityInfo.overDensityCount;
 
     //NOLINTBEGIN(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
     ImGui::Text("Density Deviation from Rest Density (%.1f):", static_cast<double>(densityInfo.restDensity));
-    ImGui::Text("Min: %.2f%% (%.1f)", minDeviation * 100.0, static_cast<double>(densityInfo.minDensity));
-    ImGui::Text("Max: %.2f%% (%.1f)", maxDeviation * 100.0, static_cast<double>(densityInfo.maxDensity));
-    ImGui::Text("Avg: %.2f%% (%.1f)", avgDeviation * 100.0, static_cast<double>(densityInfo.averageDensity));
+
+    if (std::isfinite(densityInfo.minDensity))
+    {
+        const auto minDeviation =
+            static_cast<double>((densityInfo.minDensity - densityInfo.restDensity) / densityInfo.restDensity);
+        ImGui::Text("Min: %.2f%% (%.1f)", minDeviation * 100.0, static_cast<double>(densityInfo.minDensity));
+    }
+    else
+    {
+        ImGui::Text("Min: N/A");
+    }
+
+    if (std::isfinite(densityInfo.maxDensity))
+    {
+        const auto maxDeviation =
+            static_cast<double>((densityInfo.maxDensity - densityInfo.restDensity) / densityInfo.restDensity);
+        ImGui::Text("Max: %.2f%% (%.1f)", maxDeviation * 100.0, static_cast<double>(densityInfo.maxDensity));
+    }
+    else
+    {
+        ImGui::Text("Max: N/A");
+    }
+
+    if (std::isfinite(densityInfo.averageDensity))
+    {
+        const auto avgDeviation =
+            static_cast<double>((densityInfo.averageDensity - densityInfo.restDensity) / densityInfo.restDensity);
+        ImGui::Text("Avg: %.2f%% (%.1f)", avgDeviation * 100.0, static_cast<double>(densityInfo.averageDensity));
+    }
+    else
+    {
+        ImGui::Text("Avg: N/A");
+    }
+
     ImGui::Text("Deviation Distribution:");
-    ImGui::Text("Under Density (<-10%%): %u particles (%.1f%%)",
-                densityInfo.underDensityCount,
-                100.0 * densityInfo.underDensityCount / particleCount);
-    ImGui::Text("Normal Density (±10%%): %u particles (%.1f%%)",
-                densityInfo.normalDensityCount,
-                100.0 * densityInfo.normalDensityCount / particleCount);
-    ImGui::Text("Over Density (>+10%%): %u particles (%.1f%%)",
-                densityInfo.overDensityCount,
-                100.0 * densityInfo.overDensityCount / particleCount);
+
+    if (particleCount > 0)
+    {
+        ImGui::Text("Under Density (<-10%%): %u particles (%.1f%%)",
+                    densityInfo.underDensityCount,
+                    100.0 * densityInfo.underDensityCount / particleCount);
+        ImGui::Text("Normal Density (±10%%): %u particles (%.1f%%)",
+                    densityInfo.normalDensityCount,
+                    100.0 * densityInfo.normalDensityCount / particleCount);
+        ImGui::Text("Over Density (>+10%%): %u particles (%.1f%%)",
+                    densityInfo.overDensityCount,
+                    100.0 * densityInfo.overDensityCount / particleCount);
+    }
+    else
+    {
+        ImGui::Text("No valid density data available");
+    }
     //NOLINTEND(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
 
     ImGui::End();
