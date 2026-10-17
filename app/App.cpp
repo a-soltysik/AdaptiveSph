@@ -260,7 +260,7 @@ auto App::mainLoop() -> void
     case cuda::ScenarioType::DamBreak:
         scenarioType = "dam_break";
         break;
-    case cuda::ScenarioType::None:
+    case cuda::ScenarioType::Unspecified:
         scenarioType = "none";
         break;
     }

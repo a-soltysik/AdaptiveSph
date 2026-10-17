@@ -509,7 +509,7 @@ auto SphSimulation::calculateDensityRMSE() const -> float
         thrust::device,
         densities,
         densities + count,
-        [restDensity] __device__ __host__(float density) -> RMSEAccumulator {
+        [restDensity] __device__(float density) -> RMSEAccumulator {
             if (!isfinite(density))
             {
                 return {0.0F, 0U};
@@ -518,7 +518,7 @@ auto SphSimulation::calculateDensityRMSE() const -> float
             return {error * error, 1U};
         },
         RMSEAccumulator {0.0F, 0U},
-        [] __device__ __host__(const RMSEAccumulator& a, const RMSEAccumulator& b) -> RMSEAccumulator {
+        [] __device__(const RMSEAccumulator& a, const RMSEAccumulator& b) -> RMSEAccumulator {
             return {a.sumSquaredErrors + b.sumSquaredErrors, a.validCount + b.validCount};
         });
 

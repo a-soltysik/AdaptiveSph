@@ -119,7 +119,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::utils::ExperimentConfig, enabled, sampli
 
 NLOHMANN_JSON_SERIALIZE_ENUM(sph::cuda::ScenarioType,
                              {
-                                 {sph::cuda::ScenarioType::None,            "none"             },
+                                 {sph::cuda::ScenarioType::Unspecified,     "none"             },
                                  {sph::cuda::ScenarioType::PoiseuilleFlow,  "poiseuille_flow"  },
                                  {sph::cuda::ScenarioType::LidDrivenCavity, "lid_driven_cavity"},
                                  {sph::cuda::ScenarioType::DamBreak,        "dam_break"        }
@@ -159,7 +159,7 @@ struct adl_serializer<sph::cuda::ScenarioParameters>
 
     static void from_json(const json& j, sph::cuda::ScenarioParameters& s)
     {
-        s.type = j.value("type", sph::cuda::ScenarioType::None);
+        s.type = j.value("type", sph::cuda::ScenarioType::Unspecified);
         s.cooldown = j.value("cooldown", 2.5F);
 
         if (j.contains("simulationTime"))

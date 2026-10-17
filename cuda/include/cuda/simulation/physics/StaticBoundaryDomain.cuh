@@ -22,7 +22,7 @@ public:
 
     enum class WallFlags : uint32_t
     {
-        None = 0,
+        NoWalls = 0,
         MinX = 1 << 0,
         MaxX = 1 << 1,
         MinY = 1 << 2,

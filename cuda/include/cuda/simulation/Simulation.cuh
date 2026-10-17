@@ -146,7 +146,7 @@ public:
 
 enum class ScenarioType
 {
-    None,
+    Unspecified,
     PoiseuilleFlow,
     LidDrivenCavity,
     DamBreak
@@ -169,7 +169,7 @@ struct PoiseuilleFlowParameters
 
 struct ScenarioParameters
 {
-    ScenarioType type = ScenarioType::None;
+    ScenarioType type = ScenarioType::Unspecified;
     float cooldown = 2.5F;  // Cooldown time in seconds (physical time)
     std::optional<float> simulationTime;
 
