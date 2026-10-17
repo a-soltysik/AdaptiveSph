@@ -189,10 +189,9 @@ auto loadConfigurationFromFile(const std::string& filePath) -> std::optional<Con
 
 auto validateConfiguration(const Configuration& configuration) -> void
 {
-    panda::expect(configuration.initialParameters.has_value(), "Configuration is missing initialParameters");
-    panda::expect(configuration.simulationParameters.has_value(), "Configuration is missing simulationParameters");
-    const auto& initial = *configuration.initialParameters;
-    const auto& simulation = *configuration.simulationParameters;
+    const auto initial = panda::expect(configuration.initialParameters, "Configuration is missing initialParameters");
+    const auto simulation =
+        panda::expect(configuration.simulationParameters, "Configuration is missing simulationParameters");
     const auto particleCount = initial.getScalarCount();
     validateSimulationParameters(simulation);
     validateInitialParticleDistribution(initial, simulation);
