@@ -76,70 +76,99 @@ StaticBoundaryDomain::StaticBoundaryDomain(Simulation::Parameters::Domain bounds
 auto StaticBoundaryDomain::generate(const Simulation::Parameters::Domain& bounds,
                                     float particleSpacing,
                                     float fluidRestDensity,
-                                    float fluidSmoothingRadius) -> StaticBoundaryDomain
+                                    float fluidSmoothingRadius,
+                                    WallFlags wallFlags,
+                                    bool periodicX) -> StaticBoundaryDomain
 {
-    auto positions = generateWallParticles(bounds, particleSpacing);
+    auto positions = generateWallParticles(bounds, particleSpacing, wallFlags, periodicX);
     const auto smoothingRadius = fluidSmoothingRadius;
     auto particles = computePsi(positions, smoothingRadius, fluidRestDensity);
 
     return StaticBoundaryDomain {bounds, std::move(particles)};
 }
 
-auto StaticBoundaryDomain::generateWallParticles(const Simulation::Parameters::Domain& bounds, float spacing)
-    -> std::vector<glm::vec4>
+auto StaticBoundaryDomain::generateWallParticles(const Simulation::Parameters::Domain& bounds,
+                                                 float spacing,
+                                                 WallFlags wallFlags,
+                                                 bool periodicX) -> std::vector<glm::vec4>
 {
     std::vector<glm::vec4> positions;
     const auto particlesCount = bounds.getScale() / spacing;
     positions.reserve(static_cast<size_t>(particlesCount.x * particlesCount.y * particlesCount.z));
-    const auto offset = glm::vec3 {0.05F};
+    const auto offset = periodicX ? glm::vec3 {0.0F, 0.01F, 0.01F} : glm::vec3 {0.01F};
 
-    const auto& min = bounds.min - offset;
-    const auto& max = bounds.max + offset;
+    const auto min = bounds.min - offset;
+    const auto max = bounds.max + offset;
 
-    for (float x = min.x; x < max.x; x += spacing)
+    // MinY wall (bottom)
+    if (hasFlag(wallFlags, WallFlags::MinY))
     {
-        for (float z = min.z; z < max.z; z += spacing)
+        for (float x = min.x; x < max.x; x += spacing)
         {
-            positions.emplace_back(x, min.y, z, 0.0F);
+            for (float z = min.z; z < max.z; z += spacing)
+            {
+                positions.emplace_back(x, min.y, z, 0.0F);
+            }
         }
     }
 
-    for (float x = min.x; x < max.x; x += spacing)
+    // MaxY wall (top)
+    if (hasFlag(wallFlags, WallFlags::MaxY))
     {
-        for (float z = min.z; z < max.z; z += spacing)
+        for (float x = min.x; x < max.x; x += spacing)
         {
-            positions.emplace_back(x, max.y, z, 0.0F);
+            for (float z = min.z; z < max.z; z += spacing)
+            {
+                positions.emplace_back(x, max.y, z, 0.0F);
+            }
         }
     }
 
-    for (float y = min.y + spacing; y < max.y; y += spacing)
-    {
-        for (float z = min.z; z < max.z; z += spacing)
-        {
-            positions.emplace_back(min.x, y, z, 0.0F);
-        }
-    }
-    for (float y = min.y + spacing; y < max.y; y += spacing)
-    {
-        for (float z = min.z; z < max.z; z += spacing)
-        {
-            positions.emplace_back(max.x, y, z, 0.0F);
-        }
-    }
-
-    for (float x = min.x + spacing; x < max.x; x += spacing)
+    // MinX wall (left)
+    if (hasFlag(wallFlags, WallFlags::MinX))
     {
         for (float y = min.y + spacing; y < max.y; y += spacing)
         {
-            positions.emplace_back(x, y, min.z, 0.0F);
+            for (float z = min.z; z < max.z; z += spacing)
+            {
+                positions.emplace_back(min.x, y, z, 0.0F);
+            }
         }
     }
 
-    for (float x = min.x + spacing; x < max.x; x += spacing)
+    // MaxX wall (right)
+    if (hasFlag(wallFlags, WallFlags::MaxX))
     {
         for (float y = min.y + spacing; y < max.y; y += spacing)
         {
-            positions.emplace_back(x, y, max.z, 0.0F);
+            for (float z = min.z; z < max.z; z += spacing)
+            {
+                positions.emplace_back(max.x, y, z, 0.0F);
+            }
+        }
+    }
+
+    // MinZ wall (front)
+    if (hasFlag(wallFlags, WallFlags::MinZ))
+    {
+        for (float x = min.x + spacing; x < max.x; x += spacing)
+        {
+            for (float y = min.y + spacing; y < max.y; y += spacing)
+            {
+                positions.emplace_back(x, y, min.z, 0.0F);
+            }
+        }
+    }
+
+    // MaxZ wall (back)
+    if (hasFlag(wallFlags, WallFlags::MaxZ))
+    {
+        for (float x = min.x + spacing; x < max.x; x += spacing)
+        {
+            for (float y = min.y + spacing; y < max.y; y += spacing)
+            {
+                positions.emplace_back(x, y, max.z, 0.0F);
+            }
         }
     }
 

@@ -48,8 +48,8 @@
       "merge": { "maximalCurvatureThreshold": 0.6 }
     },
     "interfaceParameters": {
-      "split": { "distanceRatioThreshold": 0.05 },
-      "merge": { "distanceRatioThreshold": 0.15 }
+      "split": { "proximityMagnitudeThreshold": 0.05 },
+      "merge": { "proximityMagnitudeThreshold": 0.15 }
     }
   },
   "renderingParameters": {

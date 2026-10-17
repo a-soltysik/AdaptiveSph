@@ -5,10 +5,6 @@
 #include <panda/utils/Assert.h>
 
 #include <../../cuda/include/cuda/simulation/Simulation.cuh>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstdint>
 #include <cuda/refinement/RefinementParameters.cuh>
 #include <exception>
 #include <fstream>
@@ -208,10 +204,19 @@ auto dumpTemplateConfiguration(const std::string& filePath) -> void
             panda::log::Error("Failed to open file: {}", filePath);
         }
 
-        const json jsonFile = Configuration {.initialParameters = InitialParameters {},
-                                             .simulationParameters = cuda::Simulation::Parameters {},
-                                             .refinementParameters = cuda::refinement::RefinementParameters {},
-                                             .renderingParameters = RenderingParameters {}};
+        const json jsonFile = Configuration {
+            .initialParameters = InitialParameters {},
+            .simulationParameters = cuda::Simulation::Parameters {},
+            .refinementParameters = cuda::refinement::RefinementParameters {},
+            .renderingParameters = RenderingParameters {},
+            .scenarioParameters =
+                cuda::ScenarioParameters {
+                                                    .lidDrivenCavity = cuda::LidDrivenCavityParameters {},
+                                                    .damBreak = cuda::DamBreakParameters {},
+                                                    .poiseuilleFlow = cuda::PoiseuilleFlowParameters {},
+                                                    },
+            .experimentConfig = ExperimentConfig {}
+        };
         file << jsonFile.dump(4);
 
         panda::log::Info("Configuration file saved: {}", filePath);

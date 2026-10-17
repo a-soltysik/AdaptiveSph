@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include <cuda/simulation/Simulation.cuh>
 #include <cuda/simulation/physics/StaticBoundaryDomain.cuh>
+#include <filesystem>
 #include <glm/common.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_uint2.hpp>
@@ -35,6 +36,7 @@
 #include <utility>
 #include <vector>
 
+#include "experiment/ExperimentDataCollector.hpp"
 #include "input/MouseHandler.hpp"
 #include "internal/config.hpp"
 #include "mesh/InvertedCube.hpp"
@@ -148,6 +150,9 @@ auto App::run() -> int
 
     const auto initialParameters = panda::expect(config.initialParameters, "Initial parameters couldn't be found");
     _simulationParameters = panda::expect(config.simulationParameters, "Simulation parameters couldn't be found");
+    _scenarioParameters = config.scenarioParameters.value_or(cuda::ScenarioParameters {});
+    _refinementParameters = config.refinementParameters;
+    _experimentConfig = config.experimentConfig.value_or(utils::ExperimentConfig {});
 
     static constexpr auto defaultWidth = uint32_t {1920};
     static constexpr auto defaultHeight = uint32_t {1080};
@@ -160,11 +165,27 @@ auto App::run() -> int
     setDefaultScene(_simulationParameters, initialParameters);
 
     const auto particleSpacing = _simulationParameters.baseParticleRadius * 2;
-    const auto boundaryDomain =
-        cuda::physics::StaticBoundaryDomain::generate(_simulationParameters.domain,
-                                                      particleSpacing,
-                                                      _simulationParameters.restDensity,
-                                                      _simulationParameters.baseSmoothingRadius);
+
+    // Determine which walls to generate based on scenario
+    auto wallFlags = cuda::physics::StaticBoundaryDomain::WallFlags::All;
+    bool periodicX = false;
+    if (_scenarioParameters.type == cuda::ScenarioType::PoiseuilleFlow)
+    {
+        // For Poiseuille flow, exclude left and right walls (MinX and MaxX) for periodic boundaries
+        wallFlags = cuda::physics::StaticBoundaryDomain::WallFlags::MinY |
+                    cuda::physics::StaticBoundaryDomain::WallFlags::MaxY |
+                    cuda::physics::StaticBoundaryDomain::WallFlags::MinZ |
+                    cuda::physics::StaticBoundaryDomain::WallFlags::MaxZ;
+        periodicX = true;
+        panda::log::Info("Poiseuille flow scenario: using periodic boundaries in X direction");
+    }
+
+    const auto boundaryDomain = cuda::physics::StaticBoundaryDomain::generate(_simulationParameters.domain,
+                                                                              particleSpacing,
+                                                                              _simulationParameters.restDensity,
+                                                                              _simulationParameters.baseSmoothingRadius,
+                                                                              wallFlags,
+                                                                              periodicX);
 
     panda::log::Info("Generated {} boundary particles for static domain", boundaryDomain.getParticleCount());
 
@@ -192,7 +213,8 @@ auto App::run() -> int
         boundaryDomain,
         config.refinementParameters,
         initialParameters.getScalarCount(),
-        maxBoundaryCapacity);
+        maxBoundaryCapacity,
+        _scenarioParameters);
 
     mainLoop();
     return 0;
@@ -226,6 +248,53 @@ auto App::mainLoop() -> void
         _simulation->enableAdaptiveRefinement();
     });
 
+    std::string scenarioType = "none";
+    switch (_scenarioParameters.type)
+    {
+    case cuda::ScenarioType::PoiseuilleFlow:
+        scenarioType = "poiseuille";
+        break;
+    case cuda::ScenarioType::LidDrivenCavity:
+        scenarioType = "lid_driven_cavity";
+        break;
+    case cuda::ScenarioType::DamBreak:
+        scenarioType = "dam_break";
+        break;
+    case cuda::ScenarioType::None:
+        scenarioType = "none";
+        break;
+    }
+
+    bool refinementEnabled = _refinementParameters.has_value() && _refinementParameters->enabled;
+    std::string refinementCriterion = "none";
+    if (refinementEnabled)
+    {
+        switch (_refinementParameters->criterionType)
+        {
+        case cuda::refinement::RefinementParameters::Criterion::Velocity:
+            refinementCriterion = "velocity";
+            break;
+        case cuda::refinement::RefinementParameters::Criterion::Interface:
+            refinementCriterion = "interface";
+            break;
+        case cuda::refinement::RefinementParameters::Criterion::Vorticity:
+            refinementCriterion = "vorticity";
+            break;
+        }
+    }
+
+    const float cooldownTime = _scenarioParameters.cooldown;
+
+    auto experimentCollector = std::make_unique<experiment::ExperimentDataCollector>(_simulation.get(),
+                                                                                     _configPath,
+                                                                                     _experimentConfig,
+                                                                                     scenarioType,
+                                                                                     refinementEnabled,
+                                                                                     refinementCriterion,
+                                                                                     cooldownTime);
+
+    const float targetSimulationTime = cooldownTime + _experimentConfig.duration;
+
     auto timeManager = utils::FrameTimeManager {};
     auto taskScheduler = utils::TaskScheduler {};
     taskScheduler.addTask(std::make_unique<utils::PerTimeTask>(
@@ -238,6 +307,29 @@ auto App::mainLoop() -> void
             gui.setDensityInfo(_simulation->getDensityInfo(0.1F));
         },
         std::chrono::seconds {1}));
+
+    taskScheduler.addTask(std::make_unique<utils::PerTimeTask>(
+        [this, targetSimulationTime, cooldownTime] {
+            const float currentTime = _simulation->getCurrentSimulationTime();
+
+            if (currentTime < cooldownTime)
+            {
+                const float cooldownProgress = (currentTime / cooldownTime) * 100.0F;
+                panda::log::Info("Cooldown: {:.2f}s / {:.2f}s ({:.1f}%)", currentTime, cooldownTime, cooldownProgress);
+            }
+            else
+            {
+                const float experimentTime = currentTime - cooldownTime;
+                const float experimentDuration = _experimentConfig.duration;
+                const float experimentProgress = (experimentTime / experimentDuration) * 100.0F;
+                panda::log::Info("Experiment: {:.2f}s / {:.2f}s ({:.1f}%) ",
+                                 experimentTime,
+                                 experimentDuration,
+                                 experimentProgress);
+            }
+        },
+        std::chrono::seconds {10}));
+
     const std::vector densityDeviations(_simulation->getFluidParticlesCount(), 0.F);
 
     while (!_window->shouldClose()) [[likely]]
@@ -248,7 +340,25 @@ auto App::mainLoop() -> void
             _window->processInput();
 
             timeManager.update();
-            _simulation->update(0.0002F);
+
+            // Measure simulation time
+            auto startTime = std::chrono::high_resolution_clock::now();
+            _simulation->update(0.0001F);
+            auto endTime = std::chrono::high_resolution_clock::now();
+            float computationTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+
+            updateScenario(_simulationStep++);
+
+            // Collect experiment data
+            experimentCollector->onFrameCompleted(computationTimeMs);
+
+            // Check simulation time limit
+            if (_simulation->getCurrentSimulationTime() >= targetSimulationTime)
+            {
+                panda::log::Info("Simulation time limit reached: {:.2f}s", targetSimulationTime);
+                break;
+            }
+
             taskScheduler.update(std::chrono::milliseconds {static_cast<uint32_t>(timeManager.getDelta() * 1000)}, 1);
             _scene->setParticleCount(_simulation->getFluidParticlesCount());
             _scene->setBoundaryParticleCount(_simulation->getBoundaryParticlesCount());
@@ -267,6 +377,9 @@ auto App::mainLoop() -> void
             _window->waitForInput();
         }
     }
+
+    // Finalize experiment data collection
+    experimentCollector->finalize();
 
     panda::log::Info("Main loop ended. Average frame rate: {} FPS", timeManager.getMeanFrameRate());
 }
@@ -335,6 +448,16 @@ void App::createParticlesInGrid(const utils::InitialParameters& initialParameter
     _particles.clear();
     _particles.reserve(initialParameters.getScalarCount());
 
+    static constexpr auto margin = 0.001F;
+
+    const auto domainSize = _simulationParameters.domain.max - _simulationParameters.domain.min;
+    const auto availableSize = domainSize - 2.0F * margin;
+    //const auto availableSize = glm::vec3 {domainSize.x - 0.2F, domainSize.y, domainSize.z} - 2.F * margin;
+
+    const auto spacingPerDim = glm::vec3 {availableSize.x / static_cast<float>(initialParameters.particleCount.x - 1),
+                                          availableSize.y / static_cast<float>(initialParameters.particleCount.y - 1),
+                                          availableSize.z / static_cast<float>(initialParameters.particleCount.z - 1)};
+
     for (uint32_t i = 0; i < initialParameters.particleCount.x; i++)
     {
         for (uint32_t j = 0; j < initialParameters.particleCount.y; j++)
@@ -387,11 +510,25 @@ void App::updateDomain(const cuda::Simulation::Parameters::Domain& newDomain)
     _simulationParameters.domain = newDomain;
 
     const auto particleSpacing = _simulationParameters.baseParticleRadius * 2;
-    const auto boundaryDomain =
-        cuda::physics::StaticBoundaryDomain::generate(newDomain,
-                                                      particleSpacing,
-                                                      _simulationParameters.restDensity,
-                                                      _simulationParameters.baseSmoothingRadius);
+
+    // Determine which walls to generate based on scenario
+    auto wallFlags = cuda::physics::StaticBoundaryDomain::WallFlags::All;
+    bool periodicX = false;
+    if (_scenarioParameters.type == cuda::ScenarioType::PoiseuilleFlow)
+    {
+        wallFlags = cuda::physics::StaticBoundaryDomain::WallFlags::MinY |
+                    cuda::physics::StaticBoundaryDomain::WallFlags::MaxY |
+                    cuda::physics::StaticBoundaryDomain::WallFlags::MinZ |
+                    cuda::physics::StaticBoundaryDomain::WallFlags::MaxZ;
+        periodicX = true;
+    }
+
+    const auto boundaryDomain = cuda::physics::StaticBoundaryDomain::generate(newDomain,
+                                                                              particleSpacing,
+                                                                              _simulationParameters.restDensity,
+                                                                              _simulationParameters.baseSmoothingRadius,
+                                                                              wallFlags,
+                                                                              periodicX);
 
     panda::log::Info("Generated {} boundary particles for new domain", boundaryDomain.getParticleCount());
 
@@ -400,5 +537,25 @@ void App::updateDomain(const cuda::Simulation::Parameters::Domain& newDomain)
     auto& domainObject = _scene->getDomain();
     domainObject.transform.translation = newDomain.getTranslation();
     domainObject.transform.scale = newDomain.getScale();
+}
+
+void App::updateScenario(uint32_t simulationStep)
+{
+    // Check if cooldown has passed (using physical time instead of steps)
+    const float currentTime = _simulation->getCurrentSimulationTime();
+    if (!_scenarioActivated && currentTime >= _scenarioParameters.cooldown)
+    {
+        _scenarioActivated = true;
+        _simulation->setScenarioActivated(true);
+        panda::log::Info("Scenario activated after cooldown of {:.2f}s", _scenarioParameters.cooldown);
+
+        if (_scenarioParameters.type == cuda::ScenarioType::DamBreak)
+        {
+            if (_scenarioParameters.damBreak.has_value())
+            {
+                updateDomain(_scenarioParameters.damBreak->expandedDomain);
+            }
+        }
+    }
 }
 }

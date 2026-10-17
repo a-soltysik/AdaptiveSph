@@ -3,6 +3,13 @@
 namespace sph::cuda::kernel
 {
 
+namespace constants
+{
+
+constexpr auto minimalDistance = 0.F;
+
+}
+
 inline __device__ auto computeTaitPressure(float density, float restDensity, float speedOfSound) -> float
 {
     static constexpr auto gamma = 5.F;

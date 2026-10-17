@@ -28,14 +28,17 @@ AdaptiveSphSimulation::AdaptiveSphSimulation(const Parameters& initialParameters
                                              const BoundaryParticlesDataImportedBuffer& boundaryParticleMemory,
                                              const physics::StaticBoundaryDomain& boundaryDomain,
                                              const refinement::RefinementParameters& refinementParams,
-                                             uint32_t maxBoundaryParticleCapacity)
+                                             uint32_t maxBoundaryParticleCapacity,
+                                             const ScenarioParameters& scenarioParams)
     : SphSimulation(initialParameters,
                     positions,
                     fluidParticleMemory,
                     boundaryParticleMemory,
                     boundaryDomain,
                     refinementParams.maxParticleCount,
-                    maxBoundaryParticleCapacity),
+                    maxBoundaryParticleCapacity,
+                    scenarioParams,
+                    1.4F),
       _refinementParams(refinementParams),
       _refinementData {
           .split = {.criterionValues = {thrust::device_vector<float>(refinementParams.maxParticleCount)},
@@ -58,8 +61,16 @@ AdaptiveSphSimulation::AdaptiveSphSimulation(const Parameters& initialParameters
 
 void AdaptiveSphSimulation::update(float deltaTime)
 {
+    _deltaTime = deltaTime;
+
     halfKickVelocities(deltaTime / 2.F);
     updatePositions(deltaTime);
+
+    if (_frameCounter == _refinementParams.initialCooldown ||
+        (_frameCounter > _refinementParams.initialCooldown && _frameCounter % _refinementParams.cooldown == 0))
+    {
+        performAdaptiveRefinement();
+    }
 
     updateGrid();
     computeDensities();
@@ -72,16 +83,12 @@ void AdaptiveSphSimulation::update(float deltaTime)
 
     computeBoundaryForces();
 
-    if (_frameCounter == _refinementParams.initialCooldown ||
-        (_frameCounter > _refinementParams.initialCooldown && _frameCounter % _refinementParams.cooldown == 0))
-    {
-        performAdaptiveRefinement();
-    }
-
     halfKickVelocities(deltaTime / 2.F);
 
     cudaDeviceSynchronize();
     _frameCounter++;
+    _accumulatedSimulationTime += deltaTime;
+    _iterationCounter++;
 }
 
 void AdaptiveSphSimulation::enableAdaptiveRefinement()
@@ -102,13 +109,24 @@ auto AdaptiveSphSimulation::getBlocksPerGridForParticles(uint32_t count) const -
 void AdaptiveSphSimulation::performAdaptiveRefinement()
 {
     const auto currentCount = getFluidParticlesCount();
+
     resetRefinementCounters();
     identifyAndMergeParticles();
+    cudaDeviceSynchronize();
+    updateGrid();
+    computeDensities();
+    computeBoundaryDensityContribution();
+
     const auto particlesRemovedInLastMerge = currentCount - getFluidParticlesCount();
 
     if (particlesRemovedInLastMerge > 0)
     {
         identifyAndSplitParticles(particlesRemovedInLastMerge);
+
+        cudaDeviceSynchronize();
+        updateGrid();
+        computeDensities();
+        computeBoundaryDensityContribution();
     }
 }
 
@@ -173,13 +191,19 @@ void AdaptiveSphSimulation::identifyAndSplitParticles(uint32_t removedParticles)
     refinement::findTopParticlesToSplit(getFluidParticles(),
                                         _refinementData,
                                         _refinementParams,
-                                        ::cuda::std::greater<float> {});
+                                        thrust::greater<float> {});
 
-    const auto particlesToSplitCount =
-        std::min(_refinementData.split.particlesSplitCount.toHost(), removedParticles / 12);
+    const auto candidatesCount = _refinementData.split.particlesSplitCount.toHost();
+    const auto particlesToSplitCount = std::min(candidatesCount, removedParticles / 12);
+
+    printf("[SPLIT] Candidates: %u, Limit by removed: %u, Actually splitting: %u\n",
+           candidatesCount,
+           removedParticles / 12,
+           particlesToSplitCount);
 
     if (particlesToSplitCount == 0)
     {
+        printf("[SPLIT] No particles to split\n");
         return;
     }
 
@@ -189,7 +213,11 @@ void AdaptiveSphSimulation::identifyAndSplitParticles(uint32_t removedParticles)
         _refinementParams.splitting,
         _refinementParams.maxParticleCount);
 
+    cudaDeviceSynchronize();
     setParticleCount(_refinementData.particlesCount.toHost());
+    printf("[SPLIT] Split %u particles into %u new particles (13 each)\n",
+           particlesToSplitCount,
+           particlesToSplitCount * 13);
 }
 
 void AdaptiveSphSimulation::identifyAndMergeParticles()
@@ -206,7 +234,7 @@ void AdaptiveSphSimulation::identifyAndMergeParticles()
     refinement::findTopParticlesToMerge(getFluidParticles(),
                                         _refinementData,
                                         _refinementParams,
-                                        ::cuda::std::less<float> {});
+                                        thrust::less<float> {});
 
     const auto particlesToMergeCount = _refinementData.merge.eligibleCount.toHost();
 
@@ -227,6 +255,7 @@ void AdaptiveSphSimulation::identifyAndMergeParticles()
         currentCount);
 
     const auto mergeCount = _refinementData.merge.mergeCount.toHost();
+
     if (mergeCount == 0)
     {
         return;
@@ -236,6 +265,8 @@ void AdaptiveSphSimulation::identifyAndMergeParticles()
         getFluidParticles(),
         refinement::RefinementDataView {_refinementData},
         getParameters());
+
+    cudaDeviceSynchronize();
 
     thrust::exclusive_scan(
         thrust::device,
@@ -248,6 +279,7 @@ void AdaptiveSphSimulation::identifyAndMergeParticles()
         refinement::RefinementDataView {_refinementData},
         currentCount);
 
+    refinement::updateParticleCount<<<1, 1>>>(refinement::RefinementDataView {_refinementData}, currentCount);
     setParticleCount(_refinementData.particlesCount.toHost());
 }
 

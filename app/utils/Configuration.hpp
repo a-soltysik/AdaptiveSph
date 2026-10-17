@@ -5,10 +5,13 @@
 #include <../../cuda/include/cuda/simulation/Simulation.cuh>
 #include <cstdint>
 #include <cuda/refinement/RefinementParameters.cuh>
+#include <cuda/simulation/Simulation.cuh>
+#include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_uint3.hpp>
 #include <limits>
 #include <optional>
 #include <string>
+#include <variant>
 
 namespace sph::utils
 {
@@ -35,12 +38,21 @@ struct RenderingParameters
     bool renderBoundaryParticles = false;
 };
 
+struct ExperimentConfig
+{
+    bool enabled = false;
+    float samplingInterval = 0.5F;
+    float duration = 5.F;
+};
+
 struct Configuration
 {
     std::optional<InitialParameters> initialParameters;
     std::optional<cuda::Simulation::Parameters> simulationParameters;
     std::optional<cuda::refinement::RefinementParameters> refinementParameters;
     std::optional<RenderingParameters> renderingParameters;
+    std::optional<cuda::ScenarioParameters> scenarioParameters;
+    std::optional<ExperimentConfig> experimentConfig;
 };
 
 auto loadConfigurationFromFile(const std::string& filePath) -> std::optional<Configuration>;

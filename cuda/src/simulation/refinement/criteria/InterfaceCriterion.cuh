@@ -1,7 +1,8 @@
 #pragma once
+#include "Common.cuh"
+#include "algorithm/WendlandKernel.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
 #include "cuda/simulation/Simulation.cuh"
-#include "glm/gtx/component_wise.hpp"
 #include "simulation/SphSimulation.cuh"
 
 namespace sph::cuda::refinement::interfaceCriterion
@@ -49,23 +50,6 @@ private:
     InterfaceParameters _interface;
 };
 
-inline __device__ auto calculateMinSurfaceDistance(const glm::vec4& position,
-                                                   const Simulation::Parameters::Domain& domain) -> glm::vec3
-{
-    const auto distToMinX = position.x - domain.min.x;
-    const auto distToMaxX = domain.max.x - position.x;
-    const auto distToMinY = position.y - domain.min.y;
-    const auto distToMaxY = domain.max.y - position.y;
-    const auto distToMinZ = position.z - domain.min.z;
-    const auto distToMaxZ = domain.max.z - position.z;
-
-    const auto minDistX = glm::min(distToMinX, distToMaxX);
-    const auto minDistY = glm::min(distToMinY, distToMaxY);
-    const auto minDistZ = glm::min(distToMinZ, distToMaxZ);
-
-    return {glm::max(0.0F, minDistX), glm::max(0.0F, minDistY), glm::max(0.0F, minDistZ)};
-}
-
 inline __device__ auto SplitCriterionGenerator::operator()(FluidParticlesData particles,
                                                            uint32_t id,
                                                            const NeighborGrid::Device& grid,
@@ -77,21 +61,54 @@ inline __device__ auto SplitCriterionGenerator::operator()(FluidParticlesData pa
     }
 
     const auto position = particles.positions[id];
-    const auto minDistances = calculateMinSurfaceDistance(position, simulationData.domain);
     const auto smoothingRadius = particles.smoothingRadii[id];
-    const auto maxOffset = _splitting.epsilon * smoothingRadius;
 
-    if (glm::compMin(minDistances) < maxOffset)
+    if (!checkIfParticleCanBeSplitInsideDomain(simulationData.domain, position, smoothingRadius, _splitting.epsilon))
     {
         return -1.0F;
     }
 
-    const auto domainSize = simulationData.domain.max - simulationData.domain.min;
-    const auto splitThresholds = _interface.split.distanceRatioThreshold * domainSize;
-    const auto normalizedDistances = minDistances / splitThresholds;
-    const auto minNormalizedDistance = glm::compMin(normalizedDistances);
+    // Compute weighted average displacement vector: u_i = sum(m_j * W * r_ij) / sum(m_j * W)
+    auto weightedDisplacement = glm::vec3(0.0F);
+    auto weightSum = 0.0F;
 
-    return 1.0F - minNormalizedDistance;
+    grid.forEachFluidNeighbor(position,
+                              particles.positions,
+                              smoothingRadius,
+                              [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
+                                  if (neighbourIdx == id)
+                                  {
+                                      return;
+                                  }
+
+                                  const auto r_ij = glm::vec3(adjustedPos - position);
+                                  const auto dist = glm::length(r_ij);
+
+                                  const auto neighborMass = particles.masses[neighbourIdx];
+                                  const auto neighborSmoothingRadius = particles.smoothingRadii[neighbourIdx];
+                                  const auto kernelValue = device::wendlandKernel(dist, neighborSmoothingRadius);
+                                  const auto weight = neighborMass * kernelValue;
+
+                                  weightedDisplacement += weight * r_ij;
+                                  weightSum += weight;
+                              });
+
+    if (weightSum < 1e-6F)
+    {
+        return -1.0F;
+    }
+
+    // Normalize to get the interface proximity indicator
+    const auto u_i = weightedDisplacement / weightSum;
+    const auto proximityMagnitude = glm::length(u_i);
+
+    // Split criterion: ||u_i|| > u^split
+    if (proximityMagnitude > _interface.split.proximityMagnitudeThreshold)
+    {
+        return proximityMagnitude;
+    }
+
+    return -1.0F;
 }
 
 inline __device__ auto MergeCriterionGenerator::operator()(FluidParticlesData particles,
@@ -103,15 +120,58 @@ inline __device__ auto MergeCriterionGenerator::operator()(FluidParticlesData pa
     {
         return -1.0F;
     }
+    const auto smoothingRadius = particles.smoothingRadii[id];
+    if (!checkIfParticleCanBeSplitInsideDomain(simulationData.domain, particles.positions[id], smoothingRadius, 1.F))
+    {
+        return -1;
+    }
 
     const auto position = particles.positions[id];
-    const auto minDistances = calculateMinSurfaceDistance(position, simulationData.domain);
-    const auto domainSize = simulationData.domain.max - simulationData.domain.min;
-    const auto mergeThresholds = _interface.merge.distanceRatioThreshold * domainSize;
-    const auto normalizedDistances = minDistances / mergeThresholds;
-    const auto minNormalizedDistance = glm::compMin(normalizedDistances);
 
-    return minNormalizedDistance - 1.0F;
+    // Compute weighted average displacement vector: u_i = sum(m_j * W * r_ij) / sum(m_j * W)
+    auto weightedDisplacement = glm::vec3(0.0F);
+    auto weightSum = 0.0F;
+
+    grid.forEachFluidNeighbor(position,
+                              particles.positions,
+                              smoothingRadius,
+                              [&](const auto neighbourIdx, const glm::vec4& adjustedPos) {
+                                  if (neighbourIdx == id)
+                                  {
+                                      return;
+                                  }
+
+                                  const auto r_ij = glm::vec3(adjustedPos - position);
+                                  const auto dist = glm::length(r_ij);
+
+                                  if (dist > 1e-6F)
+                                  {
+                                      const auto neighborMass = particles.masses[neighbourIdx];
+                                      const auto neighborSmoothingRadius = particles.smoothingRadii[neighbourIdx];
+                                      const auto kernelValue = device::wendlandKernel(dist, neighborSmoothingRadius);
+                                      const auto weight = neighborMass * kernelValue;
+
+                                      weightedDisplacement += weight * r_ij;
+                                      weightSum += weight;
+                                  }
+                              });
+
+    if (weightSum < 1e-6F)
+    {
+        return -1.0F;
+    }
+
+    // Normalize to get the interface proximity indicator
+    const auto u_i = weightedDisplacement / weightSum;
+    const auto proximityMagnitude = glm::length(u_i);
+
+    // Merge criterion: ||u_i|| < u^merge
+    if (proximityMagnitude < _interface.merge.proximityMagnitudeThreshold)
+    {
+        return proximityMagnitude / _interface.merge.proximityMagnitudeThreshold;
+    }
+
+    return -1.0F;
 }
 
 }

@@ -57,12 +57,12 @@ struct InterfaceParameters
 {
     struct Split
     {
-        float distanceRatioThreshold = 0.05F;
+        float proximityMagnitudeThreshold = 0.3F;  // u^split
     };
 
     struct Merge
     {
-        float distanceRatioThreshold = 0.15F;
+        float proximityMagnitudeThreshold = 0.1F;  // u^merge
     };
 
     Split split;
@@ -75,6 +75,13 @@ struct SplittingParameters
     float alpha = 0.70F;
     float centerMassRatio = 0.077F;
     float vertexMassRatio = 0.077F;
+};
+
+struct ShiftingParameters
+{
+    bool enabled = true;
+    float diffusionCoefficient = 0.01F;
+    float maxShiftRatio = 0.5F;
 };
 
 struct RefinementParameters
@@ -96,6 +103,7 @@ struct RefinementParameters
     Criterion criterionType = Criterion::Velocity;
 
     SplittingParameters splitting;
+    ShiftingParameters shifting;
     VelocityParameters velocity;
 
     VorticityParameters vorticity;

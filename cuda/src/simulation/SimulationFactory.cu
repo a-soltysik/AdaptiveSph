@@ -18,7 +18,8 @@ auto createSimulation(const Simulation::Parameters& parameters,
                       const physics::StaticBoundaryDomain& boundaryDomain,
                       [[maybe_unused]] const std::optional<refinement::RefinementParameters>& refinementParams,
                       uint32_t maxFluidParticleCapacity,
-                      uint32_t maxBoundaryParticleCapacity) -> std::unique_ptr<Simulation>
+                      uint32_t maxBoundaryParticleCapacity,
+                      const ScenarioParameters& scenarioParams) -> std::unique_ptr<Simulation>
 {
     if (refinementParams.has_value() && refinementParams->enabled == true)
     {
@@ -28,7 +29,8 @@ auto createSimulation(const Simulation::Parameters& parameters,
                                                        boundaryParticleMemory,
                                                        boundaryDomain,
                                                        refinementParams.value(),
-                                                       maxBoundaryParticleCapacity);
+                                                       maxBoundaryParticleCapacity,
+                                                       scenarioParams);
     }
     return std::make_unique<SphSimulation>(parameters,
                                            positions,
@@ -36,7 +38,8 @@ auto createSimulation(const Simulation::Parameters& parameters,
                                            boundaryParticleMemory,
                                            boundaryDomain,
                                            maxFluidParticleCapacity,
-                                           maxBoundaryParticleCapacity);
+                                           maxBoundaryParticleCapacity,
+                                           scenarioParams);
 }
 
 }
