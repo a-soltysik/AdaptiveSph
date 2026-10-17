@@ -52,6 +52,41 @@ struct GridCoordinate
     std::size_t particleIndex;
 };
 
+struct AdaptiveRefinementStatistics
+{
+    uint32_t passCount {};
+    uint32_t mergedPairCount {};
+    uint32_t splitParentCount {};
+    uint32_t particlesAfterLastPass {};
+};
+
+auto recordAdaptiveRefinementPass(AdaptiveRefinementStatistics& statistics,
+                                  const std::optional<sph::cuda::Simulation::AdaptiveRefinementPass>& refinementPass)
+    -> void
+{
+    if (!refinementPass.has_value())
+    {
+        return;
+    }
+
+    ++statistics.passCount;
+    statistics.mergedPairCount += refinementPass->mergedPairs;
+    statistics.splitParentCount += refinementPass->splitParents;
+    statistics.particlesAfterLastPass = refinementPass->particlesAfter;
+
+    if (refinementPass->particlesBefore == refinementPass->particlesAfter)
+    {
+        return;
+    }
+
+    panda::log::Info(
+        "Adaptive refinement changed fluid particle count from {} to {} ({} merge pairs, {} split parents)",
+        refinementPass->particlesBefore,
+        refinementPass->particlesAfter,
+        refinementPass->mergedPairs,
+        refinementPass->splitParents);
+}
+
 auto getInitialGridCoordinate(float min, float max, GridCoordinate grid) -> float
 {
     if (grid.particleCount == 1)
@@ -236,10 +271,7 @@ auto App::mainLoop() -> void
         panda::gfx::view::YXZ {.position = cameraObject.translation, .rotation = cameraObject.rotation});
 
     auto gui = SimulationDataGui {};
-    auto refinementPassCount = uint32_t {};
-    auto mergedPairCount = uint32_t {};
-    auto splitParentCount = uint32_t {};
-    auto particlesAfterLastRefinement = uint32_t {};
+    auto refinementStatistics = AdaptiveRefinementStatistics {};
     gui.setDomain(_simulationParameters.domain);
     gui.onDomainChanged([this](const cuda::Simulation::Parameters::Domain& newDomain) {
         updateDomain(newDomain);
@@ -262,19 +294,19 @@ auto App::mainLoop() -> void
         std::chrono::seconds {1}));
     taskScheduler.addTask(std::make_unique<utils::PerTimeTask>(
         [&] {
-            if (refinementPassCount == 0)
+            if (refinementStatistics.passCount == 0)
             {
                 return;
             }
 
             panda::log::Info("Adaptive refinement ran {} passes: {} merge pairs, {} split parents; fluid particles: {}",
-                             refinementPassCount,
-                             mergedPairCount,
-                             splitParentCount,
-                             particlesAfterLastRefinement);
-            refinementPassCount = 0;
-            mergedPairCount = 0;
-            splitParentCount = 0;
+                             refinementStatistics.passCount,
+                             refinementStatistics.mergedPairCount,
+                             refinementStatistics.splitParentCount,
+                             refinementStatistics.particlesAfterLastPass);
+            refinementStatistics.passCount = 0;
+            refinementStatistics.mergedPairCount = 0;
+            refinementStatistics.splitParentCount = 0;
         },
         std::chrono::seconds {1}));
 
@@ -289,24 +321,7 @@ auto App::mainLoop() -> void
 
             _simulation->update(0.0001F);
 
-            if (const auto refinementPass = _simulation->takeAdaptiveRefinementPass(); refinementPass.has_value())
-            {
-                ++refinementPassCount;
-                mergedPairCount += refinementPass->mergedPairs;
-                splitParentCount += refinementPass->splitParents;
-                particlesAfterLastRefinement = refinementPass->particlesAfter;
-
-                if (refinementPass->particlesBefore != refinementPass->particlesAfter)
-                {
-                    panda::log::Info(
-                        "Adaptive refinement changed fluid particle count from {} to {} ({} merge pairs, {} split "
-                        "parents)",
-                        refinementPass->particlesBefore,
-                        refinementPass->particlesAfter,
-                        refinementPass->mergedPairs,
-                        refinementPass->splitParents);
-                }
-            }
+            recordAdaptiveRefinementPass(refinementStatistics, _simulation->takeAdaptiveRefinementPass());
 
             updateScenario();
 
