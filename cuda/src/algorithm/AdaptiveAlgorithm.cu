@@ -71,6 +71,28 @@ struct IsMarkedForRemoval
         return state == RefinementData::RemovalState::Remove;
     }
 };
+
+__device__ auto reserveSplitParticleRange(uint32_t* particleCount, uint32_t maxParticleCount) -> uint32_t
+{
+    auto currentCount = atomicCAS(particleCount, 0U, 0U);
+    while (currentCount <= maxParticleCount)
+    {
+        if (maxParticleCount - currentCount < constants::splitChildCount)
+        {
+            return constants::noCandidate;
+        }
+
+        const auto nextCount = currentCount + constants::splitChildCount;
+        const auto observedCount = atomicCAS(particleCount, currentCount, nextCount);
+        if (observedCount == currentCount)
+        {
+            return currentCount;
+        }
+
+        currentCount = observedCount;
+    }
+    return constants::noCandidate;
+}
 }
 
 auto findTopParticlesToMerge(FluidParticlesData particles,
@@ -163,6 +185,7 @@ constexpr __constant__ __device__ auto icosahedronVertices = std::array {
     float3 {-detail::phi * detail::invnorm, detail::invnorm,               0                            },
     float3 {-detail::phi * detail::invnorm, -detail::invnorm,              0                            }
 };
+static_assert(icosahedronVertices.size() == constants::splitChildCount);
 
 __device__ auto calculateMergedSmoothingLength(std::pair<glm::vec4, glm::vec4> positions,
                                                std::pair<float, float> masses,
@@ -194,13 +217,17 @@ __global__ void splitParticles(FluidParticlesData particles,
     }
 
     const auto particleIdx = refinementData.split.particlesIdsToSplit[tid];
-    const auto newParticleBase = atomicAdd(refinementData.particlesCount, icosahedronVertices.size());
-
-    if (newParticleBase + icosahedronVertices.size() > maxParticleCount)
+    if (particleIdx >= particles.particleCount)
     {
-        atomicSub(refinementData.particlesCount, icosahedronVertices.size());
         return;
     }
+
+    const auto newParticleBase = detail::reserveSplitParticleRange(refinementData.particlesCount, maxParticleCount);
+    if (newParticleBase == constants::noCandidate)
+    {
+        return;
+    }
+
     const auto originalPosition = particles.positions[particleIdx];
     const auto originalVelocity = particles.velocities[particleIdx];
     const auto originalAcceleration = particles.accelerations[particleIdx];
@@ -216,7 +243,7 @@ __global__ void splitParticles(FluidParticlesData particles,
     particles.radii[particleIdx] = getNewRadius(centerMass, originalMass, originalRadius);
     particles.smoothingRadii[particleIdx] = newSmoothingLength;
 
-    for (uint32_t i = 0; i < icosahedronVertices.size(); i++)
+    for (uint32_t i = 0; i < constants::splitChildCount; i++)
     {
         const auto newIdx = newParticleBase + i;
 

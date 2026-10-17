@@ -13,7 +13,6 @@ namespace sph::cuda::refinement
 namespace constants
 {
 constexpr auto noCandidate = UINT32_MAX;
-constexpr auto splitChildCount = 12U;
 }
 
 struct RefinementData

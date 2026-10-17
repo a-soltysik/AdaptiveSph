@@ -5,6 +5,11 @@
 namespace sph::cuda::refinement
 {
 
+namespace constants
+{
+constexpr auto splitChildCount = 12U;
+}
+
 struct VelocityParameters
 {
     struct Split
@@ -58,7 +63,7 @@ struct SplittingParameters
     float epsilon = 0.65F;
     float alpha = 0.70F;
     float centerMassRatio = 0.077F;
-    float vertexMassRatio = 0.077F;
+    float vertexMassRatio = (1.0F - centerMassRatio) / static_cast<float>(constants::splitChildCount);
 };
 
 struct RefinementParameters

@@ -34,7 +34,8 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
                              const physics::StaticBoundaryDomain& boundaryDomain,
                              uint32_t maxFluidParticleCapacity,
                              uint32_t maxBoundaryParticleCapacity,
-                             const ScenarioParameters& scenarioParams, float multiplier)
+                             const ScenarioParameters& scenarioParams,
+                             float multiplier)
     : _fluidParticlesData {
           .imported = {toInternalBuffer(fluidParticleMemory)},
           .internal = {.accelerations = thrust::device_vector<glm::vec4>(maxFluidParticleCapacity,
@@ -46,7 +47,7 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
       _simulationData {initialParameters}, _boundaryParticleCount {boundaryDomain.getParticleCount()},
       _particleCount {static_cast<uint32_t>(positions.size())},
       _grid {initialParameters.domain,
-             2 * initialParameters.baseSmoothingRadius* device::constant::wendlandRangeRatio * multiplier,
+             2 * initialParameters.baseSmoothingRadius* device::constant::wendlandRangeRatio* multiplier,
              maxFluidParticleCapacity,
              maxBoundaryParticleCapacity},
       _scenarioParams {scenarioParams}
