@@ -6,7 +6,7 @@ cmake-build-*/
 conan-cache/
 compile_commands.json
 
-# User spesific settings
+# Local settings
 CMakeUserPresets.json
 
 # IDE files
@@ -22,6 +22,7 @@ CMakeUserPresets.json
 *~
 _ReSharper*
 *.log
+logs/
 
 # OS Generated Files
 .DS_Store

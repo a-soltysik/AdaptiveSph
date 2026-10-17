@@ -14,11 +14,11 @@
 #include <array>
 #include <chrono>
 #include <csignal>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cuda/simulation/Simulation.cuh>
 #include <cuda/simulation/physics/StaticBoundaryDomain.cuh>
-#include <filesystem>
 #include <glm/common.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_uint2.hpp>
@@ -26,7 +26,9 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <glm/trigonometric.hpp>
+#include <limits>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -45,6 +47,23 @@
 
 namespace
 {
+struct GridCoordinate
+{
+    std::size_t particleCount;
+    std::size_t particleIndex;
+};
+
+auto getInitialGridCoordinate(float min, float max, GridCoordinate grid) -> float
+{
+    if (grid.particleCount == 1)
+    {
+        return std::midpoint(min, max);
+    }
+    const auto spacing =
+        (max - min - (2.F * sph::utils::initialParticleMargin)) / static_cast<float>(grid.particleCount - 1);
+    return min + sph::utils::initialParticleMargin + (spacing * static_cast<float>(grid.particleIndex));
+}
+
 [[nodiscard]] constexpr auto getSignalName(const int signalValue) noexcept -> std::string_view
 {
     switch (signalValue)
@@ -149,7 +168,11 @@ auto App::run() -> int
 
     panda::log::Info("Generated {} boundary particles for static domain", boundaryDomain.getParticleCount());
 
-    const auto maxBoundaryCapacity = boundaryDomain.getParticleCount() * 10;
+    constexpr auto boundaryCapacityMultiplier = uint32_t {10};
+    panda::expect(
+        boundaryDomain.getParticleCount() <= std::numeric_limits<uint32_t>::max() / boundaryCapacityMultiplier,
+        "Boundary particle capacity exceeds the supported range");
+    const auto maxBoundaryCapacity = boundaryDomain.getParticleCount() * boundaryCapacityMultiplier;
 
     _simulation = cuda::createSimulation(
         _simulationParameters,
@@ -177,11 +200,9 @@ auto App::run() -> int
 
 auto App::loadConfigurationFromFile(const std::string& configPath) -> utils::Configuration
 {
-    panda::expect(std::filesystem::exists(configPath),
-                  fmt::format("Config file not found: {}. Using default parameters.", configPath));
-    const auto config =
-        panda::expect(utils::loadConfigurationFromFile(configPath),
-                      fmt::format("Failed to load configuration from file: {}. Using default parameters.", configPath));
+    auto config = panda::expect(utils::loadConfigurationFromFile(configPath),
+                                fmt::format("Could not load configuration file: {}", configPath));
+    utils::validateConfiguration(config);
 
     panda::log::Info("Successfully loaded configuration from file: {}", configPath);
 
@@ -314,25 +335,25 @@ void App::createParticlesInGrid(const utils::InitialParameters& initialParameter
     _particles.clear();
     _particles.reserve(initialParameters.getScalarCount());
 
-    static constexpr auto margin = 0.15F;
-
-    const auto domainSize = _simulationParameters.domain.max - _simulationParameters.domain.min;
-    const auto availableSize = domainSize - 2.0F * margin;
-
-    const auto spacingPerDim = glm::vec3 {availableSize.x / static_cast<float>(initialParameters.particleCount.x - 1),
-                                          availableSize.y / static_cast<float>(initialParameters.particleCount.y - 1),
-                                          availableSize.z / static_cast<float>(initialParameters.particleCount.z - 1)};
-
     for (uint32_t i = 0; i < initialParameters.particleCount.x; i++)
     {
         for (uint32_t j = 0; j < initialParameters.particleCount.y; j++)
         {
             for (uint32_t k = 0; k < initialParameters.particleCount.z; k++)
             {
-                const auto position = _simulationParameters.domain.min + glm::vec3 {margin} +
-                                      glm::vec3 {spacingPerDim.x * static_cast<float>(i),
-                                                 spacingPerDim.y * static_cast<float>(j),
-                                                 spacingPerDim.z * static_cast<float>(k)};
+                const auto position = glm::vec3 {
+                    getInitialGridCoordinate(
+                        _simulationParameters.domain.min.x,
+                        _simulationParameters.domain.max.x,
+                        GridCoordinate {.particleCount = initialParameters.particleCount.x, .particleIndex = i}),
+                    getInitialGridCoordinate(
+                        _simulationParameters.domain.min.y,
+                        _simulationParameters.domain.max.y,
+                        GridCoordinate {.particleCount = initialParameters.particleCount.y, .particleIndex = j}),
+                    getInitialGridCoordinate(
+                        _simulationParameters.domain.min.z,
+                        _simulationParameters.domain.max.z,
+                        GridCoordinate {.particleCount = initialParameters.particleCount.z, .particleIndex = k})};
 
                 _particles.emplace_back(position, 0.F);
             }
