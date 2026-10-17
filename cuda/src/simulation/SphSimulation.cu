@@ -128,6 +128,7 @@ void SphSimulation::updateDomain(const Parameters::Domain& domain, const physics
                              {getBlocksPerGridForBoundaryParticles(), _simulationData.threadsPerBlock},
                              domain,
                              getFluidParticles().positions,
+                             thrust::raw_pointer_cast(_fluidParticlesData.internal.smoothingRadii.data()),
                              getFluidParticlesCount(),
                              getBoundaryParticles().positions,
                              getBoundaryParticlesCount());
@@ -359,6 +360,7 @@ void SphSimulation::updateGrid()
 {
     _grid.updateFluid({getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock},
                       getFluidParticles().positions,
+                      thrust::raw_pointer_cast(_fluidParticlesData.internal.smoothingRadii.data()),
                       getFluidParticlesCount());
 }
 

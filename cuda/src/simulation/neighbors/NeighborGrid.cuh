@@ -18,6 +18,7 @@ public:
     struct GridData
     {
         std::span<int32_t> cellStartIndices;
+        // Cell ranges use inclusive start and end indices.
         std::span<int32_t> cellEndIndices;
         std::span<int32_t> particleGridIndices;
         std::span<int32_t> particleArrayIndices;
@@ -37,6 +38,7 @@ public:
         Grid grid;
         GridData fluid;
         GridData boundary;
+        float maxFluidSmoothingRadius;
 
         template <typename Func>
         __device__ void forEachFluidNeighbor(glm::vec4 position,
@@ -60,12 +62,16 @@ public:
                  uint32_t boundaryParticleCapacity);
     ~NeighborGrid();
 
-    void updateFluid(const RunData& runData, glm::vec4* positions, uint32_t fluidParticleCount);
+    void updateFluid(const RunData& runData,
+                     glm::vec4* positions,
+                     const float* smoothingRadii,
+                     uint32_t fluidParticleCount);
     void updateBoundary(const RunData& runData, glm::vec4* positions, uint32_t boundaryParticleCount);
     void updateBoundarySize(const RunData& fluidRunData,
                             const RunData& boundaryRunData,
                             const Simulation::Parameters::Domain& domain,
                             glm::vec4* fluidPositions,
+                            const float* fluidSmoothingRadii,
                             uint32_t fluidParticleCount,
                             glm::vec4* boundaryPositions,
                             uint32_t boundaryParticleCount);
@@ -77,7 +83,9 @@ private:
     static auto createGrid(const Simulation::Parameters::Domain& domain, float cellWidth) -> Grid;
     static auto getCellCount(const glm::ivec3& gridSize) -> uint32_t;
     static void resetGrid(const GridData& data);
-    void assignParticlesToCells(const RunData& runData, const GridData& data, glm::vec4* positions);
+    void assignParticlesToCells(const RunData& runData,
+                                const GridData& data,
+                                glm::vec4* positions);
     void sortParticles(const GridData& data);
     void calculateCellStartAndEndIndices(const RunData& runData, const GridData& data);
     Simulation::Parameters::Domain _domain;
@@ -85,6 +93,7 @@ private:
     GridData _fluid;
     GridData _boundary;
     float _cellWidth;
+    float _maxFluidSmoothingRadius {};
 };
 
 template <typename Func>
