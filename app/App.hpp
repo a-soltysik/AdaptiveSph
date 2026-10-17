@@ -3,8 +3,8 @@
 #include <panda/gfx/Context.h>
 #include <panda/gfx/Scene.h>
 
-#include <cuda/simulation/Simulation.cuh>
 #include <cuda/refinement/RefinementParameters.cuh>
+#include <cuda/simulation/Simulation.cuh>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
 #include <glm/ext/vector_uint3.hpp>

@@ -9,9 +9,8 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
-#include <utility>
-
 #include <cuda/simulation/Simulation.cuh>
+#include <utility>
 
 namespace sph
 {
