@@ -65,15 +65,19 @@ void AdaptiveSphSimulation::update(float deltaTime)
     halfKickVelocities(deltaTime / 2.F);
     updatePositions(deltaTime);
 
+    auto gridNeedsRefresh = true;
     if (_frameCounter == _refinementParams.initialCooldown ||
         (_frameCounter > _refinementParams.initialCooldown && _frameCounter % _refinementParams.cooldown == 0))
     {
-        performAdaptiveRefinement();
+        gridNeedsRefresh = performAdaptiveRefinement();
     }
 
-    updateGrid();
-    computeDensities();
-    computeBoundaryDensityContribution();
+    if (gridNeedsRefresh)
+    {
+        updateGrid();
+        computeDensities();
+        computeBoundaryDensityContribution();
+    }
 
     computeExternalAccelerations();
     computePressureAccelerations();
@@ -106,28 +110,32 @@ auto AdaptiveSphSimulation::getBlocksPerGridForParticles(uint32_t count) const -
     return {(count + getThreadsPerBlock() - 1) / getThreadsPerBlock()};
 }
 
-void AdaptiveSphSimulation::performAdaptiveRefinement()
+auto AdaptiveSphSimulation::performAdaptiveRefinement() -> bool
 {
     const auto currentCount = getFluidParticlesCount();
 
-    resetRefinementCounters();
-    identifyAndMergeParticles();
-    cudaDeviceSynchronize();
     updateGrid();
     computeDensities();
     computeBoundaryDensityContribution();
 
+    resetRefinementCounters();
+    identifyAndMergeParticles();
+
     const auto particlesRemovedInLastMerge = currentCount - getFluidParticlesCount();
     const auto countAfterMerge = getFluidParticlesCount();
+    auto gridNeedsRefresh = particlesRemovedInLastMerge > 0;
 
-    if (particlesRemovedInLastMerge > 0)
+    const auto availableParticleCapacity = _refinementParams.maxParticleCount - countAfterMerge;
+    if (particlesRemovedInLastMerge == 0 || availableParticleCapacity >= refinement::constants::splitChildCount)
     {
-        identifyAndSplitParticles(particlesRemovedInLastMerge);
-
-        cudaDeviceSynchronize();
-        updateGrid();
-        computeDensities();
-        computeBoundaryDensityContribution();
+        if (particlesRemovedInLastMerge > 0)
+        {
+            updateGrid();
+            computeDensities();
+            computeBoundaryDensityContribution();
+            gridNeedsRefresh = false;
+        }
+        gridNeedsRefresh = identifyAndSplitParticles();
     }
 
     const auto finalCount = getFluidParticlesCount();
@@ -136,6 +144,8 @@ void AdaptiveSphSimulation::performAdaptiveRefinement()
         .particlesAfter = finalCount,
         .mergedPairs = particlesRemovedInLastMerge,
         .splitParents = (finalCount - countAfterMerge) / refinement::constants::splitChildCount};
+
+    return gridNeedsRefresh;
 }
 
 void AdaptiveSphSimulation::resetRefinementCounters()
@@ -159,8 +169,15 @@ void AdaptiveSphSimulation::resetRefinementCounters()
     thrust::fill(_refinementData.particlesIds.begin(), _refinementData.particlesIds.end(), 0);
 }
 
-void AdaptiveSphSimulation::identifyAndSplitParticles(uint32_t removedParticles)
+auto AdaptiveSphSimulation::identifyAndSplitParticles() -> bool
 {
+    const auto currentCount = getFluidParticlesCount();
+    if (currentCount > _refinementParams.maxParticleCount ||
+        _refinementParams.maxParticleCount - currentCount < refinement::constants::splitChildCount)
+    {
+        return false;
+    }
+
     const float minMass = _refinementParams.minMassRatio * getParameters().baseParticleMass;
 
     if (_refinementParams.criterionType == refinement::RefinementParameters::Criterion::Interface)
@@ -197,14 +214,16 @@ void AdaptiveSphSimulation::identifyAndSplitParticles(uint32_t removedParticles)
                                         ::cuda::std::greater<float> {});
 
     const auto candidatesCount = _refinementData.split.particlesSplitCount.toHost();
-    const auto particlesToSplitCount =
-        std::min(candidatesCount, removedParticles / refinement::constants::splitChildCount);
+    const auto availableParticleCapacity = _refinementParams.maxParticleCount - currentCount;
+    const auto maxSplitCount = availableParticleCapacity / refinement::constants::splitChildCount;
+    const auto particlesToSplitCount = std::min(candidatesCount, maxSplitCount);
 
     if (particlesToSplitCount == 0)
     {
-        return;
+        return false;
     }
 
+    _refinementData.split.particlesSplitCount = particlesToSplitCount;
     refinement::splitParticles<<<getBlocksPerGridForParticles(particlesToSplitCount), getThreadsPerBlock()>>>(
         getFluidParticles(),
         refinement::RefinementDataView {_refinementData},
@@ -213,6 +232,7 @@ void AdaptiveSphSimulation::identifyAndSplitParticles(uint32_t removedParticles)
 
     cudaDeviceSynchronize();
     setParticleCount(_refinementData.particlesCount.toHost());
+    return getFluidParticlesCount() != currentCount;
 }
 
 void AdaptiveSphSimulation::identifyAndMergeParticles()

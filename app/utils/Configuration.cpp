@@ -165,6 +165,17 @@ void validateRefinementParameters(const std::optional<cuda::refinement::Refineme
     panda::expect(refinement.maxBatchRatio > 0.F && refinement.maxBatchRatio <= 1.F,
                   "refinementParameters.maxBatchRatio must be in the range (0, 1]");
     panda::expect(refinement.cooldown > 0, "refinementParameters.cooldown must be greater than zero");
+
+    const auto& splitting = refinement.splitting;
+    requirePositive(splitting.epsilon, "refinementParameters.splitting.epsilon");
+    requirePositive(splitting.alpha, "refinementParameters.splitting.alpha");
+    requirePositive(splitting.centerMassRatio, "refinementParameters.splitting.centerMassRatio");
+    requirePositive(splitting.vertexMassRatio, "refinementParameters.splitting.vertexMassRatio");
+    const auto childMassRatio =
+        static_cast<float>(cuda::refinement::constants::splitChildCount) * splitting.vertexMassRatio;
+    const auto totalSplitMassRatio = splitting.centerMassRatio + childMassRatio;
+    panda::expect(std::abs(totalSplitMassRatio - 1.F) <= 1e-6F,
+                  "refinementParameters.splitting mass ratios must sum to 1 across the center and 12 children");
 }
 
 void validatePoiseuilleFlowParameters(const cuda::ScenarioParameters& scenario)

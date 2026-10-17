@@ -33,11 +33,11 @@ public:
     [[nodiscard]] auto takeAdaptiveRefinementPass() -> std::optional<AdaptiveRefinementPass> override;
 
 private:
-    void performAdaptiveRefinement();
+    [[nodiscard]] auto performAdaptiveRefinement() -> bool;
     [[nodiscard]] auto getBlocksPerGridForParticles(uint32_t count) const -> dim3;
     void calculateMergeCriteria(float* criterionValues);
     void resetRefinementCounters();
-    void identifyAndSplitParticles(uint32_t removedParticles);
+    [[nodiscard]] auto identifyAndSplitParticles() -> bool;
     void identifyAndMergeParticles();
 
     refinement::RefinementParameters _refinementParams;
