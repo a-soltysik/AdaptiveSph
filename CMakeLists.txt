@@ -18,6 +18,7 @@ set(ASPH_CONFIG_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin/configs")
 file(MAKE_DIRECTORY "${ASPH_CONFIG_OUTPUT_DIR}")
 configure_file(configs/base.json "${ASPH_CONFIG_OUTPUT_DIR}/base.json" COPYONLY)
 configure_file(configs/adaptive.json "${ASPH_CONFIG_OUTPUT_DIR}/adaptive.json" COPYONLY)
+configure_file(configs/poiseuille.json "${ASPH_CONFIG_OUTPUT_DIR}/poiseuille.json" COPYONLY)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

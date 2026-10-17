@@ -97,7 +97,6 @@ public:
         glm::vec3 gravity;
         float speedOfSound;
         float restDensity;
-        float restitution;
         float viscosityConstant;
         float surfaceTensionConstant;
         float maxVelocity;
@@ -165,7 +164,6 @@ struct ScenarioParameters
 {
     ScenarioType type = ScenarioType::Unspecified;
     float cooldown = 2.5F;  // Cooldown time in seconds (physical time)
-    std::optional<float> simulationTime;
 
     std::optional<LidDrivenCavityParameters> lidDrivenCavity;
     std::optional<DamBreakParameters> damBreak;

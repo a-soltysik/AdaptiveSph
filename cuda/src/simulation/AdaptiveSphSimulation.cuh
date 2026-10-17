@@ -32,7 +32,6 @@ public:
 
 private:
     void performAdaptiveRefinement();
-    void updateParticleCount();
     [[nodiscard]] auto getBlocksPerGridForParticles(uint32_t count) const -> dim3;
     void calculateMergeCriteria(float* criterionValues);
     void resetRefinementCounters();

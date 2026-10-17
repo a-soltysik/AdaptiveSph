@@ -15,11 +15,12 @@
 #include <glm/ext/vector_float3.hpp>
 #include <limits>
 #include <nlohmann/json.hpp>
+#include <nlohmann/json_fwd.hpp>
 #include <optional>
 #include <string>
 #include <string_view>
 
-#include "utils/Serializers.hpp"
+#include "utils/Serializers.hpp"  // NOLINT(misc-include-cleaner)
 
 using json = nlohmann::json;
 
@@ -102,7 +103,6 @@ void validateSimulationParameters(const cuda::Simulation::Parameters& simulation
     requireFinite(simulation.gravity.z, "simulationParameters.gravity");
     requirePositive(simulation.speedOfSound, "simulationParameters.speedOfSound");
     requirePositive(simulation.restDensity, "simulationParameters.restDensity");
-    requireFinite(simulation.restitution, "simulationParameters.restitution");
     requireNonNegative(simulation.viscosityConstant, "simulationParameters.viscosityConstant");
     requireNonNegative(simulation.surfaceTensionConstant, "simulationParameters.surfaceTensionConstant");
     requirePositive(simulation.maxVelocity, "simulationParameters.maxVelocity");
@@ -156,6 +156,70 @@ void validateRefinementParameters(const std::optional<cuda::refinement::Refineme
                   "refinementParameters.maxBatchRatio must be in the range (0, 1]");
     panda::expect(refinement.cooldown > 0, "refinementParameters.cooldown must be greater than zero");
 }
+
+void validatePoiseuilleFlowParameters(const cuda::ScenarioParameters& scenario)
+{
+    if (!scenario.poiseuilleFlow.has_value())
+    {
+        panda::expect(false, "Poiseuille flow requires scenarioParameters.poiseuilleFlow");
+        return;
+    }
+    requireFinite((*scenario.poiseuilleFlow).drivingForce, "scenarioParameters.poiseuilleFlow.drivingForce");
+}
+
+void validateLidDrivenCavityParameters(const cuda::ScenarioParameters& scenario)
+{
+    if (!scenario.lidDrivenCavity.has_value())
+    {
+        panda::expect(false, "Lid-driven cavity requires scenarioParameters.lidDrivenCavity");
+        return;
+    }
+    requireFinite((*scenario.lidDrivenCavity).lidVelocity, "scenarioParameters.lidDrivenCavity.lidVelocity");
+}
+
+void validateDamBreakParameters(const cuda::ScenarioParameters& scenario)
+{
+    if (!scenario.damBreak.has_value())
+    {
+        panda::expect(false, "Dam break requires scenarioParameters.damBreak");
+        return;
+    }
+    const auto& damBreak = *scenario.damBreak;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        const auto& domain = damBreak.expandedDomain;
+        requireFinite(domain.min[axis], "scenarioParameters.damBreak.expandedDomain.min");
+        requireFinite(domain.max[axis], "scenarioParameters.damBreak.expandedDomain.max");
+        const auto extent = domain.max[axis] - domain.min[axis];
+        panda::expect(std::isfinite(extent) && extent > (2.F * initialParticleMargin),
+                      "Dam-break domain extent must be finite and exceed twice the initial particle margin");
+    }
+    requireNonNegative(damBreak.expandedDomain.friction, "scenarioParameters.damBreak.expandedDomain.friction");
+}
+
+void validateScenarioParameters(const std::optional<cuda::ScenarioParameters>& parameters)
+{
+    if (!parameters.has_value())
+    {
+        return;
+    }
+    const auto& scenario = *parameters;
+    requireNonNegative(scenario.cooldown, "scenarioParameters.cooldown");
+    switch (scenario.type)
+    {
+    case cuda::ScenarioType::Unspecified:
+        break;
+    case cuda::ScenarioType::PoiseuilleFlow:
+        validatePoiseuilleFlowParameters(scenario);
+        break;
+    case cuda::ScenarioType::LidDrivenCavity:
+        validateLidDrivenCavityParameters(scenario);
+        break;
+    case cuda::ScenarioType::DamBreak:
+        validateDamBreakParameters(scenario);
+        break;
+    }
+}
 }
 
 auto loadConfigurationFromFile(const std::string& filePath) -> std::optional<Configuration>
@@ -195,6 +259,7 @@ auto validateConfiguration(const Configuration& configuration) -> void
     validateSimulationParameters(simulation);
     validateInitialParticleDistribution(initial, simulation);
     validateRefinementParameters(configuration.refinementParameters, particleCount);
+    validateScenarioParameters(configuration.scenarioParameters);
 }
 
 }

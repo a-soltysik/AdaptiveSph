@@ -49,24 +49,6 @@ target_compile_definitions(
         $<$<CXX_COMPILER_ID:MSVC>:NOMINMAX>
 )
 
-if (SPH_ENABLE_PCH)
-    target_precompile_headers(
-            AdaptiveSphEngine
-            PRIVATE
-            <cstddef>
-            <cstdint>
-            <memory>
-            <vector>
-            <optional>
-            <span>
-            <string>
-            <panda/utils/Assert.h>
-            <vulkan/vulkan.hpp>
-            <vulkan/vulkan_handles.hpp>
-            <vulkan/vulkan_enums.hpp>
-            <vulkan/vulkan_structs.hpp>)
-endif ()
-
 add_subdirectory(config)
 add_subdirectory(shader)
 add_dependencies(AdaptiveSphEngine AdaptiveSphShader)

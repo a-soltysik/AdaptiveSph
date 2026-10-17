@@ -95,11 +95,6 @@ void AdaptiveSphSimulation::enableAdaptiveRefinement()
     _frameCounter = _refinementParams.initialCooldown;
 }
 
-void AdaptiveSphSimulation::updateParticleCount()
-{
-    setParticleCount(_refinementData.particlesCount.toHost());
-}
-
 auto AdaptiveSphSimulation::getBlocksPerGridForParticles(uint32_t count) const -> dim3
 {
     return {(count + getThreadsPerBlock() - 1) / getThreadsPerBlock()};
@@ -158,9 +153,7 @@ void AdaptiveSphSimulation::identifyAndSplitParticles(uint32_t removedParticles)
         refinement::getCriterionValues<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
             getFluidParticles(),
             thrust::raw_pointer_cast(_refinementData.split.criterionValues.data()),
-            refinement::interfaceCriterion::SplitCriterionGenerator(minMass,
-                                                                    _refinementParams.interfaceParameters,
-                                                                    _refinementParams.splitting),
+            refinement::interfaceCriterion::SplitCriterionGenerator(minMass, _refinementParams.interfaceParameters),
             getGrid().toDevice(),
             getParameters());
     }
@@ -169,9 +162,7 @@ void AdaptiveSphSimulation::identifyAndSplitParticles(uint32_t removedParticles)
         refinement::getCriterionValues<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
             getFluidParticles(),
             thrust::raw_pointer_cast(_refinementData.split.criterionValues.data()),
-            refinement::vorticity::SplitCriterionGenerator(minMass,
-                                                           _refinementParams.vorticity,
-                                                           _refinementParams.splitting),
+            refinement::vorticity::SplitCriterionGenerator(minMass, _refinementParams.vorticity),
             getGrid().toDevice(),
             getParameters());
     }
@@ -180,9 +171,7 @@ void AdaptiveSphSimulation::identifyAndSplitParticles(uint32_t removedParticles)
         refinement::getCriterionValues<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
             getFluidParticles(),
             thrust::raw_pointer_cast(_refinementData.split.criterionValues.data()),
-            refinement::velocity::SplitCriterionGenerator(minMass,
-                                                          _refinementParams.velocity.split,
-                                                          _refinementParams.splitting),
+            refinement::velocity::SplitCriterionGenerator(minMass, _refinementParams.velocity.split),
             getGrid().toDevice(),
             getParameters());
     }
@@ -190,19 +179,13 @@ void AdaptiveSphSimulation::identifyAndSplitParticles(uint32_t removedParticles)
     refinement::findTopParticlesToSplit(getFluidParticles(),
                                         _refinementData,
                                         _refinementParams,
-                                        thrust::greater<float> {});
+                                        ::cuda::std::greater<float> {});
 
     const auto candidatesCount = _refinementData.split.particlesSplitCount.toHost();
     const auto particlesToSplitCount = std::min(candidatesCount, removedParticles / 12);
 
-    printf("[SPLIT] Candidates: %u, Limit by removed: %u, Actually splitting: %u\n",
-           candidatesCount,
-           removedParticles / 12,
-           particlesToSplitCount);
-
     if (particlesToSplitCount == 0)
     {
-        printf("[SPLIT] No particles to split\n");
         return;
     }
 
@@ -214,9 +197,6 @@ void AdaptiveSphSimulation::identifyAndSplitParticles(uint32_t removedParticles)
 
     cudaDeviceSynchronize();
     setParticleCount(_refinementData.particlesCount.toHost());
-    printf("[SPLIT] Split %u particles into %u new particles (13 each)\n",
-           particlesToSplitCount,
-           particlesToSplitCount * 13);
 }
 
 void AdaptiveSphSimulation::identifyAndMergeParticles()
@@ -233,7 +213,7 @@ void AdaptiveSphSimulation::identifyAndMergeParticles()
     refinement::findTopParticlesToMerge(getFluidParticles(),
                                         _refinementData,
                                         _refinementParams,
-                                        thrust::less<float> {});
+                                        ::cuda::std::less<float> {});
 
     const auto particlesToMergeCount = _refinementData.merge.eligibleCount.toHost();
 

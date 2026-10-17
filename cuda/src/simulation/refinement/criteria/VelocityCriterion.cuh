@@ -1,7 +1,6 @@
 #pragma once
 #include <cstdint>
 
-#include "Common.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
 #include "cuda/simulation/Simulation.cuh"
 #include "simulation/SphSimulation.cuh"
@@ -12,12 +11,9 @@ namespace sph::cuda::refinement::velocity
 class SplitCriterionGenerator
 {
 public:
-    __host__ __device__ SplitCriterionGenerator(float minimalMass,
-                                                VelocityParameters::Split split,
-                                                SplittingParameters splitting)
+    __host__ __device__ SplitCriterionGenerator(float minimalMass, VelocityParameters::Split split)
         : _minimalMass(minimalMass),
-          _split(split),
-          _splitting(splitting)
+          _split(split)
     {
     }
 
@@ -29,7 +25,6 @@ public:
 private:
     float _minimalMass;
     VelocityParameters::Split _split;
-    SplittingParameters _splitting;
 };
 
 class MergeCriterionGenerator
@@ -61,15 +56,6 @@ inline __device__ auto SplitCriterionGenerator::operator()(FluidParticlesData pa
         return -1;
     }
 
-    const auto smoothingRadius = particles.smoothingRadii[id];
-    if (!checkIfParticleCanBeSplitInsideDomain(simulationData.domain,
-                                               particles.positions[id],
-                                               smoothingRadius,
-                                               _splitting.epsilon))
-    {
-        return -1;
-    }
-
     const auto velocity = particles.velocities[id];
     const auto velocityMagnitude = glm::length(glm::vec3(velocity));
     if (velocityMagnitude < _split.minimalSpeedThreshold)
@@ -88,12 +74,6 @@ inline __device__ auto MergeCriterionGenerator::operator()(FluidParticlesData pa
     {
         return -1;
     }
-    const auto smoothingRadius = particles.smoothingRadii[id];
-    if (!checkIfParticleCanBeSplitInsideDomain(simulationData.domain, particles.positions[id], smoothingRadius, 1.F))
-    {
-        return -1;
-    }
-
     const auto velocity = particles.velocities[id];
     const auto velocityMagnitude = glm::length(glm::vec3(velocity));
 

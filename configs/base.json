@@ -11,7 +11,6 @@
     "gravity": { "x": 0.0, "y": 9.81, "z": 0.0 },
     "speedOfSound": 20.0,
     "restDensity": 1000.0,
-    "restitution": 0.5,
     "viscosityConstant": 0.01,
     "surfaceTensionConstant": 0.0,
     "maxVelocity": 20.0,
