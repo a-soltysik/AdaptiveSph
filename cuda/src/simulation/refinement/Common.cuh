@@ -39,7 +39,6 @@ struct RefinementData
         thrust::device_vector<uint32_t> mergeCandidates;
         thrust::device_vector<uint32_t> mergePairs;
         thrust::device_vector<RemovalState> removalFlags;
-        thrust::device_vector<uint32_t> prefixSums;
         DeviceValue<uint32_t> mergeCount;
     };
 
@@ -68,7 +67,6 @@ struct RefinementDataView
         std::span<uint32_t> mergeCandidates;
         std::span<uint32_t> mergePairs;
         std::span<RefinementData::RemovalState> removalFlags;
-        std::span<uint32_t> prefixSums;
         uint32_t* mergeCount;
     };
 
@@ -97,7 +95,6 @@ struct RefinementDataView
                  .mergePairs = {thrust::raw_pointer_cast(data.merge.mergePairs.data()), data.merge.mergePairs.size()},
                  .removalFlags = {thrust::raw_pointer_cast(data.merge.removalFlags.data()),
                                   data.merge.removalFlags.size()},
-                 .prefixSums = {thrust::raw_pointer_cast(data.merge.prefixSums.data()), data.merge.prefixSums.size()},
                  .mergeCount = data.merge.mergeCount.getDevicePtr()},
           particlesIds {thrust::raw_pointer_cast(data.particlesIds.data()), data.particlesIds.size()},
           particlesCount {data.particlesCount.getDevicePtr()}

@@ -51,7 +51,6 @@ AdaptiveSphSimulation::AdaptiveSphSimulation(const Parameters& initialParameters
                     .mergePairs = {thrust::device_vector<uint32_t>(refinementParams.maxParticleCount * 2)},
                     .removalFlags = {thrust::device_vector<refinement::RefinementData::RemovalState>(
                         refinementParams.maxParticleCount)},
-                    .prefixSums = {thrust::device_vector<uint32_t>(refinementParams.maxParticleCount)},
                     .mergeCount = DeviceValue<uint32_t>::fromHost(0)},
           .particlesIds = {thrust::device_vector<uint32_t>(refinementParams.maxParticleCount)},
           .particlesCount = DeviceValue<uint32_t>::fromHost(SphSimulation::getFluidParticlesCount())
@@ -149,7 +148,6 @@ void AdaptiveSphSimulation::resetRefinementCounters()
     thrust::fill(_refinementData.merge.removalFlags.begin(),
                  _refinementData.merge.removalFlags.end(),
                  refinement::RefinementData::RemovalState::Keep);
-    thrust::fill(_refinementData.merge.prefixSums.begin(), _refinementData.merge.prefixSums.end(), 0);
     thrust::fill(_refinementData.merge.eligibleParticles.begin(), _refinementData.merge.eligibleParticles.end(), 0);
     thrust::fill(_refinementData.merge.mergeCandidates.begin(),
                  _refinementData.merge.mergeCandidates.end(),
@@ -260,21 +258,9 @@ void AdaptiveSphSimulation::identifyAndMergeParticles()
         refinement::RefinementDataView {_refinementData},
         getParameters());
 
-    cudaDeviceSynchronize();
-
-    thrust::exclusive_scan(
-        thrust::device,
-        reinterpret_cast<uint32_t*>(thrust::raw_pointer_cast(_refinementData.merge.removalFlags.data())),
-        reinterpret_cast<uint32_t*>(thrust::raw_pointer_cast(_refinementData.merge.removalFlags.data())) + currentCount,
-        _refinementData.merge.prefixSums.data());
-
-    refinement::compactParticles<<<getBlocksPerGridForParticles(currentCount), getThreadsPerBlock()>>>(
-        getFluidParticles(),
-        refinement::RefinementDataView {_refinementData},
-        currentCount);
-
-    refinement::updateParticleCount<<<1, 1>>>(refinement::RefinementDataView {_refinementData}, currentCount);
-    setParticleCount(_refinementData.particlesCount.toHost());
+    const auto compactedCount = refinement::compactParticles(getFluidParticles(), _refinementData);
+    setParticleCount(compactedCount);
+    _refinementData.particlesCount = compactedCount;
 }
 
 void AdaptiveSphSimulation::calculateMergeCriteria(float* criterionValues)
