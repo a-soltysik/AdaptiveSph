@@ -1,5 +1,4 @@
 #pragma once
-#include "Common.cuh"
 #include "algorithm/WendlandKernel.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
 #include "cuda/simulation/Simulation.cuh"
@@ -11,12 +10,9 @@ namespace sph::cuda::refinement::interfaceCriterion
 class SplitCriterionGenerator
 {
 public:
-    __host__ __device__ SplitCriterionGenerator(float minimalMass,
-                                                InterfaceParameters interfaceParameters,
-                                                SplittingParameters splitting)
+    __host__ __device__ SplitCriterionGenerator(float minimalMass, InterfaceParameters interfaceParameters)
         : _minimalMass(minimalMass),
-          _interface(interfaceParameters),
-          _splitting(splitting)
+          _interface(interfaceParameters)
     {
     }
 
@@ -28,7 +24,6 @@ public:
 private:
     float _minimalMass;
     InterfaceParameters _interface;
-    SplittingParameters _splitting;
 };
 
 class MergeCriterionGenerator
@@ -62,11 +57,6 @@ inline __device__ auto SplitCriterionGenerator::operator()(FluidParticlesData pa
 
     const auto position = particles.positions[id];
     const auto smoothingRadius = particles.smoothingRadii[id];
-
-    if (!checkIfParticleCanBeSplitInsideDomain(simulationData.domain, position, smoothingRadius, _splitting.epsilon))
-    {
-        return -1.0F;
-    }
 
     // Compute weighted average displacement vector: u_i = sum(m_j * W * r_ij) / sum(m_j * W)
     auto weightedDisplacement = glm::vec3(0.0F);
@@ -121,11 +111,6 @@ inline __device__ auto MergeCriterionGenerator::operator()(FluidParticlesData pa
         return -1.0F;
     }
     const auto smoothingRadius = particles.smoothingRadii[id];
-    if (!checkIfParticleCanBeSplitInsideDomain(simulationData.domain, particles.positions[id], smoothingRadius, 1.F))
-    {
-        return -1;
-    }
-
     const auto position = particles.positions[id];
 
     // Compute weighted average displacement vector: u_i = sum(m_j * W * r_ij) / sum(m_j * W)

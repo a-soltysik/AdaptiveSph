@@ -17,7 +17,7 @@ The renderer is for inspecting simulation behavior. Its frame rate is not a solv
 - `cuda/` contains the SPH kernels, neighbor grid, boundary handling, and refinement code.
 - `app/` contains the application loop, configuration loading, input, and GUI.
 - `engine/` contains the Vulkan rendering support used by the application.
-- `configs/` contains the base and adaptive example scenes.
+- `configs/` contains the base, adaptive and Poiseuille example scenes.
 
 ## Requirements
 
@@ -60,7 +60,21 @@ The adaptive variant uses the same initial scene and physical parameters, with a
 ./build/linux-gcc-release/bin/AdaptiveSph configs/adaptive.json
 ```
 
-Then click **Enable Adaptive Refinement** in the GUI to start refinement. Without a configuration argument, the application looks for `configs/base.json` beside the executable. Explicit configuration paths are relative to the current working directory. `AdaptiveSph --help` logs the command syntax. A missing or invalid configuration aborts startup; the application does not generate fallback parameters.
+Refinement starts automatically after the configured initial cooldown in simulation steps. The GUI button advances that schedule.
+
+For a channel with periodic X boundaries, zero gravity and a driving acceleration of 0.1 m/s² in X, use `configs/poiseuille.json`:
+
+```powershell
+.\build\windows-msvc-release\bin\AdaptiveSph.exe configs\poiseuille.json
+```
+
+```sh
+./build/linux-gcc-release/bin/AdaptiveSph configs/poiseuille.json
+```
+
+The force is applied only after the Poiseuille scenario activates; this example uses zero cooldown. It demonstrates the scenario setup, with numerical validation still pending.
+
+Without a configuration argument, the application looks for `configs/base.json` beside the executable. Explicit configuration paths are relative to the current working directory. `AdaptiveSph --help` logs the command syntax. A missing or invalid configuration aborts startup; the application does not generate fallback parameters. Runs have no automatic duration limit.
 
 ## Controls
 

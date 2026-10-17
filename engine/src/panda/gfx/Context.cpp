@@ -153,7 +153,7 @@ Context::~Context() noexcept
 
     if (_debugMessenger)
     {
-        _instance->destroyDebugUtilsMessengerEXT(_debugMessenger.value());
+        _instance->destroyDebugUtilsMessengerEXT(*_debugMessenger);
     }
 }
 

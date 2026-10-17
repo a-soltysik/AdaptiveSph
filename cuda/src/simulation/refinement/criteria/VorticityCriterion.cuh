@@ -11,12 +11,9 @@ namespace sph::cuda::refinement::vorticity
 class SplitCriterionGenerator
 {
 public:
-    __host__ __device__ SplitCriterionGenerator(float minimalMass,
-                                                VorticityParameters vorticity,
-                                                SplittingParameters splitting)
+    __host__ __device__ SplitCriterionGenerator(float minimalMass, VorticityParameters vorticity)
         : _minimalMass(minimalMass),
-          _vorticity(vorticity),
-          _splitting(splitting)
+          _vorticity(vorticity)
     {
     }
 
@@ -28,7 +25,6 @@ public:
 private:
     float _minimalMass;
     VorticityParameters _vorticity;
-    SplittingParameters _splitting;
 };
 
 class MergeCriterionGenerator
@@ -62,11 +58,6 @@ inline __device__ auto SplitCriterionGenerator::operator()(FluidParticlesData pa
 
     const auto position = particles.positions[id];
     const auto smoothingRadius = particles.smoothingRadii[id];
-    if (!checkIfParticleCanBeSplitInsideDomain(simulationData.domain, position, smoothingRadius, _splitting.epsilon))
-    {
-        return -1;
-    }
-
     auto dvx_dx = 0.0F;
     auto dvx_dy = 0.0F;
     auto dvx_dz = 0.0F;
@@ -138,11 +129,6 @@ inline __device__ auto MergeCriterionGenerator::operator()(FluidParticlesData pa
         return -1;
     }
     const auto smoothingRadius = particles.smoothingRadii[id];
-    if (!checkIfParticleCanBeSplitInsideDomain(simulationData.domain, particles.positions[id], smoothingRadius, 1.F))
-    {
-        return -1;
-    }
-
     const auto position = particles.positions[id];
     auto dvx_dx = 0.0F, dvx_dy = 0.0F, dvx_dz = 0.0F;
     auto dvy_dx = 0.0F, dvy_dy = 0.0F, dvy_dz = 0.0F;

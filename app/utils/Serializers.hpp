@@ -65,18 +65,11 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::VelocityParameters, sp
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::VorticityParameters::Split, minimalVorticityThreshold)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::VorticityParameters::Merge, maximalVorticityThreshold)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::VorticityParameters, split, merge)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::CurvatureParameters::Split, minimalCurvatureThreshold)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::CurvatureParameters::Merge, maximalCurvatureThreshold)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::CurvatureParameters, split, merge)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::InterfaceParameters::Split, proximityMagnitudeThreshold)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::InterfaceParameters::Merge, proximityMagnitudeThreshold)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::InterfaceParameters, split, merge)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(
     sph::cuda::refinement::SplittingParameters, epsilon, alpha, centerMassRatio, vertexMassRatio)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::ShiftingParameters,
-                                   enabled,
-                                   diffusionCoefficient,
-                                   maxShiftRatio)
 NLOHMANN_JSON_SERIALIZE_ENUM(sph::cuda::refinement::RefinementParameters::Criterion,
                              {
                                  {sph::cuda::refinement::RefinementParameters::Criterion::Velocity,  "velocity" },
@@ -95,7 +88,6 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::refinement::RefinementParameters,
                                    splitting,
                                    velocity,
                                    vorticity,
-                                   curvature,
                                    interfaceParameters)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::Simulation::Parameters::Domain, min, max, friction)
@@ -104,7 +96,6 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::Simulation::Parameters,
                                    gravity,
                                    speedOfSound,
                                    restDensity,
-                                   restitution,
                                    viscosityConstant,
                                    surfaceTensionConstant,
                                    maxVelocity,
@@ -138,10 +129,6 @@ struct adl_serializer<sph::cuda::ScenarioParameters>
             {"cooldown", s.cooldown}
         };
 
-        if (s.simulationTime.has_value())
-        {
-            j["simulationTime"] = s.simulationTime.value();
-        }
         if (s.lidDrivenCavity.has_value())
         {
             j["lidDrivenCavity"] = s.lidDrivenCavity.value();
@@ -159,12 +146,12 @@ struct adl_serializer<sph::cuda::ScenarioParameters>
     static void from_json(const json& j, sph::cuda::ScenarioParameters& s)
     {
         s.type = j.value("type", sph::cuda::ScenarioType::Unspecified);
+        if (j.contains("type") && j.at("type") != json(s.type))
+        {
+            throw json::other_error::create(501, "Unknown scenarioParameters.type", &j);
+        }
         s.cooldown = j.value("cooldown", 2.5F);
 
-        if (j.contains("simulationTime"))
-        {
-            s.simulationTime = j["simulationTime"].get<float>();
-        }
         if (j.contains("lidDrivenCavity"))
         {
             s.lidDrivenCavity = j["lidDrivenCavity"].get<sph::cuda::LidDrivenCavityParameters>();

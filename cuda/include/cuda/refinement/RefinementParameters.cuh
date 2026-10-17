@@ -37,22 +37,6 @@ struct VorticityParameters
     Merge merge;
 };
 
-struct CurvatureParameters
-{
-    struct Split
-    {
-        float minimalCurvatureThreshold = 2.0F;
-    };
-
-    struct Merge
-    {
-        float maximalCurvatureThreshold = 0.6F;
-    };
-
-    Split split;
-    Merge merge;
-};
-
 struct InterfaceParameters
 {
     struct Split
@@ -77,13 +61,6 @@ struct SplittingParameters
     float vertexMassRatio = 0.077F;
 };
 
-struct ShiftingParameters
-{
-    bool enabled = true;
-    float diffusionCoefficient = 0.01F;
-    float maxShiftRatio = 0.5F;
-};
-
 struct RefinementParameters
 {
     enum class Criterion
@@ -103,11 +80,9 @@ struct RefinementParameters
     Criterion criterionType = Criterion::Velocity;
 
     SplittingParameters splitting;
-    ShiftingParameters shifting;
     VelocityParameters velocity;
 
     VorticityParameters vorticity;
-    CurvatureParameters curvature;
     InterfaceParameters interfaceParameters;
 };
 

@@ -250,7 +250,7 @@ auto App::mainLoop() -> void
         [&gui, this] {
             gui.setAverageNeighbourCount(_simulation->calculateAverageNeighborCount());
         },
-        std::chrono::seconds {0}));
+        std::chrono::seconds {1}));
     taskScheduler.addTask(std::make_unique<utils::PerTimeTask>(
         [&gui, this] {
             gui.setDensityInfo(_simulation->getDensityInfo(0.1F));
@@ -439,7 +439,10 @@ void App::updateDomain(const cuda::Simulation::Parameters::Domain& newDomain)
 
 void App::updateScenario()
 {
-    // Check if cooldown has passed (using physical time instead of steps)
+    if (_scenarioParameters.type == cuda::ScenarioType::Unspecified)
+    {
+        return;
+    }
     const float currentTime = _simulation->getCurrentSimulationTime();
     if (!_scenarioActivated && currentTime >= _scenarioParameters.cooldown)
     {

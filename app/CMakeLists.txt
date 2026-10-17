@@ -46,13 +46,3 @@ target_compile_definitions(AdaptiveSph
         GLM_ENABLE_EXPERIMENTAL
         $<$<CXX_COMPILER_ID:MSVC>:NOMINMAX>
 )
-
-if (sph_ENABLE_PCH)
-    target_precompile_headers(
-            ${APP_TARGET_NAME}
-            PRIVATE
-            <string>
-            <vector>
-            <GLFW/glfw3.h>
-            <panda/Logger.h>)
-endif ()

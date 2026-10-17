@@ -20,7 +20,6 @@ __global__ auto splitParticles(FluidParticlesData particles,
                                SplittingParameters params,
                                uint32_t maxParticleCount) -> void;
 
-__global__ auto buildCompactionMap(RefinementDataView refinementData, uint32_t particleCount) -> void;
 __global__ auto compactParticles(FluidParticlesData particles, RefinementDataView refinementData, uint32_t oldCount)
     -> void;
 
@@ -36,12 +35,6 @@ __global__ auto performMerges(FluidParticlesData particles,
                               Simulation::Parameters simulationData) -> void;
 
 __global__ auto updateParticleCount(RefinementDataView refinementData, uint32_t particleCount) -> void;
-
-__global__ auto shiftParticles(FluidParticlesData particles,
-                                NeighborGrid::Device grid,
-                                Simulation::Parameters simulationData,
-                                ShiftingParameters shiftingParams,
-                                float deltaTime) -> void;
 
 template <typename CriterionGenerator>
 __global__ void getCriterionValues(FluidParticlesData particles,
