@@ -88,7 +88,6 @@ void AdaptiveSphSimulation::update(float deltaTime)
     cudaDeviceSynchronize();
     _frameCounter++;
     _accumulatedSimulationTime += deltaTime;
-    _iterationCounter++;
 }
 
 void AdaptiveSphSimulation::enableAdaptiveRefinement()

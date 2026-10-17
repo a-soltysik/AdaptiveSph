@@ -6,11 +6,10 @@
 #include <thrust/transform_reduce.h>
 #include <vector_types.h>
 
-#include <cmath>
+#include <algorithm>
 #include <cuda/simulation/Simulation.cuh>
 #include <cuda/simulation/physics/StaticBoundaryDomain.cuh>
 #include <glm/common.hpp>
-#include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
 #include <glm/ext/vector_uint3.hpp>
 #include <span>
@@ -27,15 +26,6 @@
 
 namespace sph::cuda
 {
-
-namespace
-{
-struct RMSEAccumulator
-{
-    float sumSquaredErrors;
-    uint32_t validCount;
-};
-}  // namespace
 
 SphSimulation::SphSimulation(const Parameters& initialParameters,
                              const std::vector<glm::vec4>& positions,
@@ -132,7 +122,6 @@ void SphSimulation::update(float deltaTime)
     cudaDeviceSynchronize();
 
     _accumulatedSimulationTime += deltaTime;
-    _iterationCounter++;
 }
 
 void SphSimulation::updateDomain(const Parameters::Domain& domain, const physics::StaticBoundaryDomain& boundaryDomain)
@@ -492,74 +481,6 @@ void SphSimulation::enableAdaptiveRefinement() { }
 auto SphSimulation::getCurrentSimulationTime() const -> float
 {
     return _accumulatedSimulationTime;
-}
-
-auto SphSimulation::getCurrentIteration() const -> uint32_t
-{
-    return _iterationCounter;
-}
-
-auto SphSimulation::calculateDensityRMSE() const -> float
-{
-    const auto restDensity = _simulationData.restDensity;
-    const auto count = getFluidParticlesCount();
-    const auto* densities = _fluidParticlesData.imported.densities.getData<float>();
-
-    const auto result = thrust::transform_reduce(
-        thrust::device,
-        densities,
-        densities + count,
-        [restDensity] __device__(float density) -> RMSEAccumulator {
-            if (!isfinite(density))
-            {
-                return {0.0F, 0U};
-            }
-            const auto error = density - restDensity;
-            return {error * error, 1U};
-        },
-        RMSEAccumulator {0.0F, 0U},
-        [] __device__(const RMSEAccumulator& a, const RMSEAccumulator& b) -> RMSEAccumulator {
-            return {a.sumSquaredErrors + b.sumSquaredErrors, a.validCount + b.validCount};
-        });
-
-    if (result.validCount == 0U)
-    {
-        return 0.0F;
-    }
-
-    return std::sqrt(result.sumSquaredErrors / static_cast<float>(result.validCount));
-}
-
-auto SphSimulation::copyParticlePositionsToHost(std::vector<glm::vec3>& output) const -> void
-{
-    output.resize(getFluidParticlesCount());
-
-    std::vector<glm::vec4> temp(getFluidParticlesCount());
-    cudaMemcpy(temp.data(),
-               _fluidParticlesData.imported.positions.getData<glm::vec4>(),
-               getFluidParticlesCount() * sizeof(glm::vec4),
-               cudaMemcpyDeviceToHost);
-
-    for (size_t i = 0; i < output.size(); ++i)
-    {
-        output[i] = glm::vec3(temp[i]);
-    }
-}
-
-auto SphSimulation::copyParticleVelocitiesToHost(std::vector<glm::vec3>& output) const -> void
-{
-    output.resize(getFluidParticlesCount());
-
-    std::vector<glm::vec4> temp(getFluidParticlesCount());
-    cudaMemcpy(temp.data(),
-               _fluidParticlesData.imported.velocities.getData<glm::vec4>(),
-               getFluidParticlesCount() * sizeof(glm::vec4),
-               cudaMemcpyDeviceToHost);
-
-    for (size_t i = 0; i < output.size(); ++i)
-    {
-        output[i] = glm::vec3(temp[i]);
-    }
 }
 
 }

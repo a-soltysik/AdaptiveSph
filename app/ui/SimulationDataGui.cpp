@@ -7,10 +7,11 @@
 #include <vulkan/vulkan_core.h>
 
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <utility>
 
-#include "../../cuda/include/cuda/simulation/Simulation.cuh"
+#include <cuda/simulation/Simulation.cuh>
 
 namespace sph
 {

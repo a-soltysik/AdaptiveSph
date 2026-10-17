@@ -1,7 +1,7 @@
 #pragma once
 
-#include <../../cuda/include/cuda/simulation/Simulation.cuh>
 #include <cuda/refinement/RefinementParameters.cuh>
+#include <cuda/simulation/Simulation.cuh>
 #include <glm/detail/qualifier.hpp>
 #include <nlohmann/adl_serializer.hpp>
 #include <nlohmann/detail/macro_scope.hpp>
@@ -115,7 +115,6 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::Simulation::Parameters,
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::utils::InitialParameters, particleCount)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::utils::RenderingParameters, renderBoundaryParticles)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::utils::ExperimentConfig, enabled, samplingInterval, duration)
 
 NLOHMANN_JSON_SERIALIZE_ENUM(sph::cuda::ScenarioType,
                              {
@@ -191,8 +190,7 @@ struct adl_serializer<sph::utils::Configuration>
             {"simulationParameters", c.simulationParameters},
             {"refinementParameters", c.refinementParameters},
             {"renderingParameters",  c.renderingParameters },
-            {"scenarioParameters",   c.scenarioParameters  },
-            {"experimentConfig",     c.experimentConfig    }
+            {"scenarioParameters",   c.scenarioParameters  }
         };
     }
 
@@ -204,7 +202,6 @@ struct adl_serializer<sph::utils::Configuration>
             j.value("refinementParameters", std::optional<sph::cuda::refinement::RefinementParameters> {});
         c.renderingParameters = j.value("renderingParameters", std::optional<sph::utils::RenderingParameters> {});
         c.scenarioParameters = j.value("scenarioParameters", std::optional<sph::cuda::ScenarioParameters> {});
-        c.experimentConfig = j.value("experimentConfig", std::optional<sph::utils::ExperimentConfig> {});
     }
 };
 

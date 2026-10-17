@@ -59,13 +59,7 @@ public:
         return _scenarioParams;
     }
 
-    // Experiment data collection API
     [[nodiscard]] auto getCurrentSimulationTime() const -> float override;
-    [[nodiscard]] auto getCurrentIteration() const -> uint32_t override;
-    [[nodiscard]] auto calculateDensityRMSE() const -> float override;
-
-    auto copyParticlePositionsToHost(std::vector<glm::vec3>& output) const -> void override;
-    auto copyParticleVelocitiesToHost(std::vector<glm::vec3>& output) const -> void override;
 
 protected:
     struct FluidParticlesDataBuffer
@@ -155,7 +149,6 @@ protected:
     void updateGrid();
 
     float _accumulatedSimulationTime = 0.0F;
-    uint32_t _iterationCounter = 0;
 
 private:
     void initializeBoundaryParticles(const physics::StaticBoundaryDomain& boundaryDomain);

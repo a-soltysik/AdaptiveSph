@@ -3,7 +3,7 @@
 #include <panda/gfx/Context.h>
 #include <panda/gfx/Scene.h>
 
-#include <../cuda/include/cuda/simulation/Simulation.cuh>
+#include <cuda/simulation/Simulation.cuh>
 #include <cuda/refinement/RefinementParameters.cuh>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
@@ -59,7 +59,6 @@ private:
     cuda::Simulation::Parameters _simulationParameters {};
     cuda::ScenarioParameters _scenarioParameters {};
     std::optional<cuda::refinement::RefinementParameters> _refinementParameters;
-    utils::ExperimentConfig _experimentConfig {};
     bool _scenarioActivated = false;
 };
 }

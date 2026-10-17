@@ -2,7 +2,6 @@
 
 #include <panda/utils/Assert.h>
 
-#include <../../cuda/include/cuda/simulation/Simulation.cuh>
 #include <cstdint>
 #include <cuda/refinement/RefinementParameters.cuh>
 #include <cuda/simulation/Simulation.cuh>
@@ -38,13 +37,6 @@ struct RenderingParameters
     bool renderBoundaryParticles = false;
 };
 
-struct ExperimentConfig
-{
-    bool enabled = false;
-    float samplingInterval = 0.5F;
-    float duration = 5.F;
-};
-
 struct Configuration
 {
     std::optional<InitialParameters> initialParameters;
@@ -52,7 +44,6 @@ struct Configuration
     std::optional<cuda::refinement::RefinementParameters> refinementParameters;
     std::optional<RenderingParameters> renderingParameters;
     std::optional<cuda::ScenarioParameters> scenarioParameters;
-    std::optional<ExperimentConfig> experimentConfig;
 };
 
 auto loadConfigurationFromFile(const std::string& filePath) -> std::optional<Configuration>;

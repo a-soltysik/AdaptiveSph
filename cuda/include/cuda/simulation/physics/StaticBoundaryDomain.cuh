@@ -68,6 +68,7 @@ private:
 
 constexpr auto operator|(StaticBoundaryDomain::WallFlags lhs, StaticBoundaryDomain::WallFlags rhs) -> StaticBoundaryDomain::WallFlags
 {
+    // NOLINT(clang-analyzer-optin.core.EnumCastOutOfRange): combinations of flag bits are valid WallFlags values.
     return static_cast<StaticBoundaryDomain::WallFlags>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
 }
 
