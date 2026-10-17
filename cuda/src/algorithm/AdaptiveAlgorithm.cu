@@ -4,8 +4,11 @@
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/remove.h>
 #include <thrust/scatter.h>
 #include <thrust/sort.h>
+#include <thrust/tuple.h>
 
 #include <array>
 #include <cfloat>
@@ -60,6 +63,14 @@ struct SelectedMaskValue
         return 1U;
     }
 };
+
+struct IsMarkedForRemoval
+{
+    __host__ __device__ auto operator()(RefinementData::RemovalState state) const -> bool
+    {
+        return state == RefinementData::RemovalState::Remove;
+    }
+};
 }
 
 auto findTopParticlesToMerge(FluidParticlesData particles,
@@ -108,6 +119,29 @@ auto findTopParticlesToMerge(FluidParticlesData particles,
     }
 
     refinementData.merge.eligibleCount = maxEligibleCount;
+}
+
+auto compactParticles(FluidParticlesData particles, RefinementData& refinementData) -> uint32_t
+{
+    if (particles.particleCount == 0)
+    {
+        return 0;
+    }
+
+    auto particlesBegin = thrust::make_zip_iterator(thrust::make_tuple(particles.positions,
+                                                                       particles.velocities,
+                                                                       particles.accelerations,
+                                                                       particles.densities,
+                                                                       particles.radii,
+                                                                       particles.smoothingRadii,
+                                                                       particles.masses));
+    const auto particlesEnd = particlesBegin + particles.particleCount;
+    const auto newEnd = thrust::remove_if(thrust::device,
+                                          particlesBegin,
+                                          particlesEnd,
+                                          refinementData.merge.removalFlags.begin(),
+                                          detail::IsMarkedForRemoval {});
+    return static_cast<uint32_t>(newEnd - particlesBegin);
 }
 
 __device__ auto getNewRadius(float mass, float baseMass, float baseRadius) -> float
@@ -195,41 +229,6 @@ __global__ void splitParticles(FluidParticlesData particles,
         particles.smoothingRadii[newIdx] = newSmoothingLength;
 
         particles.densities[newIdx] = 0.0F;
-    }
-}
-
-__global__ void updateParticleCount(RefinementDataView refinementData, uint32_t particleCount)
-{
-    auto removedCount = refinementData.merge.prefixSums[particleCount - 1];
-    if (refinementData.merge.removalFlags[particleCount - 1] == RefinementData::RemovalState::Remove)
-    {
-        removedCount++;
-    }
-
-    *refinementData.particlesCount = particleCount - removedCount;
-}
-
-__global__ void compactParticles(FluidParticlesData particles,
-                                 RefinementDataView refinementData,
-                                 uint32_t particleCount)
-{
-    const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx >= particleCount)
-    {
-        return;
-    }
-
-    if (refinementData.merge.removalFlags[idx] == RefinementData::RemovalState::Keep)
-    {
-        const auto newIdx = idx - refinementData.merge.prefixSums[idx];
-
-        particles.positions[newIdx] = particles.positions[idx];
-        particles.velocities[newIdx] = particles.velocities[idx];
-        particles.accelerations[newIdx] = particles.accelerations[idx];
-        particles.masses[newIdx] = particles.masses[idx];
-        particles.radii[newIdx] = particles.radii[idx];
-        particles.smoothingRadii[newIdx] = particles.smoothingRadii[idx];
-        particles.densities[newIdx] = particles.densities[idx];
     }
 }
 

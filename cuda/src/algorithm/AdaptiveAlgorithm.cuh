@@ -21,8 +21,7 @@ __global__ auto splitParticles(FluidParticlesData particles,
                                SplittingParameters params,
                                uint32_t maxParticleCount) -> void;
 
-__global__ auto compactParticles(FluidParticlesData particles, RefinementDataView refinementData, uint32_t oldCount)
-    -> void;
+auto compactParticles(FluidParticlesData particles, RefinementData& refinementData) -> uint32_t;
 
 __global__ auto identifyMergeCandidates(FluidParticlesData particles,
                                         RefinementDataView refinementData,
@@ -34,8 +33,6 @@ __global__ auto resolveMergePairs(RefinementDataView refinementData, uint32_t pa
 __global__ auto performMerges(FluidParticlesData particles,
                               RefinementDataView refinementData,
                               Simulation::Parameters simulationData) -> void;
-
-__global__ auto updateParticleCount(RefinementDataView refinementData, uint32_t particleCount) -> void;
 
 auto findTopParticlesToMerge(FluidParticlesData particles,
                              RefinementData& refinementData,
