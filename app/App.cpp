@@ -236,6 +236,10 @@ auto App::mainLoop() -> void
         panda::gfx::view::YXZ {.position = cameraObject.translation, .rotation = cameraObject.rotation});
 
     auto gui = SimulationDataGui {};
+    auto refinementPassCount = uint32_t {};
+    auto mergedPairCount = uint32_t {};
+    auto splitParentCount = uint32_t {};
+    auto particlesAfterLastRefinement = uint32_t {};
     gui.setDomain(_simulationParameters.domain);
     gui.onDomainChanged([this](const cuda::Simulation::Parameters::Domain& newDomain) {
         updateDomain(newDomain);
@@ -256,6 +260,23 @@ auto App::mainLoop() -> void
             gui.setDensityInfo(_simulation->getDensityInfo(0.1F));
         },
         std::chrono::seconds {1}));
+    taskScheduler.addTask(std::make_unique<utils::PerTimeTask>(
+        [&] {
+            if (refinementPassCount == 0)
+            {
+                return;
+            }
+
+            panda::log::Info("Adaptive refinement ran {} passes: {} merge pairs, {} split parents; fluid particles: {}",
+                             refinementPassCount,
+                             mergedPairCount,
+                             splitParentCount,
+                             particlesAfterLastRefinement);
+            refinementPassCount = 0;
+            mergedPairCount = 0;
+            splitParentCount = 0;
+        },
+        std::chrono::seconds {1}));
 
     while (!_window->shouldClose()) [[likely]]
     {
@@ -267,6 +288,25 @@ auto App::mainLoop() -> void
             timeManager.update();
 
             _simulation->update(0.0001F);
+
+            if (const auto refinementPass = _simulation->takeAdaptiveRefinementPass(); refinementPass.has_value())
+            {
+                ++refinementPassCount;
+                mergedPairCount += refinementPass->mergedPairs;
+                splitParentCount += refinementPass->splitParents;
+                particlesAfterLastRefinement = refinementPass->particlesAfter;
+
+                if (refinementPass->particlesBefore != refinementPass->particlesAfter)
+                {
+                    panda::log::Info(
+                        "Adaptive refinement changed fluid particle count from {} to {} ({} merge pairs, {} split "
+                        "parents)",
+                        refinementPass->particlesBefore,
+                        refinementPass->particlesAfter,
+                        refinementPass->mergedPairs,
+                        refinementPass->splitParents);
+                }
+            }
 
             updateScenario();
 

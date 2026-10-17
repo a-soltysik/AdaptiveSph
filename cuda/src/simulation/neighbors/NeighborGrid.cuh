@@ -65,6 +65,8 @@ public:
                                                         float smoothingRadius,
                                                         Func&& func) const;
 
+        __device__ auto getFluidNeighborSearchRadius(float smoothingRadius, float supportRadiusRatio) const -> float;
+
         __device__ auto calculateCellIndex(glm::vec4 position) const -> glm::ivec3;
         __device__ auto flattenCellIndex(glm::ivec3 cellIndex) const -> uint32_t;
     };
@@ -96,9 +98,7 @@ private:
     static auto createGrid(const Simulation::Parameters::Domain& domain, float cellWidth) -> Grid;
     static auto getCellCount(const glm::ivec3& gridSize) -> uint32_t;
     static void resetGrid(const GridData& data);
-    void assignParticlesToCells(const RunData& runData,
-                                const GridData& data,
-                                glm::vec4* positions);
+    void assignParticlesToCells(const RunData& runData, const GridData& data, glm::vec4* positions);
     void sortParticles(const GridData& data);
     void calculateCellStartAndEndIndices(const RunData& runData, const GridData& data);
     Simulation::Parameters::Domain _domain;
@@ -412,6 +412,12 @@ void __device__ NeighborGrid::Device::forEachBoundaryNeighborPeriodic(glm::vec4 
             }
         }
     }
+}
+
+inline __device__ auto NeighborGrid::Device::getFluidNeighborSearchRadius(float smoothingRadius,
+                                                                          float supportRadiusRatio) const -> float
+{
+    return supportRadiusRatio * glm::max(smoothingRadius, maxFluidSmoothingRadius);
 }
 
 inline __device__ auto NeighborGrid::Device::calculateCellIndex(glm::vec4 position) const -> glm::ivec3

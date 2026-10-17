@@ -128,10 +128,20 @@ void validateInitialParticleDistribution(const InitialParameters& initial,
     const auto expectedMass = simulation.restDensity * spacing.x * spacing.y * spacing.z;
     panda::expect(std::isfinite(expectedMass) && expectedMass > 0.F,
                   "Initial spacing and rest density produce an invalid particle mass");
-    if (std::abs((simulation.baseParticleMass / expectedMass) - 1.F) > 0.1F)
+    const auto relativeMassErrorPercent = 100.F * ((simulation.baseParticleMass - expectedMass) / expectedMass);
+    if (std::abs(relativeMassErrorPercent) > 10.F)
     {
         panda::log::Warning(
-            "baseParticleMass differs from restDensity times the initial grid-cell volume by more than 10%");
+            "Initial particle mass mismatch: configured {:.6g}, expected {:.6g} "
+            "(restDensity {:.6g}, grid spacing {:.6g} x {:.6g} x {:.6g}); "
+            "deviation {:+.1f}%. Check baseParticleMass, restDensity, domain, and particleCount.",
+            simulation.baseParticleMass,
+            expectedMass,
+            simulation.restDensity,
+            spacing.x,
+            spacing.y,
+            spacing.z,
+            relativeMassErrorPercent);
     }
 }
 

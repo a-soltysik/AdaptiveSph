@@ -72,7 +72,7 @@ For a channel with periodic X boundaries, zero gravity and a driving acceleratio
 ./build/linux-gcc-release/bin/AdaptiveSph configs/poiseuille.json
 ```
 
-The force is applied only after the Poiseuille scenario activates; this example uses zero cooldown. It demonstrates the scenario setup, with numerical validation still pending.
+The force is applied after the Poiseuille scenario activates. This config starts the scenario immediately and enables vorticity-based adaptive refinement after 100 simulation steps, then repeats refinement every 100 steps. Numerical validation of the flow remains pending.
 
 Without a configuration argument, the application looks for `configs/base.json` beside the executable. Explicit configuration paths are relative to the current working directory. `AdaptiveSph --help` logs the command syntax. A missing or invalid configuration aborts startup; the application does not generate fallback parameters. Runs have no automatic duration limit.
 
