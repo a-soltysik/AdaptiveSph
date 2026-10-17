@@ -19,7 +19,34 @@
     "baseParticleMass": 1.0,
     "threadsPerBlock": 256
   },
-  "refinementParameters": null,
+  "refinementParameters": {
+    "enabled": true,
+    "minMassRatio": 0.3,
+    "maxMassRatio": 8.0,
+    "maxParticleCount": 8192,
+    "maxBatchRatio": 0.1,
+    "initialCooldown": 100,
+    "cooldown": 100,
+    "criterionType": "vorticity",
+    "splitting": {
+      "epsilon": 0.65,
+      "alpha": 0.7,
+      "centerMassRatio": 0.077,
+      "vertexMassRatio": 0.077
+    },
+    "velocity": {
+      "split": { "minimalSpeedThreshold": 2.0 },
+      "merge": { "maximalSpeedThreshold": 0.1 }
+    },
+    "vorticity": {
+      "split": { "minimalVorticityThreshold": 1.0 },
+      "merge": { "maximalVorticityThreshold": 0.3 }
+    },
+    "interfaceParameters": {
+      "split": { "proximityMagnitudeThreshold": 0.05 },
+      "merge": { "proximityMagnitudeThreshold": 0.15 }
+    }
+  },
   "renderingParameters": {
     "renderBoundaryParticles": false
   },

@@ -95,6 +95,13 @@ void AdaptiveSphSimulation::enableAdaptiveRefinement()
     _frameCounter = _refinementParams.initialCooldown;
 }
 
+auto AdaptiveSphSimulation::takeAdaptiveRefinementPass() -> std::optional<AdaptiveRefinementPass>
+{
+    const auto refinementPass = _lastRefinementPass;
+    _lastRefinementPass.reset();
+    return refinementPass;
+}
+
 auto AdaptiveSphSimulation::getBlocksPerGridForParticles(uint32_t count) const -> dim3
 {
     return {(count + getThreadsPerBlock() - 1) / getThreadsPerBlock()};
@@ -112,6 +119,7 @@ void AdaptiveSphSimulation::performAdaptiveRefinement()
     computeBoundaryDensityContribution();
 
     const auto particlesRemovedInLastMerge = currentCount - getFluidParticlesCount();
+    const auto countAfterMerge = getFluidParticlesCount();
 
     if (particlesRemovedInLastMerge > 0)
     {
@@ -122,6 +130,13 @@ void AdaptiveSphSimulation::performAdaptiveRefinement()
         computeDensities();
         computeBoundaryDensityContribution();
     }
+
+    const auto finalCount = getFluidParticlesCount();
+    _lastRefinementPass = AdaptiveRefinementPass {
+        .particlesBefore = currentCount,
+        .particlesAfter = finalCount,
+        .mergedPairs = particlesRemovedInLastMerge,
+        .splitParents = (finalCount - countAfterMerge) / refinement::constants::splitChildCount};
 }
 
 void AdaptiveSphSimulation::resetRefinementCounters()
@@ -136,7 +151,9 @@ void AdaptiveSphSimulation::resetRefinementCounters()
                  refinement::RefinementData::RemovalState::Keep);
     thrust::fill(_refinementData.merge.prefixSums.begin(), _refinementData.merge.prefixSums.end(), 0);
     thrust::fill(_refinementData.merge.eligibleParticles.begin(), _refinementData.merge.eligibleParticles.end(), 0);
-    thrust::fill(_refinementData.merge.mergeCandidates.begin(), _refinementData.merge.mergeCandidates.end(), 0);
+    thrust::fill(_refinementData.merge.mergeCandidates.begin(),
+                 _refinementData.merge.mergeCandidates.end(),
+                 refinement::constants::noCandidate);
     thrust::fill(_refinementData.merge.mergePairs.begin(), _refinementData.merge.mergePairs.end(), 0);
     _refinementData.merge.eligibleCount = 0;
     _refinementData.merge.mergeCount = 0;
@@ -182,7 +199,8 @@ void AdaptiveSphSimulation::identifyAndSplitParticles(uint32_t removedParticles)
                                         ::cuda::std::greater<float> {});
 
     const auto candidatesCount = _refinementData.split.particlesSplitCount.toHost();
-    const auto particlesToSplitCount = std::min(candidatesCount, removedParticles / 12);
+    const auto particlesToSplitCount =
+        std::min(candidatesCount, removedParticles / refinement::constants::splitChildCount);
 
     if (particlesToSplitCount == 0)
     {
@@ -210,10 +228,7 @@ void AdaptiveSphSimulation::identifyAndMergeParticles()
 
     calculateMergeCriteria(thrust::raw_pointer_cast(_refinementData.merge.criterionValues.data()));
 
-    refinement::findTopParticlesToMerge(getFluidParticles(),
-                                        _refinementData,
-                                        _refinementParams,
-                                        ::cuda::std::less<float> {});
+    refinement::findTopParticlesToMerge(getFluidParticles(), _refinementData, _refinementParams);
 
     const auto particlesToMergeCount = _refinementData.merge.eligibleCount.toHost();
 

@@ -13,14 +13,6 @@
 
 namespace sph::cuda::kernel
 {
-namespace
-{
-__device__ auto getFluidNeighborSearchRadius(float smoothingRadius, NeighborGrid::Device grid) -> float
-{
-    return device::constant::wendlandRangeRatio * glm::max(smoothingRadius, grid.maxFluidSmoothingRadius);
-}
-}
-
 __global__ void computeDensities(FluidParticlesData particles, NeighborGrid::Device grid)
 {
     const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
@@ -35,7 +27,7 @@ __global__ void computeDensities(FluidParticlesData particles, NeighborGrid::Dev
 
     grid.forEachFluidNeighbor(position,
                               particles.positions,
-                              getFluidNeighborSearchRadius(smoothingRadius, grid),
+                              grid.getFluidNeighborSearchRadius(smoothingRadius, device::constant::wendlandRangeRatio),
                               [position, &particles, &density](const auto neighbourIdx, const auto neighborPosition) {
                                   const auto offsetToNeighbour = neighborPosition - position;
                                   const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
@@ -79,7 +71,7 @@ __global__ void computePressureAccelerations(FluidParticlesData particles,
     grid.forEachFluidNeighbor(
         position,
         particles.positions,
-        getFluidNeighborSearchRadius(smoothingRadius, grid),
+        grid.getFluidNeighborSearchRadius(smoothingRadius, device::constant::wendlandRangeRatio),
         [position, &particles, &simulationData, pressure, density, &acceleration, idx](const auto neighbourIdx,
                                                                                        const auto neighborPosition) {
             if (neighbourIdx == idx)
@@ -134,7 +126,7 @@ __global__ void computeViscosityAccelerations(FluidParticlesData particles,
     grid.forEachFluidNeighbor(
         position,
         particles.positions,
-        getFluidNeighborSearchRadius(smoothingRadius, grid),
+        grid.getFluidNeighborSearchRadius(smoothingRadius, device::constant::wendlandRangeRatio),
         [position, velocity, &particles, &acceleration, &simulationData, density, smoothingRadius, idx](
             const auto neighborIdx,
             const auto neighborPosition) {
@@ -191,7 +183,7 @@ __global__ void computeSurfaceTensionAccelerations(FluidParticlesData particles,
     grid.forEachFluidNeighbor(
         position,
         particles.positions,
-        getFluidNeighborSearchRadius(smoothingRadius, grid),
+        grid.getFluidNeighborSearchRadius(smoothingRadius, device::constant::wendlandRangeRatio),
         [position, &particles, &acceleration, idx](const auto neighborIdx, const glm::vec4& neighborPosition) {
             if (neighborIdx == idx)
             {
@@ -255,7 +247,7 @@ __global__ void sumAllNeighbors(FluidParticlesData particles, NeighborGrid::Devi
     grid.forEachFluidNeighbor(
         position,
         particles.positions,
-        getFluidNeighborSearchRadius(smoothingRadius, grid),
+        grid.getFluidNeighborSearchRadius(smoothingRadius, device::constant::wendlandRangeRatio),
         [position, &particles, &count, idx](const auto neighborIdx, const glm::vec4& adjustedPos) {
             if (idx == neighborIdx)
             {
@@ -322,7 +314,7 @@ __global__ void computeDensitiesPeriodic(FluidParticlesData particles, NeighborG
     grid.forEachFluidNeighborPeriodic(
         position,
         particles.positions,
-        device::constant::wendlandRangeRatio * smoothingRadius,
+        grid.getFluidNeighborSearchRadius(smoothingRadius, device::constant::wendlandRangeRatio),
         [position, &particles, &density](const auto neighbourIdx, const auto neighborPosition) {
             const auto offsetToNeighbour = neighborPosition - position;
             const auto distanceSquared = glm::dot(offsetToNeighbour, offsetToNeighbour);
@@ -365,7 +357,7 @@ __global__ void computePressureAccelerationsPeriodic(FluidParticlesData particle
     grid.forEachFluidNeighborPeriodic(
         position,
         particles.positions,
-        device::constant::wendlandRangeRatio * smoothingRadius,
+        grid.getFluidNeighborSearchRadius(smoothingRadius, device::constant::wendlandRangeRatio),
         [position, &particles, &simulationData, pressure, density, &acceleration, idx](const auto neighbourIdx,
                                                                                        const auto neighborPosition) {
             if (neighbourIdx == idx)
@@ -420,7 +412,7 @@ __global__ void computeViscosityAccelerationsPeriodic(FluidParticlesData particl
     grid.forEachFluidNeighborPeriodic(
         position,
         particles.positions,
-        device::constant::wendlandRangeRatio * smoothingRadius,
+        grid.getFluidNeighborSearchRadius(smoothingRadius, device::constant::wendlandRangeRatio),
         [position, velocity, &particles, &acceleration, &simulationData, density, smoothingRadius, idx](
             const auto neighborIdx,
             const auto neighborPosition) {
@@ -477,7 +469,7 @@ __global__ void computeSurfaceTensionAccelerationsPeriodic(FluidParticlesData pa
     grid.forEachFluidNeighborPeriodic(
         position,
         particles.positions,
-        device::constant::wendlandRangeRatio * smoothingRadius,
+        grid.getFluidNeighborSearchRadius(smoothingRadius, device::constant::wendlandRangeRatio),
         [position, &particles, &acceleration, idx](const auto neighborIdx, const glm::vec4& neighborPosition) {
             if (neighborIdx == idx)
             {

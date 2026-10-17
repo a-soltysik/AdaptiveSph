@@ -1,4 +1,11 @@
 #include <device_atomic_functions.h>
+#include <thrust/copy.h>
+#include <thrust/execution_policy.h>
+#include <thrust/fill.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/scatter.h>
+#include <thrust/sort.h>
 
 #include <array>
 #include <cfloat>
@@ -25,6 +32,82 @@ namespace detail
 {
 constexpr __device__ auto phi = std::numbers::phi_v<float>;
 constexpr __device__ auto invnorm = 0.5257311121F;
+
+struct IsEligibleMergeCriterion
+{
+    __host__ __device__ auto operator()(float value) const -> bool
+    {
+        return value >= 0.0F;
+    }
+};
+
+struct MergeCriterionLess
+{
+    const float* criterionValues;
+
+    __host__ __device__ auto operator()(uint32_t left, uint32_t right) const -> bool
+    {
+        const auto leftValue = criterionValues[left];
+        const auto rightValue = criterionValues[right];
+        return leftValue < rightValue || (leftValue == rightValue && left < right);
+    }
+};
+
+struct SelectedMaskValue
+{
+    __host__ __device__ auto operator()(uint32_t) const -> uint32_t
+    {
+        return 1U;
+    }
+};
+}
+
+auto findTopParticlesToMerge(FluidParticlesData particles,
+                             RefinementData& refinementData,
+                             RefinementParameters refinementParameters) -> void
+{
+    cudaDeviceSynchronize();
+
+    const auto particleIdsBegin = thrust::make_counting_iterator<uint32_t>(0);
+    const auto particleIdsEnd = particleIdsBegin + particles.particleCount;
+    const auto criterionValues = refinementData.merge.criterionValues.data();
+    const auto eligibleParticlesBegin = refinementData.merge.eligibleParticles.begin();
+    const auto eligibleParticlesEnd = thrust::copy_if(thrust::device,
+                                                      particleIdsBegin,
+                                                      particleIdsEnd,
+                                                      refinementData.merge.criterionValues.begin(),
+                                                      eligibleParticlesBegin,
+                                                      detail::IsEligibleMergeCriterion {});
+    const auto qualifiedCount = static_cast<uint32_t>(eligibleParticlesEnd - eligibleParticlesBegin);
+
+    const auto maxEligibleCount =
+        std::min(qualifiedCount,
+                 static_cast<uint32_t>(
+                     std::round(static_cast<float>(particles.particleCount) * refinementParameters.maxBatchRatio)));
+
+    // Reuse the split ID scratch buffer as a membership mask during merge selection.
+    thrust::fill(thrust::device,
+                 refinementData.particlesIds.begin(),
+                 refinementData.particlesIds.begin() + particles.particleCount,
+                 0U);
+
+    if (maxEligibleCount > 0)
+    {
+        thrust::sort(thrust::device,
+                     eligibleParticlesBegin,
+                     eligibleParticlesEnd,
+                     detail::MergeCriterionLess {thrust::raw_pointer_cast(criterionValues)});
+
+        const auto selectedMaskValuesBegin =
+            thrust::make_transform_iterator(eligibleParticlesBegin, detail::SelectedMaskValue {});
+        thrust::scatter(thrust::device,
+                        selectedMaskValuesBegin,
+                        selectedMaskValuesBegin + maxEligibleCount,
+                        eligibleParticlesBegin,
+                        refinementData.particlesIds.begin());
+    }
+
+    refinementData.merge.eligibleCount = maxEligibleCount;
 }
 
 __device__ auto getNewRadius(float mass, float baseMass, float baseRadius) -> float
@@ -164,6 +247,7 @@ __global__ void identifyMergeCandidates(FluidParticlesData particles,
     const auto particleId = refinementData.merge.eligibleParticles[idx];
     const auto position = particles.positions[particleId];
     const auto smoothingRadius = particles.smoothingRadii[particleId];
+    const auto maximalMergeMass = refinementParameters.maxMassRatio * simulationData.baseParticleMass;
     auto closestDistanceSquared = FLT_MAX;
     auto closestIdx = constants::noCandidate;
 
@@ -180,16 +264,19 @@ __global__ void identifyMergeCandidates(FluidParticlesData particles,
             {
                 return;
             }
+            if (refinementData.merge.selectedMask[neighborIdx] == 0)
+            {
+                return;
+            }
 
             const auto offset = neighborPosition - position;
             const auto distanceSquared = glm::dot(offset, offset);
             const auto neighbourSmoothingRadius = particles.smoothingRadii[neighborIdx];
             const auto minimalSmoothingRadius = glm::min(smoothingRadius, neighbourSmoothingRadius);
-            const auto neighbourMass = particles.masses[neighborIdx];
+            const auto mergedMass = particles.masses[particleId] + particles.masses[neighborIdx];
 
             if (distanceSquared < minimalSmoothingRadius * minimalSmoothingRadius &&
-                distanceSquared < closestDistanceSquared &&
-                neighbourMass < refinementParameters.maxMassRatio * simulationData.baseParticleMass)
+                distanceSquared < closestDistanceSquared && mergedMass <= maximalMergeMass)
             {
                 closestDistanceSquared = distanceSquared;
                 closestIdx = neighborIdx;
@@ -207,12 +294,11 @@ __global__ void resolveMergePairs(RefinementDataView refinementData, uint32_t pa
         return;
     }
 
-    if (refinementData.merge.mergeCandidates[idx] == constants::noCandidate ||
-        refinementData.merge.removalFlags[idx] != RefinementData::RemovalState::Keep)
+    const auto candidateIdx = refinementData.merge.mergeCandidates[idx];
+    if (candidateIdx == constants::noCandidate || candidateIdx >= particleCount || candidateIdx == idx)
     {
         return;
     }
-    const auto candidateIdx = refinementData.merge.mergeCandidates[idx];
 
     if (refinementData.merge.mergeCandidates[candidateIdx] == idx)
     {

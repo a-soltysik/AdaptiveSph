@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <glm/ext/vector_float4.hpp>
+#include <optional>
 #include <vector>
 
 #include "cuda/refinement/RefinementParameters.cuh"
@@ -29,6 +30,7 @@ public:
 
     void update(float deltaTime) override;
     void enableAdaptiveRefinement() override;
+    [[nodiscard]] auto takeAdaptiveRefinementPass() -> std::optional<AdaptiveRefinementPass> override;
 
 private:
     void performAdaptiveRefinement();
@@ -42,6 +44,7 @@ private:
     refinement::RefinementData _refinementData;
     uint32_t _frameCounter = 0;
     float _deltaTime = 0.0F;
+    std::optional<AdaptiveRefinementPass> _lastRefinementPass;
 };
 
 }

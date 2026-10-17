@@ -118,11 +118,24 @@ public:
         uint32_t overDensityCount;
     };
 
+    struct AdaptiveRefinementPass
+    {
+        uint32_t particlesBefore;
+        uint32_t particlesAfter;
+        uint32_t mergedPairs;
+        uint32_t splitParents;
+    };
+
     virtual ~Simulation() = default;
 
     virtual void update(float deltaTime) = 0;
     virtual void updateDomain(const Parameters::Domain& domain,
                               const physics::StaticBoundaryDomain& boundaryDomain) = 0;
+
+    [[nodiscard]] virtual auto takeAdaptiveRefinementPass() -> std::optional<AdaptiveRefinementPass>
+    {
+        return std::nullopt;
+    }
 
     [[nodiscard]] virtual auto getFluidParticlesCount() const -> uint32_t = 0;
     [[nodiscard]] virtual auto getBoundaryParticlesCount() const -> uint32_t = 0;

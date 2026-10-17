@@ -5,6 +5,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/sort.h>
 
+#include <cstdint>
 #include <cuda/simulation/Simulation.cuh>
 #include <thrust/detail/sequence.inl>
 
@@ -35,6 +36,10 @@ __global__ auto performMerges(FluidParticlesData particles,
                               Simulation::Parameters simulationData) -> void;
 
 __global__ auto updateParticleCount(RefinementDataView refinementData, uint32_t particleCount) -> void;
+
+auto findTopParticlesToMerge(FluidParticlesData particles,
+                             RefinementData& refinementData,
+                             RefinementParameters refinementParameters) -> void;
 
 template <typename CriterionGenerator>
 __global__ void getCriterionValues(FluidParticlesData particles,
@@ -90,43 +95,6 @@ auto findTopParticlesToSplit(FluidParticlesData particles,
                    refinementData.particlesIds.data(),
                    maxParticlesCount,
                    refinementData.split.particlesIdsToSplit.data());
-}
-
-template <typename CriterionSorter>
-auto findTopParticlesToMerge(FluidParticlesData particles,
-                             RefinementData& refinementData,
-                             RefinementParameters refinementParameters,
-                             CriterionSorter criterionSorter) -> void
-{
-    cudaDeviceSynchronize();
-
-    thrust::sequence(thrust::device,
-                     refinementData.particlesIds.data(),
-                     refinementData.particlesIds.data() + particles.particleCount,
-                     0);
-
-    thrust::sort_by_key(thrust::device,
-                        refinementData.merge.criterionValues.data(),
-                        refinementData.merge.criterionValues.data() + particles.particleCount,
-                        refinementData.particlesIds.data(),
-                        criterionSorter);
-    const auto eligibleCount = thrust::count_if(thrust::device,
-                                                refinementData.merge.criterionValues.data(),
-                                                refinementData.merge.criterionValues.data() + particles.particleCount,
-                                                [] __device__(float value) {
-                                                    return value > 0.0F;
-                                                });
-    const auto maxEligibleCount =
-        std::min(static_cast<uint32_t>(eligibleCount),
-                 static_cast<uint32_t>(
-                     std::round(static_cast<float>(particles.particleCount) * refinementParameters.maxBatchRatio)));
-
-    thrust::copy_n(thrust::device,
-                   refinementData.particlesIds.data(),
-                   maxEligibleCount,
-                   refinementData.merge.eligibleParticles.data());
-
-    refinementData.merge.eligibleCount = maxEligibleCount;
 }
 
 }

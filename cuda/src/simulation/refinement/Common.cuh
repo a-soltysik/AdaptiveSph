@@ -13,6 +13,7 @@ namespace sph::cuda::refinement
 namespace constants
 {
 constexpr auto noCandidate = UINT32_MAX;
+constexpr auto splitChildCount = 12U;
 }
 
 struct RefinementData
@@ -62,6 +63,7 @@ struct RefinementDataView
     {
         std::span<float> criterionValues;
         std::span<uint32_t> eligibleParticles;
+        std::span<uint32_t> selectedMask;
         uint32_t* eligibleCount;
         std::span<uint32_t> mergeCandidates;
         std::span<uint32_t> mergePairs;
@@ -78,27 +80,27 @@ struct RefinementDataView
 
     explicit RefinementDataView(RefinementData& data)
         : split {
-            .criterionValues = {thrust::raw_pointer_cast(data.split.criterionValues.data()),
-                                data.split.criterionValues.size()    },
-            .particlesIdsToSplit = {thrust::raw_pointer_cast(data.split.particlesIdsToSplit.data()),
-                                data.split.particlesIdsToSplit.size()},
-            .particlesSplitCount = data.split.particlesSplitCount.getDevicePtr()
-  },
-  merge
-    {
-        .criterionValues = {thrust::raw_pointer_cast(data.merge.criterionValues.data()),
-                            data.merge.criterionValues.size()},
-        .eligibleParticles = {thrust::raw_pointer_cast(data.merge.eligibleParticles.data()),
-                              data.merge.eligibleParticles.size()},
-        .eligibleCount = data.merge.eligibleCount.getDevicePtr(),
-        .mergeCandidates = {thrust::raw_pointer_cast(data.merge.mergeCandidates.data()), data.merge.mergeCandidates.size()},
-        .mergePairs = {thrust::raw_pointer_cast(data.merge.mergePairs.data()), data.merge.mergePairs.size()},
-        .removalFlags = {thrust::raw_pointer_cast(data.merge.removalFlags.data()), data.merge.removalFlags.size()},
-        .prefixSums = {thrust::raw_pointer_cast(data.merge.prefixSums.data()), data.merge.prefixSums.size()},
-        .mergeCount = data.merge.mergeCount.getDevicePtr()
+              .criterionValues = {thrust::raw_pointer_cast(data.split.criterionValues.data()),
+                                  data.split.criterionValues.size()    },
+              .particlesIdsToSplit = {thrust::raw_pointer_cast(data.split.particlesIdsToSplit.data()),
+                                  data.split.particlesIdsToSplit.size()},
+              .particlesSplitCount = data.split.particlesSplitCount.getDevicePtr()
     },
-    particlesIds {thrust::raw_pointer_cast(data.particlesIds.data()), data.particlesIds.size()},
-    particlesCount{data.particlesCount.getDevicePtr()}
+          merge {.criterionValues = {thrust::raw_pointer_cast(data.merge.criterionValues.data()),
+                                     data.merge.criterionValues.size()},
+                 .eligibleParticles = {thrust::raw_pointer_cast(data.merge.eligibleParticles.data()),
+                                       data.merge.eligibleParticles.size()},
+                 .selectedMask = {thrust::raw_pointer_cast(data.particlesIds.data()), data.particlesIds.size()},
+                 .eligibleCount = data.merge.eligibleCount.getDevicePtr(),
+                 .mergeCandidates = {thrust::raw_pointer_cast(data.merge.mergeCandidates.data()),
+                                     data.merge.mergeCandidates.size()},
+                 .mergePairs = {thrust::raw_pointer_cast(data.merge.mergePairs.data()), data.merge.mergePairs.size()},
+                 .removalFlags = {thrust::raw_pointer_cast(data.merge.removalFlags.data()),
+                                  data.merge.removalFlags.size()},
+                 .prefixSums = {thrust::raw_pointer_cast(data.merge.prefixSums.data()), data.merge.prefixSums.size()},
+                 .mergeCount = data.merge.mergeCount.getDevicePtr()},
+          particlesIds {thrust::raw_pointer_cast(data.particlesIds.data()), data.particlesIds.size()},
+          particlesCount {data.particlesCount.getDevicePtr()}
     {
     }
 };
