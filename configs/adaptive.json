@@ -1,0 +1,58 @@
+{
+  "initialParameters": {
+    "particleCount": { "x": 12, "y": 15, "z": 12 }
+  },
+  "simulationParameters": {
+    "domain": {
+      "min": { "x": -0.7, "y": -0.85, "z": -0.7 },
+      "max": { "x": 0.7, "y": 0.85, "z": 0.7 },
+      "friction": 0.01
+    },
+    "gravity": { "x": 0.0, "y": 9.81, "z": 0.0 },
+    "speedOfSound": 20.0,
+    "restDensity": 1000.0,
+    "restitution": 0.5,
+    "viscosityConstant": 0.01,
+    "surfaceTensionConstant": 0.0,
+    "maxVelocity": 20.0,
+    "baseSmoothingRadius": 0.12,
+    "baseParticleRadius": 0.05,
+    "baseParticleMass": 1.0,
+    "threadsPerBlock": 256
+  },
+  "refinementParameters": {
+    "enabled": true,
+    "minMassRatio": 0.3,
+    "maxMassRatio": 8.0,
+    "maxParticleCount": 8192,
+    "maxBatchRatio": 0.1,
+    "initialCooldown": 10,
+    "cooldown": 10,
+    "criterionType": "velocity",
+    "splitting": {
+      "epsilon": 0.65,
+      "alpha": 0.7,
+      "centerMassRatio": 0.077,
+      "vertexMassRatio": 0.077
+    },
+    "velocity": {
+      "split": { "minimalSpeedThreshold": 2.0 },
+      "merge": { "maximalSpeedThreshold": 0.1 }
+    },
+    "vorticity": {
+      "split": { "minimalVorticityThreshold": 1.0 },
+      "merge": { "maximalVorticityThreshold": 0.3 }
+    },
+    "curvature": {
+      "split": { "minimalCurvatureThreshold": 2.0 },
+      "merge": { "maximalCurvatureThreshold": 0.6 }
+    },
+    "interfaceParameters": {
+      "split": { "distanceRatioThreshold": 0.05 },
+      "merge": { "distanceRatioThreshold": 0.15 }
+    }
+  },
+  "renderingParameters": {
+    "renderBoundaryParticles": false
+  }
+}

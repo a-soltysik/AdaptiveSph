@@ -1,10 +1,10 @@
 #include <cuda_runtime_api.h>
 #include <driver_types.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
 #include <vector_types.h>
 
 #include <cstdint>
+#include <cuda/std/functional>
 #include <glm/ext/vector_float4.hpp>
 #include <vector>
 
@@ -173,7 +173,7 @@ void AdaptiveSphSimulation::identifyAndSplitParticles(uint32_t removedParticles)
     refinement::findTopParticlesToSplit(getFluidParticles(),
                                         _refinementData,
                                         _refinementParams,
-                                        thrust::greater<float> {});
+                                        ::cuda::std::greater<float> {});
 
     const auto particlesToSplitCount =
         std::min(_refinementData.split.particlesSplitCount.toHost(), removedParticles / 12);
@@ -206,7 +206,7 @@ void AdaptiveSphSimulation::identifyAndMergeParticles()
     refinement::findTopParticlesToMerge(getFluidParticles(),
                                         _refinementData,
                                         _refinementParams,
-                                        thrust::less<float> {});
+                                        ::cuda::std::less<float> {});
 
     const auto particlesToMergeCount = _refinementData.merge.eligibleCount.toHost();
 

@@ -1,0 +1,27 @@
+{
+  "initialParameters": {
+    "particleCount": { "x": 12, "y": 15, "z": 12 }
+  },
+  "simulationParameters": {
+    "domain": {
+      "min": { "x": -0.7, "y": -0.85, "z": -0.7 },
+      "max": { "x": 0.7, "y": 0.85, "z": 0.7 },
+      "friction": 0.01
+    },
+    "gravity": { "x": 0.0, "y": 9.81, "z": 0.0 },
+    "speedOfSound": 20.0,
+    "restDensity": 1000.0,
+    "restitution": 0.5,
+    "viscosityConstant": 0.01,
+    "surfaceTensionConstant": 0.0,
+    "maxVelocity": 20.0,
+    "baseSmoothingRadius": 0.12,
+    "baseParticleRadius": 0.05,
+    "baseParticleMass": 1.0,
+    "threadsPerBlock": 256
+  },
+  "refinementParameters": null,
+  "renderingParameters": {
+    "renderBoundaryParticles": false
+  }
+}

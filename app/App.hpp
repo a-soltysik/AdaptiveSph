@@ -19,7 +19,7 @@ namespace sph
 class App
 {
 public:
-    explicit App(std::string configPath = "config.json");
+    explicit App(std::string configPath = "configs/base.json");
 
     auto run() -> int;
 
