@@ -24,7 +24,8 @@ public:
                           const BoundaryParticlesDataImportedBuffer& boundaryParticleMemory,
                           const physics::StaticBoundaryDomain& boundaryDomain,
                           const refinement::RefinementParameters& refinementParams,
-                          uint32_t maxBoundaryParticleCapacity);
+                          uint32_t maxBoundaryParticleCapacity,
+                          const ScenarioParameters& scenarioParams);
 
     void update(float deltaTime) override;
     void enableAdaptiveRefinement() override;
@@ -41,6 +42,7 @@ private:
     refinement::RefinementParameters _refinementParams;
     refinement::RefinementData _refinementData;
     uint32_t _frameCounter = 0;
+    float _deltaTime = 0.0F;
 };
 
 }

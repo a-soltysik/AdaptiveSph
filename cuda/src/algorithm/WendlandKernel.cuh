@@ -9,7 +9,6 @@ namespace constants
 {
 constexpr auto pi = 3.141592653589793F;
 constexpr auto wendlandCoefficient = 21.F / (16.F * pi);
-constexpr auto wendlandLaplacianCoefficient = 105.F / (16.F * pi);
 constexpr auto wendlandDerivativeCoefficient = -5.F * wendlandCoefficient;
 }
 
@@ -49,21 +48,6 @@ __forceinline__ __device__ __host__ auto wendlandKernel(float distance, float sm
     const auto tmp4 = detail::pow2(tmp) * detail::pow2(tmp);
 
     return (detail::constants::wendlandCoefficient / h3) * tmp4 * (2.0F * q + 1.0F);
-}
-
-__forceinline__ __device__ __host__ auto wendlandLaplacianKernel(float distance, float smoothingRadius) -> float
-{
-    if (distance < smoothingRadius)
-    {
-        const auto q = distance / smoothingRadius;
-        const auto h5 = detail::pow5(smoothingRadius);
-
-        const auto oneMq = 1.0F - q;
-        const auto oneMq2 = oneMq * oneMq;
-
-        return (detail::constants::wendlandLaplacianCoefficient / h5) * oneMq2 * (1.0F - 5.0F * q);
-    }
-    return 0.0F;
 }
 
 __forceinline__ __device__ __host__ auto wendlandDerivativeKernel(float distance, float smoothingRadius) -> float

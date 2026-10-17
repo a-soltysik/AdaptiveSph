@@ -62,7 +62,6 @@ __device__ auto calculateMergedSmoothingLength(std::pair<glm::vec4, glm::vec4> p
     const auto denomNormal = (masses.first * kernelValues.first) + (masses.second * kernelValues.second);
 
     static constexpr auto coefficient = 16.0F * std::numbers::pi_v<float> / 21.F;
-
     return std::cbrt(coefficient * mergedMass / denomNormal);
 }
 
@@ -116,7 +115,7 @@ __global__ void splitParticles(FluidParticlesData particles,
     }
 }
 
-__device__ void updateParticleCount(RefinementDataView refinementData, uint32_t particleCount)
+__global__ void updateParticleCount(RefinementDataView refinementData, uint32_t particleCount)
 {
     auto removedCount = refinementData.merge.prefixSums[particleCount - 1];
     if (refinementData.merge.removalFlags[particleCount - 1] == RefinementData::RemovalState::Remove)
@@ -148,11 +147,6 @@ __global__ void compactParticles(FluidParticlesData particles,
         particles.radii[newIdx] = particles.radii[idx];
         particles.smoothingRadii[newIdx] = particles.smoothingRadii[idx];
         particles.densities[newIdx] = particles.densities[idx];
-    }
-
-    if (blockIdx.x == 0 && threadIdx.x == 0)
-    {
-        updateParticleCount(refinementData, particleCount);
     }
 }
 
@@ -262,16 +256,93 @@ __global__ void performMerges(FluidParticlesData particles,
     const auto newPosition = (masses.first * positions.first + masses.second * positions.second) / newMass;
     const auto newVelocity = (masses.first * velocities.first + masses.second * velocities.second) / newMass;
     const auto newAcceleration = (masses.first * accelerations.first + masses.second * accelerations.second) / newMass;
+    const auto newSmoothingRadius =
+        calculateMergedSmoothingLength(positions, masses, smoothingRadii, newPosition, newMass);
+    const auto newRadius = simulationData.baseParticleRadius * std::cbrt(newMass / simulationData.baseParticleMass);
 
     particles.positions[keepIdx] = newPosition;
     particles.velocities[keepIdx] = newVelocity;
     particles.accelerations[keepIdx] = newAcceleration;
     particles.masses[keepIdx] = newMass;
-    particles.radii[keepIdx] = simulationData.baseParticleRadius * std::cbrt(newMass / simulationData.baseParticleMass);
-    particles.smoothingRadii[keepIdx] =
-        calculateMergedSmoothingLength(positions, masses, smoothingRadii, newPosition, newMass);
+    particles.radii[keepIdx] = newRadius;
+    particles.smoothingRadii[keepIdx] = newSmoothingRadius;
 
     particles.densities[keepIdx] = 0.0F;
+}
+
+__global__ void shiftParticles(FluidParticlesData particles,
+                               NeighborGrid::Device grid,
+                               Simulation::Parameters simulationData,
+                               ShiftingParameters shiftingParams,
+                               float deltaTime)
+{
+    const auto idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    if (idx >= particles.particleCount)
+    {
+        return;
+    }
+
+    if (!shiftingParams.enabled)
+    {
+        return;
+    }
+
+    const auto position = particles.positions[idx];
+    const auto smoothingRadius = particles.smoothingRadii[idx];
+    const auto velocity = particles.velocities[idx];
+    const auto velocityMagnitude = glm::length(glm::vec3(velocity));
+
+    glm::vec3 concentrationGradient(0.0F);
+
+    grid.forEachFluidNeighbor(position,
+                              particles.positions,
+                              device::constant::wendlandRangeRatio * smoothingRadius,
+                              [&](const auto neighbourIdx, const auto neighborPosition) {
+                                  const auto offset = neighborPosition - position;
+                                  const auto distance = glm::length(glm::vec3(offset));
+                                  const auto neighbourSmoothingRadius = particles.smoothingRadii[neighbourIdx];
+
+                                  if (distance > device::constant::wendlandRangeRatio * neighbourSmoothingRadius)
+                                  {
+                                      return;
+                                  }
+
+                                  // Concentration gradient: ∇C_i = Σ(∇W_ij)
+                                  const auto kernelGrad =
+                                      device::wendlandDerivativeKernel(distance, neighbourSmoothingRadius);
+                                  if (distance > 1e-6F)
+                                  {
+                                      concentrationGradient += (kernelGrad / distance) * glm::vec3(offset);
+                                  }
+                              });
+
+    // Adaptive diffusion coefficient (Skillen eq. 12): D_i = A * h * ||u||_i
+    const float D_i = shiftingParams.diffusionCoefficient * smoothingRadius * velocityMagnitude;
+
+    // Shift: δr_i = -D_i * Δt * ∇C_i (Skillen eq. 8)
+    glm::vec3 shift = D_i * deltaTime * concentrationGradient;
+
+    // Check boundary constraints and reduce shift if needed
+    const glm::vec3 currentPos = glm::vec3(position);
+    const glm::vec3 targetPos = currentPos + shift;
+    const float margin = smoothingRadius * 0.1F;  // Small margin from boundaries
+
+    // Clamp each component separately to respect domain boundaries
+    glm::vec3 clampedShift = shift;
+    for (int i = 0; i < 3; i++)
+    {
+        if (targetPos[i] < simulationData.domain.min[i] + margin)
+        {
+            clampedShift[i] = glm::max(simulationData.domain.min[i] + margin - currentPos[i], 0.0F);
+        }
+        else if (targetPos[i] > simulationData.domain.max[i] - margin)
+        {
+            clampedShift[i] = glm::min(simulationData.domain.max[i] - margin - currentPos[i], 0.0F);
+        }
+    }
+
+    // Apply shift
+    particles.positions[idx] = position + glm::vec4(clampedShift, 0.0F);
 }
 
 }

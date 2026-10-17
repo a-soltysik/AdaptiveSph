@@ -88,6 +88,11 @@ inline __device__ auto MergeCriterionGenerator::operator()(FluidParticlesData pa
     {
         return -1;
     }
+    const auto smoothingRadius = particles.smoothingRadii[id];
+    if (!checkIfParticleCanBeSplitInsideDomain(simulationData.domain, particles.positions[id], smoothingRadius, 1.F))
+    {
+        return -1;
+    }
 
     const auto velocity = particles.velocities[id];
     const auto velocityMagnitude = glm::length(glm::vec3(velocity));

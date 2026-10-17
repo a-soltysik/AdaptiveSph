@@ -4,23 +4,22 @@
 #include <panda/Logger.h>
 #include <panda/utils/Assert.h>
 
-#include <../../cuda/include/cuda/simulation/Simulation.cuh>
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
 #include <cuda/refinement/RefinementParameters.cuh>
+#include <cuda/simulation/Simulation.cuh>
 #include <exception>
 #include <fstream>
 #include <glm/ext/vector_float3.hpp>
 #include <limits>
 #include <nlohmann/json.hpp>
-#include <nlohmann/json_fwd.hpp>
 #include <optional>
 #include <string>
 #include <string_view>
 
-#include "utils/Serializers.hpp"  //NOLINT(misc-include-cleaner)
+#include "utils/Serializers.hpp"
 
 using json = nlohmann::json;
 
@@ -196,34 +195,6 @@ auto validateConfiguration(const Configuration& configuration) -> void
     validateSimulationParameters(simulation);
     validateInitialParticleDistribution(initial, simulation);
     validateRefinementParameters(configuration.refinementParameters, particleCount);
-}
-
-auto dumpTemplateConfiguration(const std::string& filePath) -> void
-{
-    try
-    {
-        std::ofstream file(filePath);
-        if (!file.is_open())
-        {
-            panda::log::Error("Failed to open file: {}", filePath);
-        }
-
-        const json jsonFile = Configuration {.initialParameters = InitialParameters {},
-                                             .simulationParameters = cuda::Simulation::Parameters {},
-                                             .refinementParameters = cuda::refinement::RefinementParameters {},
-                                             .renderingParameters = RenderingParameters {}};
-        file << jsonFile.dump(4);
-
-        panda::log::Info("Configuration file saved: {}", filePath);
-    }
-    catch (const json::exception& e)
-    {
-        panda::log::Error("JSON parsing error: {}", e.what());
-    }
-    catch (const std::exception& e)
-    {
-        panda::log::Error("Error saving configuration: {}", e.what());
-    }
 }
 
 }
