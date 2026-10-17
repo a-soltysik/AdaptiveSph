@@ -1,7 +1,9 @@
+#include <thrust/extrema.h>
 #include <thrust/fill.h>
 #include <thrust/sort.h>
 
 #include "../../algorithm/neighbors/NeighborKernels.cuh"
+#include "../../utils/DeviceView.cuh"
 #include "NeighborGrid.cuh"
 
 namespace sph::cuda
@@ -30,10 +32,22 @@ NeighborGrid::~NeighborGrid()
     cudaFree(_boundary.particleArrayIndices.data());
 }
 
-void NeighborGrid::updateFluid(const RunData& runData, glm::vec4* positions, uint32_t fluidParticleCount)
+void NeighborGrid::updateFluid(const RunData& runData,
+                               glm::vec4* positions,
+                               const float* smoothingRadii,
+                               uint32_t fluidParticleCount)
 {
     _fluid.particleCount = fluidParticleCount;
     resetGrid(_fluid);
+    if (fluidParticleCount == 0)
+    {
+        _maxFluidSmoothingRadius = 0.F;
+        return;
+    }
+
+    const auto maxSmoothingRadius =
+        thrust::max_element(thrust::device, smoothingRadii, smoothingRadii + fluidParticleCount);
+    _maxFluidSmoothingRadius = DeviceView<float>::fromDevice(maxSmoothingRadius).toHost();
     assignParticlesToCells(runData, _fluid, positions);
     sortParticles(_fluid);
     calculateCellStartAndEndIndices(runData, _fluid);
@@ -43,6 +57,11 @@ void NeighborGrid::updateBoundary(const RunData& runData, glm::vec4* positions, 
 {
     _boundary.particleCount = boundaryParticleCount;
     resetGrid(_boundary);
+    if (boundaryParticleCount == 0)
+    {
+        return;
+    }
+
     assignParticlesToCells(runData, _boundary, positions);
     sortParticles(_boundary);
     calculateCellStartAndEndIndices(runData, _boundary);
@@ -52,6 +71,7 @@ void NeighborGrid::updateBoundarySize(const RunData& fluidRunData,
                                       const RunData& boundaryRunData,
                                       const Simulation::Parameters::Domain& domain,
                                       glm::vec4* fluidPositions,
+                                      const float* fluidSmoothingRadii,
                                       uint32_t fluidParticleCount,
                                       glm::vec4* boundaryPositions,
                                       uint32_t boundaryParticleCount)
@@ -80,7 +100,7 @@ void NeighborGrid::updateBoundarySize(const RunData& fluidRunData,
     _boundary.cellStartIndices = {boundaryCellStartIndices, cellsCount};
     _boundary.cellEndIndices = {boundaryCellEndIndices, cellsCount};
 
-    updateFluid(fluidRunData, fluidPositions, fluidParticleCount);
+    updateFluid(fluidRunData, fluidPositions, fluidSmoothingRadii, fluidParticleCount);
     updateBoundary(boundaryRunData, boundaryPositions, boundaryParticleCount);
 }
 
@@ -151,6 +171,10 @@ void NeighborGrid::calculateCellStartAndEndIndices(const RunData& runData, const
 
 auto NeighborGrid::toDevice() const -> Device
 {
-    return {.domain = _domain, .grid = _grid, .fluid = _fluid, .boundary = _boundary};
+    return {.domain = _domain,
+            .grid = _grid,
+            .fluid = _fluid,
+            .boundary = _boundary,
+            .maxFluidSmoothingRadius = _maxFluidSmoothingRadius};
 }
 }
