@@ -6,6 +6,8 @@
 #include <cstddef>
 #include <cuda/memory/ImportedMemory.cuh>
 
+#include "ExternalMemoryHandle.hpp"
+
 namespace sph::cuda
 {
 
@@ -18,11 +20,7 @@ public:
     auto operator=(ImportedParticleMemory&&) -> ImportedParticleMemory& = delete;
     ~ImportedParticleMemory() override;
 
-#if defined(WIN32)
-    ImportedParticleMemory(void* handle, size_t size);
-#else
-    ImportedParticleMemory(int handle, size_t size);
-#endif
+    ImportedParticleMemory(ExternalMemoryHandle handle, size_t size);
 
     template <typename T>
     [[nodiscard]] auto getData() const -> T*
@@ -42,6 +40,8 @@ public:
     }
 
 private:
+    void mapBuffer();
+
     cudaExternalMemory_t _externalMemory {};
     void* _data {};
     size_t _size = 0;

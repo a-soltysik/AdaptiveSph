@@ -1,8 +1,9 @@
 #pragma once
 #include <cuda/simulation/Simulation.cuh>
 #include <glm/vec3.hpp>
-#include <span>
 
+#include "../../utils/DeviceBuffer.cuh"
+#include "../../utils/DeviceSpan.cuh"
 #include "glm/gtx/compatibility.hpp"
 
 namespace sph::cuda
@@ -18,11 +19,11 @@ public:
 
     struct GridData
     {
-        std::span<int32_t> cellStartIndices;
+        DeviceSpan<int32_t> cellStartIndices;
         // Cell ranges use inclusive start and end indices.
-        std::span<int32_t> cellEndIndices;
-        std::span<int32_t> particleGridIndices;
-        std::span<int32_t> particleArrayIndices;
+        DeviceSpan<int32_t> cellEndIndices;
+        DeviceSpan<int32_t> particleGridIndices;
+        DeviceSpan<int32_t> particleArrayIndices;
 
         uint32_t particleCount;
     };
@@ -75,6 +76,10 @@ public:
                  float cellWidth,
                  uint32_t fluidParticleCapacity,
                  uint32_t boundaryParticleCapacity);
+    NeighborGrid(const NeighborGrid&) = delete;
+    auto operator=(const NeighborGrid&) -> NeighborGrid& = delete;
+    NeighborGrid(NeighborGrid&&) = delete;
+    auto operator=(NeighborGrid&&) -> NeighborGrid& = delete;
     ~NeighborGrid();
 
     void updateFluid(const RunData& runData,
@@ -90,10 +95,29 @@ public:
                             uint32_t fluidParticleCount,
                             glm::vec4* boundaryPositions,
                             uint32_t boundaryParticleCount);
-    [[nodiscard]] auto toDevice() const -> Device;
+    [[nodiscard]] auto toDevice() -> Device;
 
 private:
-    static auto createData(uint32_t totalCells, uint32_t particleCapacity) -> GridData;
+    struct GridStorage
+    {
+        DeviceBuffer<int32_t> cellStartIndices;
+        DeviceBuffer<int32_t> cellEndIndices;
+        DeviceBuffer<int32_t> particleGridIndices;
+        DeviceBuffer<int32_t> particleArrayIndices;
+        uint32_t particleCount {};
+        uint32_t particleCapacity {};
+
+        [[nodiscard]] auto view() -> GridData
+        {
+            return {.cellStartIndices = cellStartIndices.view(),
+                    .cellEndIndices = cellEndIndices.view(),
+                    .particleGridIndices = particleGridIndices.view(),
+                    .particleArrayIndices = particleArrayIndices.view(),
+                    .particleCount = particleCount};
+        }
+    };
+
+    static auto createData(uint32_t totalCells, uint32_t particleCapacity, const char* context) -> GridStorage;
     static auto calculateGridSize(const Simulation::Parameters::Domain& domain, float cellWidth) -> glm::ivec3;
     static auto createGrid(const Simulation::Parameters::Domain& domain, float cellWidth) -> Grid;
     static auto getCellCount(const glm::ivec3& gridSize) -> uint32_t;
@@ -103,8 +127,8 @@ private:
     void calculateCellStartAndEndIndices(const RunData& runData, const GridData& data);
     Simulation::Parameters::Domain _domain;
     Grid _grid;
-    GridData _fluid;
-    GridData _boundary;
+    GridStorage _fluid;
+    GridStorage _boundary;
     float _cellWidth;
     float _maxFluidSmoothingRadius {};
 };

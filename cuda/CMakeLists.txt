@@ -30,6 +30,7 @@ sph_target_link_cuda(AdaptiveSphCuda)
 target_compile_definitions(AdaptiveSphCuda
         PRIVATE
         ASPH_CUDA_EXPORTS
+        $<$<PLATFORM_ID:Windows>:NOMINMAX>
         GLM_ENABLE_EXPERIMENTAL
         PUBLIC
         $<$<PLATFORM_ID:Windows>:WIN32>

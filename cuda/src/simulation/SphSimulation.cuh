@@ -109,7 +109,7 @@ protected:
     [[nodiscard]] auto getFluidParticles() -> FluidParticlesData;
     [[nodiscard]] auto getBoundaryParticles() -> BoundaryParticlesData;
 
-    [[nodiscard]] auto getGrid() const -> const NeighborGrid&
+    [[nodiscard]] auto getGrid() -> NeighborGrid&
     {
         return _grid;
     }
@@ -152,12 +152,14 @@ protected:
 
 private:
     void initializeBoundaryParticles(const physics::StaticBoundaryDomain& boundaryDomain);
+    void validateBoundaryParticleCapacity(uint32_t particleCount) const;
 
     FluidParticlesDataBuffer _fluidParticlesData;
     BoundaryParticlesDataBuffer _boundaryParticlesData;
     Parameters _simulationData;
     uint32_t _boundaryParticleCount;
     uint32_t _particleCount;
+    uint32_t _boundaryParticleCapacity;
     NeighborGrid _grid;
     ScenarioParameters _scenarioParams;
     bool _scenarioActivated = false;

@@ -4,7 +4,9 @@
 #include <cstddef>
 #include <cuda/memory/ImportedMemory.cuh>
 #include <memory>
+#include <utility>
 
+#include "../utils/CudaError.cuh"
 #include "ImportedParticleMemory.cuh"
 
 namespace sph::cuda
@@ -12,54 +14,76 @@ namespace sph::cuda
 
 ImportedParticleMemory::~ImportedParticleMemory()
 {
-    cudaFree(_data);
-    cudaDestroyExternalMemory(_externalMemory);
+    if (_data != nullptr)
+    {
+        detail::reportCudaCleanupError(cudaFree(_data), "ImportedParticleMemory: unmap imported buffer");
+    }
+    if (_externalMemory != nullptr)
+    {
+        detail::reportCudaCleanupError(cudaDestroyExternalMemory(_externalMemory),
+                                       "ImportedParticleMemory: destroy imported memory");
+    }
 }
 #if defined(WIN32)
-ImportedParticleMemory::ImportedParticleMemory(void* handle, size_t size)
+ImportedParticleMemory::ImportedParticleMemory(ExternalMemoryHandle handle, size_t size)
     : _size {size}
 {
     cudaExternalMemoryHandleDesc handleDesc {};
     handleDesc.type = cudaExternalMemoryHandleTypeOpaqueWin32;
     handleDesc.size = size;
-    handleDesc.handle.win32.handle = handle;
+    handleDesc.handle.win32.handle = handle.get();
 
-    cudaImportExternalMemory(&_externalMemory, &handleDesc);
-
-    cudaExternalMemoryBufferDesc bufferDesc {};
-    bufferDesc.size = size;
-    bufferDesc.offset = 0;
-
-    cudaExternalMemoryGetMappedBuffer(&_data, _externalMemory, &bufferDesc);
+    detail::checkCuda(cudaImportExternalMemory(&_externalMemory, &handleDesc),
+                      "ImportedParticleMemory: import Win32 external memory");
+    mapBuffer();
 }
 #else
-ImportedParticleMemory::ImportedParticleMemory(int handle, size_t size)
+ImportedParticleMemory::ImportedParticleMemory(ExternalMemoryHandle handle, size_t size)
     : _size {size}
 {
     cudaExternalMemoryHandleDesc handleDesc {};
     handleDesc.type = cudaExternalMemoryHandleTypeOpaqueFd;
     handleDesc.size = size;
-    handleDesc.handle.fd = handle;
+    handleDesc.handle.fd = handle.get();
 
-    cudaImportExternalMemory(&_externalMemory, &handleDesc);
-
-    cudaExternalMemoryBufferDesc bufferDesc {};
-    bufferDesc.size = size;
-    bufferDesc.offset = 0;
-
-    cudaExternalMemoryGetMappedBuffer(&_data, _externalMemory, &bufferDesc);
+    detail::checkCuda(cudaImportExternalMemory(&_externalMemory, &handleDesc),
+                      "ImportedParticleMemory: import file-descriptor external memory");
+    static_cast<void>(handle.release());
+    mapBuffer();
 }
 #endif
+
+void ImportedParticleMemory::mapBuffer()
+{
+    cudaExternalMemoryBufferDesc bufferDesc {};
+    bufferDesc.size = _size;
+    bufferDesc.offset = 0;
+
+    try
+    {
+        detail::checkCuda(cudaExternalMemoryGetMappedBuffer(&_data, _externalMemory, &bufferDesc),
+                          "ImportedParticleMemory: map external buffer");
+    }
+    catch (...)
+    {
+        detail::reportCudaCleanupError(cudaDestroyExternalMemory(_externalMemory),
+                                       "ImportedParticleMemory: roll back external-memory import");
+        _externalMemory = {};
+        throw;
+    }
+}
 
 #if defined(WIN32)
 auto importBuffer(void* handle, size_t size) -> std::unique_ptr<ImportedMemory>
 {
-    return std::make_unique<ImportedParticleMemory>(handle, size);
+    auto ownedHandle = ExternalMemoryHandle {handle};
+    return std::make_unique<ImportedParticleMemory>(std::move(ownedHandle), size);
 }
 #else
 auto importBuffer(int handle, size_t size) -> std::unique_ptr<ImportedMemory>
 {
-    return std::make_unique<ImportedParticleMemory>(handle, size);
+    auto ownedHandle = ExternalMemoryHandle {handle};
+    return std::make_unique<ImportedParticleMemory>(std::move(ownedHandle), size);
 }
 #endif
 

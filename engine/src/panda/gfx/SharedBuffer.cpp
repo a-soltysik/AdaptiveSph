@@ -36,13 +36,13 @@ SharedBuffer::SharedBuffer(const Device& deviceRef,
     expect(_device.logicalDevice.bindBufferMemory(buffer, memory, 0),
            vk::Result::eSuccess,
            "Failed to bind memory buffer");
-    _importedMemory = sph::cuda::importBuffer(getBufferHandle(), size);
-    log::Info("Created new buffer [{}] with size: {}", static_cast<void*>(buffer), size);
-
     _bufferDestructor = std::make_unique<utils::ScopeGuard>([this] {
         _device.logicalDevice.destroy(buffer);
         _device.logicalDevice.freeMemory(memory);
     });
+
+    _importedMemory = sph::cuda::importBuffer(getBufferHandle(), size);
+    log::Info("Created new buffer [{}] with size: {}", static_cast<void*>(buffer), size);
 }
 
 SharedBuffer::SharedBuffer(const Device& deviceRef, vk::DeviceSize bufferSize, vk::MemoryPropertyFlags properties)
