@@ -36,7 +36,7 @@ runs:
       with:
         cuda: '13.3.1'
         method: network
-        sub-packages: '["crt", "nvcc", "cudart", "thrust"]'
+        sub-packages: '["crt", "nvcc", "nvvm", "cudart", "thrust"]'
         log-file-suffix: '${{github.job}}-${{ inputs.preset }}.txt'
 
     - name: Install CUDA Toolkit (Linux)
