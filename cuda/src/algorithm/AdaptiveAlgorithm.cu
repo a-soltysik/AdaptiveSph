@@ -27,6 +27,7 @@
 #include "cuda/simulation/Simulation.cuh"
 #include "simulation/SphSimulation.cuh"
 #include "simulation/refinement/Common.cuh"
+#include "utils/CudaError.cuh"
 #include "utils/HelperMath.cuh"
 
 namespace sph::cuda::refinement
@@ -99,7 +100,7 @@ auto findTopParticlesToMerge(FluidParticlesData particles,
                              RefinementData& refinementData,
                              RefinementParameters refinementParameters) -> void
 {
-    cudaDeviceSynchronize();
+    ::sph::cuda::detail::checkCuda(cudaDeviceSynchronize(), "findTopParticlesToMerge: synchronize criterion kernel");
 
     const auto particleIdsBegin = thrust::make_counting_iterator<uint32_t>(0);
     const auto particleIdsEnd = particleIdsBegin + particles.particleCount;
@@ -140,7 +141,9 @@ auto findTopParticlesToMerge(FluidParticlesData particles,
                         refinementData.particlesIds.begin());
     }
 
-    refinementData.merge.eligibleCount = maxEligibleCount;
+    refinementData.merge.eligibleCount.copyValueFromHost(
+        maxEligibleCount,
+        "findTopParticlesToMerge: copy eligible-particle count to device");
 }
 
 auto compactParticles(FluidParticlesData particles, RefinementData& refinementData) -> uint32_t

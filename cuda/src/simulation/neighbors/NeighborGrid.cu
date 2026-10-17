@@ -2,8 +2,15 @@
 #include <thrust/fill.h>
 #include <thrust/sort.h>
 
+#include <array>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+#include <string>
+#include <utility>
+
 #include "../../algorithm/neighbors/NeighborKernels.cuh"
-#include "../../utils/DeviceView.cuh"
+#include "../../utils/CudaError.cuh"
 #include "NeighborGrid.cuh"
 
 namespace sph::cuda
@@ -14,31 +21,33 @@ NeighborGrid::NeighborGrid(const Simulation::Parameters::Domain& domain,
                            uint32_t boundaryParticleCapacity)
     : _domain {domain},
       _grid {createGrid(domain, cellWidth)},
-      _fluid {createData(getCellCount(_grid.gridSize), fluidParticleCapacity)},
-      _boundary {createData(getCellCount(_grid.gridSize), boundaryParticleCapacity)},
+      _fluid {createData(getCellCount(_grid.gridSize), fluidParticleCapacity, "NeighborGrid fluid storage")},
+      _boundary {createData(getCellCount(_grid.gridSize), boundaryParticleCapacity, "NeighborGrid boundary storage")},
       _cellWidth {cellWidth}
 {
 }
 
-NeighborGrid::~NeighborGrid()
-{
-    cudaFree(_fluid.cellEndIndices.data());
-    cudaFree(_fluid.cellStartIndices.data());
-    cudaFree(_fluid.particleArrayIndices.data());
-    cudaFree(_fluid.particleGridIndices.data());
-    cudaFree(_boundary.cellEndIndices.data());
-    cudaFree(_boundary.cellStartIndices.data());
-    cudaFree(_boundary.particleGridIndices.data());
-    cudaFree(_boundary.particleArrayIndices.data());
-}
+NeighborGrid::~NeighborGrid() = default;
 
 void NeighborGrid::updateFluid(const RunData& runData,
                                glm::vec4* positions,
                                const float* smoothingRadii,
                                uint32_t fluidParticleCount)
 {
+    if (fluidParticleCount != 0 && (positions == nullptr || smoothingRadii == nullptr))
+    {
+        throw std::invalid_argument {
+            "NeighborGrid::updateFluid requires particle and smoothing-radius device pointers"};
+    }
+    if (fluidParticleCount > _fluid.particleCapacity)
+    {
+        throw std::length_error {"NeighborGrid::updateFluid particle count " + std::to_string(fluidParticleCount) +
+                                 " exceeds capacity " + std::to_string(_fluid.particleCapacity)};
+    }
+
     _fluid.particleCount = fluidParticleCount;
-    resetGrid(_fluid);
+    const auto data = _fluid.view();
+    resetGrid(data);
     if (fluidParticleCount == 0)
     {
         _maxFluidSmoothingRadius = 0.F;
@@ -47,24 +56,37 @@ void NeighborGrid::updateFluid(const RunData& runData,
 
     const auto maxSmoothingRadius =
         thrust::max_element(thrust::device, smoothingRadii, smoothingRadii + fluidParticleCount);
-    _maxFluidSmoothingRadius = DeviceView<float>::fromDevice(maxSmoothingRadius).toHost();
-    assignParticlesToCells(runData, _fluid, positions);
-    sortParticles(_fluid);
-    calculateCellStartAndEndIndices(runData, _fluid);
+    detail::checkCuda(cudaMemcpy(&_maxFluidSmoothingRadius, maxSmoothingRadius, sizeof(float), cudaMemcpyDeviceToHost),
+                      "NeighborGrid::updateFluid: copy maximum smoothing radius to host");
+    assignParticlesToCells(runData, data, positions);
+    sortParticles(data);
+    calculateCellStartAndEndIndices(runData, data);
 }
 
 void NeighborGrid::updateBoundary(const RunData& runData, glm::vec4* positions, uint32_t boundaryParticleCount)
 {
+    if (boundaryParticleCount != 0 && positions == nullptr)
+    {
+        throw std::invalid_argument {"NeighborGrid::updateBoundary requires a boundary-position device pointer"};
+    }
+    if (boundaryParticleCount > _boundary.particleCapacity)
+    {
+        throw std::length_error {"NeighborGrid::updateBoundary particle count " +
+                                 std::to_string(boundaryParticleCount) + " exceeds capacity " +
+                                 std::to_string(_boundary.particleCapacity)};
+    }
+
     _boundary.particleCount = boundaryParticleCount;
-    resetGrid(_boundary);
+    const auto data = _boundary.view();
+    resetGrid(data);
     if (boundaryParticleCount == 0)
     {
         return;
     }
 
-    assignParticlesToCells(runData, _boundary, positions);
-    sortParticles(_boundary);
-    calculateCellStartAndEndIndices(runData, _boundary);
+    assignParticlesToCells(runData, data, positions);
+    sortParticles(data);
+    calculateCellStartAndEndIndices(runData, data);
 }
 
 void NeighborGrid::updateBoundarySize(const RunData& fluidRunData,
@@ -76,58 +98,76 @@ void NeighborGrid::updateBoundarySize(const RunData& fluidRunData,
                                       glm::vec4* boundaryPositions,
                                       uint32_t boundaryParticleCount)
 {
-    cudaFree(_fluid.cellEndIndices.data());
-    cudaFree(_fluid.cellStartIndices.data());
-    cudaFree(_boundary.cellEndIndices.data());
-    cudaFree(_boundary.cellStartIndices.data());
+    if (fluidParticleCount > _fluid.particleCapacity || boundaryParticleCount > _boundary.particleCapacity)
+    {
+        throw std::length_error {"NeighborGrid::updateBoundarySize particle count exceeds the allocated grid capacity"};
+    }
 
-    int32_t* boundaryCellStartIndices {};
-    int32_t* boundaryCellEndIndices {};
-    int32_t* fluidCellStartIndices {};
-    int32_t* fluidCellEndIndices {};
+    const auto newGrid = createGrid(domain, _cellWidth);
+    const auto cellsCount = getCellCount(newGrid.gridSize);
+    auto fluidCellStartIndices = DeviceBuffer<int32_t> {cellsCount, "NeighborGrid: allocate fluid cell-start indices"};
+    auto fluidCellEndIndices = DeviceBuffer<int32_t> {cellsCount, "NeighborGrid: allocate fluid cell-end indices"};
+    auto boundaryCellStartIndices =
+        DeviceBuffer<int32_t> {cellsCount, "NeighborGrid: allocate boundary cell-start indices"};
+    auto boundaryCellEndIndices =
+        DeviceBuffer<int32_t> {cellsCount, "NeighborGrid: allocate boundary cell-end indices"};
 
+    _fluid.cellStartIndices = std::move(fluidCellStartIndices);
+    _fluid.cellEndIndices = std::move(fluidCellEndIndices);
+    _boundary.cellStartIndices = std::move(boundaryCellStartIndices);
+    _boundary.cellEndIndices = std::move(boundaryCellEndIndices);
     _domain = domain;
-    _grid = createGrid(domain, _cellWidth);
-
-    const auto cellsCount = getCellCount(_grid.gridSize);
-    cudaMalloc(&boundaryCellStartIndices, cellsCount * sizeof(int32_t));
-    cudaMalloc(&boundaryCellEndIndices, cellsCount * sizeof(int32_t));
-    cudaMalloc(&fluidCellStartIndices, cellsCount * sizeof(int32_t));
-    cudaMalloc(&fluidCellEndIndices, cellsCount * sizeof(int32_t));
-
-    _fluid.cellStartIndices = {fluidCellStartIndices, cellsCount};
-    _fluid.cellEndIndices = {fluidCellEndIndices, cellsCount};
-    _boundary.cellStartIndices = {boundaryCellStartIndices, cellsCount};
-    _boundary.cellEndIndices = {boundaryCellEndIndices, cellsCount};
+    _grid = newGrid;
 
     updateFluid(fluidRunData, fluidPositions, fluidSmoothingRadii, fluidParticleCount);
     updateBoundary(boundaryRunData, boundaryPositions, boundaryParticleCount);
 }
 
-auto NeighborGrid::createData(uint32_t totalCells, uint32_t particleCapacity) -> GridData
+auto NeighborGrid::createData(uint32_t totalCells, uint32_t particleCapacity, const char* context) -> GridStorage
 {
-    int32_t* particleIndices {};
-    int32_t* particleArrayIndices {};
-    int32_t* cellStartIndices {};
-    int32_t* cellEndIndices {};
+    if (particleCapacity > static_cast<uint32_t>(std::numeric_limits<int32_t>::max()))
+    {
+        throw std::length_error {std::string {context} + " particle capacity exceeds the signed grid-index range"};
+    }
 
-    cudaMalloc(&particleIndices, particleCapacity * sizeof(int32_t));
-    cudaMalloc(&particleArrayIndices, particleCapacity * sizeof(int32_t));
-    cudaMalloc(&cellStartIndices, totalCells * sizeof(int32_t));
-    cudaMalloc(&cellEndIndices, totalCells * sizeof(int32_t));
+    const auto cellStartContext = std::string {context} + ": allocate cell-start indices";
+    const auto cellEndContext = std::string {context} + ": allocate cell-end indices";
+    const auto particleGridContext = std::string {context} + ": allocate particle grid indices";
+    const auto particleArrayContext = std::string {context} + ": allocate particle array indices";
 
     return {
-        .cellStartIndices = std::span {cellStartIndices,     totalCells      },
-        .cellEndIndices = std::span {cellEndIndices,       totalCells      },
-        .particleGridIndices = std::span {particleIndices,      particleCapacity},
-        .particleArrayIndices = std::span {particleArrayIndices, particleCapacity},
-        .particleCount = 0
+        .cellStartIndices = DeviceBuffer<int32_t> {totalCells,       cellStartContext    },
+        .cellEndIndices = DeviceBuffer<int32_t> {totalCells,       cellEndContext      },
+        .particleGridIndices = DeviceBuffer<int32_t> {particleCapacity, particleGridContext },
+        .particleArrayIndices = DeviceBuffer<int32_t> {particleCapacity, particleArrayContext},
+        .particleCount = 0,
+        .particleCapacity = particleCapacity
     };
 }
 
 auto NeighborGrid::calculateGridSize(const Simulation::Parameters::Domain& domain, float cellWidth) -> glm::ivec3
 {
-    return glm::ivec3 {glm::ceil(domain.getScale() / cellWidth)};
+    if (!std::isfinite(cellWidth) || cellWidth <= 0.F)
+    {
+        throw std::invalid_argument {"NeighborGrid cell width must be finite and greater than zero"};
+    }
+
+    const auto scale = domain.getScale();
+    const auto getAxisCellCount = [cellWidth](float axisScale) {
+        if (!std::isfinite(axisScale) || axisScale <= 0.F)
+        {
+            throw std::invalid_argument {"NeighborGrid domain dimensions must be finite and greater than zero"};
+        }
+
+        const auto cellCount = std::ceil(static_cast<double>(axisScale) / static_cast<double>(cellWidth));
+        if (cellCount > static_cast<double>(std::numeric_limits<int32_t>::max()))
+        {
+            throw std::length_error {"NeighborGrid axis cell count exceeds the supported range"};
+        }
+        return static_cast<int32_t>(cellCount);
+    };
+
+    return {getAxisCellCount(scale.x), getAxisCellCount(scale.y), getAxisCellCount(scale.z)};
 }
 
 auto NeighborGrid::createGrid(const Simulation::Parameters::Domain& domain, float cellWidth) -> Grid
@@ -142,7 +182,22 @@ auto NeighborGrid::createGrid(const Simulation::Parameters::Domain& domain, floa
 
 auto NeighborGrid::getCellCount(const glm::ivec3& gridSize) -> uint32_t
 {
-    return static_cast<uint32_t>(gridSize.x * gridSize.y * gridSize.z);
+    auto cellCount = uint64_t {1};
+    for (const auto axisCellCount : std::array {gridSize.x, gridSize.y, gridSize.z})
+    {
+        if (axisCellCount <= 0)
+        {
+            throw std::invalid_argument {"NeighborGrid axis cell count must be greater than zero"};
+        }
+
+        const auto axisSize = static_cast<uint64_t>(axisCellCount);
+        if (cellCount > static_cast<uint64_t>(std::numeric_limits<int32_t>::max()) / axisSize)
+        {
+            throw std::length_error {"NeighborGrid cell count exceeds the signed grid-index range"};
+        }
+        cellCount *= axisSize;
+    }
+    return static_cast<uint32_t>(cellCount);
 }
 
 void NeighborGrid::resetGrid(const GridData& data)
@@ -154,6 +209,7 @@ void NeighborGrid::resetGrid(const GridData& data)
 void NeighborGrid::assignParticlesToCells(const RunData& runData, const GridData& data, glm::vec4* positions)
 {
     kernel::assignParticlesToCells<<<runData.blocksPerGrid, runData.threadsPerBlock>>>(positions, toDevice(), data);
+    detail::checkCuda(cudaGetLastError(), "NeighborGrid::assignParticlesToCells: launch kernel");
 }
 
 void NeighborGrid::sortParticles(const GridData& data)
@@ -167,14 +223,15 @@ void NeighborGrid::sortParticles(const GridData& data)
 void NeighborGrid::calculateCellStartAndEndIndices(const RunData& runData, const GridData& data)
 {
     kernel::calculateCellStartAndEndIndices<<<runData.blocksPerGrid, runData.threadsPerBlock>>>(data);
+    detail::checkCuda(cudaGetLastError(), "NeighborGrid::calculateCellStartAndEndIndices: launch kernel");
 }
 
-auto NeighborGrid::toDevice() const -> Device
+auto NeighborGrid::toDevice() -> Device
 {
     return {.domain = _domain,
             .grid = _grid,
-            .fluid = _fluid,
-            .boundary = _boundary,
+            .fluid = _fluid.view(),
+            .boundary = _boundary.view(),
             .maxFluidSmoothingRadius = _maxFluidSmoothingRadius};
 }
 }

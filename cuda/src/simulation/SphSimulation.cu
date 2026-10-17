@@ -7,12 +7,15 @@
 #include <vector_types.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <cuda/simulation/Simulation.cuh>
 #include <cuda/simulation/physics/StaticBoundaryDomain.cuh>
 #include <glm/common.hpp>
 #include <glm/ext/vector_float4.hpp>
 #include <glm/ext/vector_uint3.hpp>
-#include <span>
+#include <limits>
+#include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -22,10 +25,34 @@
 #include "algorithm/WendlandKernel.cuh"
 #include "memory/ImportedParticleMemory.cuh"
 #include "neighbors/NeighborGrid.cuh"
-#include "utils/DeviceValue.cuh"
+#include "utils/CudaError.cuh"
+#include "utils/DeviceBuffer.cuh"
 
 namespace sph::cuda
 {
+namespace
+{
+auto checkedParticleCount(std::size_t particleCount) -> uint32_t
+{
+    if (particleCount > std::numeric_limits<uint32_t>::max())
+    {
+        throw std::length_error {"SphSimulation particle count exceeds the supported 32-bit range"};
+    }
+    return static_cast<uint32_t>(particleCount);
+}
+
+template <typename T>
+void requireImportedCapacity(const ImportedParticleMemory& memory, std::size_t particleCount, const char* bufferName)
+{
+    const auto capacity = memory.getMaxDataCount<T>();
+    if (particleCount > capacity)
+    {
+        throw std::length_error {std::string {"SphSimulation "} + bufferName + " requires " +
+                                 std::to_string(particleCount) + " elements but its imported buffer holds " +
+                                 std::to_string(capacity)};
+    }
+}
+}
 
 SphSimulation::SphSimulation(const Parameters& initialParameters,
                              const std::vector<glm::vec4>& positions,
@@ -44,8 +71,8 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
                        .masses = thrust::device_vector<float>(maxFluidParticleCapacity)}
 },
       _boundaryParticlesData {.imported = {toInternalBuffer(boundaryParticleMemory)}, .internal = {}},
-      _simulationData {initialParameters}, _boundaryParticleCount {boundaryDomain.getParticleCount()},
-      _particleCount {static_cast<uint32_t>(positions.size())},
+      _simulationData {initialParameters}, _boundaryParticleCount {},
+      _particleCount {checkedParticleCount(positions.size())}, _boundaryParticleCapacity {maxBoundaryParticleCapacity},
       _grid {initialParameters.domain,
              2 * initialParameters.baseSmoothingRadius* device::constant::wendlandRangeRatio* multiplier,
              maxFluidParticleCapacity,
@@ -53,23 +80,43 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
       _scenarioParams {scenarioParams}
 
 {
+    if (positions.size() > maxFluidParticleCapacity)
+    {
+        throw std::length_error {"SphSimulation initial fluid particle count exceeds maxFluidParticleCapacity"};
+    }
+
+    requireImportedCapacity<glm::vec4>(_fluidParticlesData.imported.positions,
+                                       maxFluidParticleCapacity,
+                                       "fluid positions");
+    requireImportedCapacity<glm::vec4>(_fluidParticlesData.imported.velocities,
+                                       maxFluidParticleCapacity,
+                                       "fluid velocities");
+    requireImportedCapacity<float>(_fluidParticlesData.imported.densities, maxFluidParticleCapacity, "fluid densities");
+    requireImportedCapacity<float>(_fluidParticlesData.imported.radii, maxFluidParticleCapacity, "fluid radii");
+
     const auto velocitiesVec = std::vector(positions.size(), glm::vec4 {});
     const auto radiusesVec = std::vector(positions.size(), initialParameters.baseParticleRadius);
 
-    cudaMemcpy(_fluidParticlesData.imported.positions.getData<glm::vec4>(),
-               positions.data(),
-               positions.size() * sizeof(glm::vec4),
-               cudaMemcpyHostToDevice);
+    if (!positions.empty())
+    {
+        detail::checkCuda(cudaMemcpy(_fluidParticlesData.imported.positions.getData<glm::vec4>(),
+                                     positions.data(),
+                                     positions.size() * sizeof(glm::vec4),
+                                     cudaMemcpyHostToDevice),
+                          "SphSimulation constructor: copy initial fluid positions");
 
-    cudaMemcpy(_fluidParticlesData.imported.velocities.getData<glm::vec4>(),
-               velocitiesVec.data(),
-               velocitiesVec.size() * sizeof(glm::vec4),
-               cudaMemcpyHostToDevice);
+        detail::checkCuda(cudaMemcpy(_fluidParticlesData.imported.velocities.getData<glm::vec4>(),
+                                     velocitiesVec.data(),
+                                     velocitiesVec.size() * sizeof(glm::vec4),
+                                     cudaMemcpyHostToDevice),
+                          "SphSimulation constructor: copy initial fluid velocities");
 
-    cudaMemcpy(_fluidParticlesData.imported.radii.getData<float>(),
-               radiusesVec.data(),
-               radiusesVec.size() * sizeof(float),
-               cudaMemcpyHostToDevice);
+        detail::checkCuda(cudaMemcpy(_fluidParticlesData.imported.radii.getData<float>(),
+                                     radiusesVec.data(),
+                                     radiusesVec.size() * sizeof(float),
+                                     cudaMemcpyHostToDevice),
+                          "SphSimulation constructor: copy initial fluid radii");
+    }
 
     thrust::fill_n(_fluidParticlesData.internal.smoothingRadii.begin(),
                    positions.size(),
@@ -120,14 +167,15 @@ void SphSimulation::update(float deltaTime)
 
     halfKickVelocities(deltaTime / 2.F);
 
-    cudaDeviceSynchronize();
+    detail::checkCuda(cudaDeviceSynchronize(), "SphSimulation::update: synchronize completed timestep");
 
     _accumulatedSimulationTime += deltaTime;
 }
 
 void SphSimulation::updateDomain(const Parameters::Domain& domain, const physics::StaticBoundaryDomain& boundaryDomain)
 {
-    cudaDeviceSynchronize();
+    detail::checkCuda(cudaDeviceSynchronize(), "SphSimulation::updateDomain: synchronize before domain change");
+    validateBoundaryParticleCapacity(boundaryDomain.getParticleCount());
     _simulationData.domain = domain;
     initializeBoundaryParticles(boundaryDomain);
     _grid.updateBoundarySize({getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock},
@@ -188,6 +236,7 @@ void SphSimulation::computeExternalAccelerations()
         _simulationData,
         _scenarioParams,
         _scenarioActivated);
+    detail::checkCudaLastError("SphSimulation::computeExternalAccelerations: launch kernel");
 }
 
 void SphSimulation::computeDensities()
@@ -197,12 +246,14 @@ void SphSimulation::computeDensities()
         kernel::computeDensitiesPeriodic<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
             getFluidParticles(),
             _grid.toDevice());
+        detail::checkCudaLastError("SphSimulation::computeDensities: launch periodic kernel");
     }
     else
     {
         kernel::computeDensities<<<getBlocksPerGridForFluidParticles(), _simulationData.threadsPerBlock>>>(
             getFluidParticles(),
             _grid.toDevice());
+        detail::checkCudaLastError("SphSimulation::computeDensities: launch kernel");
     }
 }
 
@@ -214,6 +265,7 @@ void SphSimulation::computePressureAccelerations()
                                                        _simulationData.threadsPerBlock>>>(getFluidParticles(),
                                                                                           _grid.toDevice(),
                                                                                           _simulationData);
+        detail::checkCudaLastError("SphSimulation::computePressureAccelerations: launch periodic kernel");
     }
     else
     {
@@ -221,6 +273,7 @@ void SphSimulation::computePressureAccelerations()
             getFluidParticles(),
             _grid.toDevice(),
             _simulationData);
+        detail::checkCudaLastError("SphSimulation::computePressureAccelerations: launch kernel");
     }
 }
 
@@ -234,6 +287,7 @@ void SphSimulation::computeViscosityAccelerations()
                                                             _simulationData.threadsPerBlock>>>(getFluidParticles(),
                                                                                                _grid.toDevice(),
                                                                                                _simulationData);
+            detail::checkCudaLastError("SphSimulation::computeViscosityAccelerations: launch periodic kernel");
         }
         else
         {
@@ -242,6 +296,7 @@ void SphSimulation::computeViscosityAccelerations()
                     getFluidParticles(),
                     _grid.toDevice(),
                     _simulationData);
+            detail::checkCudaLastError("SphSimulation::computeViscosityAccelerations: launch kernel");
         }
     }
 }
@@ -256,6 +311,7 @@ void SphSimulation::computeSurfaceTensionAccelerations()
                                                                  _simulationData.threadsPerBlock>>>(getFluidParticles(),
                                                                                                     _grid.toDevice(),
                                                                                                     _simulationData);
+            detail::checkCudaLastError("SphSimulation::computeSurfaceTensionAccelerations: launch periodic kernel");
         }
         else
         {
@@ -263,6 +319,7 @@ void SphSimulation::computeSurfaceTensionAccelerations()
                                                          _simulationData.threadsPerBlock>>>(getFluidParticles(),
                                                                                             _grid.toDevice(),
                                                                                             _simulationData);
+            detail::checkCudaLastError("SphSimulation::computeSurfaceTensionAccelerations: launch kernel");
         }
     }
 }
@@ -273,6 +330,7 @@ void SphSimulation::halfKickVelocities(float halfDt)
         getFluidParticles(),
         _simulationData,
         halfDt);
+    detail::checkCudaLastError("SphSimulation::halfKickVelocities: launch kernel");
 }
 
 void SphSimulation::updatePositions(float dt)
@@ -283,6 +341,7 @@ void SphSimulation::updatePositions(float dt)
             getFluidParticles(),
             _simulationData.domain,
             dt);
+        detail::checkCudaLastError("SphSimulation::updatePositions: launch periodic kernel");
     }
     else
     {
@@ -290,18 +349,22 @@ void SphSimulation::updatePositions(float dt)
             getFluidParticles(),
             _simulationData.domain,
             dt);
+        detail::checkCudaLastError("SphSimulation::updatePositions: launch kernel");
     }
 }
 
 auto SphSimulation::calculateAverageNeighborCount() -> float
 {
-    auto totalNeighborCount = DeviceValue<uint32_t>::fromHost(0);
-    kernel::sumAllNeighbors<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
-        getFluidParticles(),
-        _grid.toDevice(),
-        totalNeighborCount.getDevicePtr());
+    auto totalNeighborCount =
+        DeviceBuffer<uint32_t>::fromValue(0, "SphSimulation::calculateAverageNeighborCount: initialize neighbor count");
+    kernel::sumAllNeighbors<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(getFluidParticles(),
+                                                                                           _grid.toDevice(),
+                                                                                           totalNeighborCount.data());
+    detail::checkCudaLastError("SphSimulation::calculateAverageNeighborCount: launch kernel");
 
-    return _particleCount > 0 ? static_cast<float>(totalNeighborCount.toHost()) / static_cast<float>(_particleCount)
+    return _particleCount > 0 ? static_cast<float>(totalNeighborCount.copyValueToHost(
+                                    "SphSimulation::calculateAverageNeighborCount: read neighbor count")) /
+                                    static_cast<float>(_particleCount)
                               : 0.F;
 }
 
@@ -364,10 +427,14 @@ auto SphSimulation::getDensityInfo(float threshold) -> DensityInfo
 void SphSimulation::initializeBoundaryParticles(const physics::StaticBoundaryDomain& boundaryDomain)
 {
     const auto& particles = boundaryDomain.getParticles();
-    _boundaryParticleCount = boundaryDomain.getParticleCount();
+    const auto particleCount = boundaryDomain.getParticleCount();
+    validateBoundaryParticleCapacity(particleCount);
 
-    if (_boundaryParticleCount == 0)
+    if (particleCount == 0)
     {
+        _boundaryParticleCount = 0;
+        _boundaryParticlesData.internal.psiValues.clear();
+        _boundaryParticlesData.internal.viscosityCoefficients.clear();
         return;
     }
 
@@ -375,12 +442,12 @@ void SphSimulation::initializeBoundaryParticles(const physics::StaticBoundaryDom
     std::vector<float> psiValues;
     std::vector<glm::vec4> colors;
     std::vector<float> viscosityCoeffs;
-    std::vector radii(_boundaryParticleCount, _simulationData.baseParticleRadius);
+    std::vector radii(particleCount, _simulationData.baseParticleRadius);
 
-    positions.reserve(_boundaryParticleCount);
-    psiValues.reserve(_boundaryParticleCount);
-    colors.reserve(_boundaryParticleCount);
-    viscosityCoeffs.reserve(_boundaryParticleCount);
+    positions.reserve(particleCount);
+    psiValues.reserve(particleCount);
+    colors.reserve(particleCount);
+    viscosityCoeffs.reserve(particleCount);
 
     for (const auto& particle : particles)
     {
@@ -390,23 +457,40 @@ void SphSimulation::initializeBoundaryParticles(const physics::StaticBoundaryDom
         viscosityCoeffs.push_back(_simulationData.domain.friction);
     }
 
-    cudaMemcpy(_boundaryParticlesData.imported.positions.getData<glm::vec4>(),
-               positions.data(),
-               _boundaryParticleCount * sizeof(glm::vec4),
-               cudaMemcpyHostToDevice);
+    detail::checkCuda(cudaMemcpy(_boundaryParticlesData.imported.positions.getData<glm::vec4>(),
+                                 positions.data(),
+                                 particleCount * sizeof(glm::vec4),
+                                 cudaMemcpyHostToDevice),
+                      "SphSimulation::initializeBoundaryParticles: copy positions");
 
-    cudaMemcpy(_boundaryParticlesData.imported.colors.getData<glm::vec4>(),
-               colors.data(),
-               _boundaryParticleCount * sizeof(glm::vec4),
-               cudaMemcpyHostToDevice);
+    detail::checkCuda(cudaMemcpy(_boundaryParticlesData.imported.colors.getData<glm::vec4>(),
+                                 colors.data(),
+                                 particleCount * sizeof(glm::vec4),
+                                 cudaMemcpyHostToDevice),
+                      "SphSimulation::initializeBoundaryParticles: copy colors");
 
-    cudaMemcpy(_boundaryParticlesData.imported.radii.getData<float>(),
-               radii.data(),
-               _boundaryParticleCount * sizeof(float),
-               cudaMemcpyHostToDevice);
+    detail::checkCuda(cudaMemcpy(_boundaryParticlesData.imported.radii.getData<float>(),
+                                 radii.data(),
+                                 particleCount * sizeof(float),
+                                 cudaMemcpyHostToDevice),
+                      "SphSimulation::initializeBoundaryParticles: copy radii");
 
     _boundaryParticlesData.internal.psiValues = psiValues;
     _boundaryParticlesData.internal.viscosityCoefficients = viscosityCoeffs;
+    _boundaryParticleCount = particleCount;
+}
+
+void SphSimulation::validateBoundaryParticleCapacity(uint32_t particleCount) const
+{
+    if (particleCount > _boundaryParticleCapacity)
+    {
+        throw std::length_error {"SphSimulation boundary particle count " + std::to_string(particleCount) +
+                                 " exceeds allocated capacity " + std::to_string(_boundaryParticleCapacity)};
+    }
+
+    requireImportedCapacity<glm::vec4>(_boundaryParticlesData.imported.positions, particleCount, "boundary positions");
+    requireImportedCapacity<float>(_boundaryParticlesData.imported.radii, particleCount, "boundary radii");
+    requireImportedCapacity<glm::vec4>(_boundaryParticlesData.imported.colors, particleCount, "boundary colors");
 }
 
 void SphSimulation::computeBoundaryDensityContribution()
@@ -418,6 +502,7 @@ void SphSimulation::computeBoundaryDensityContribution()
                 getFluidParticles(),
                 getBoundaryParticles(),
                 _grid.toDevice());
+        detail::checkCudaLastError("SphSimulation::computeBoundaryDensityContribution: launch periodic kernel");
     }
     else
     {
@@ -425,6 +510,7 @@ void SphSimulation::computeBoundaryDensityContribution()
             getFluidParticles(),
             getBoundaryParticles(),
             _grid.toDevice());
+        detail::checkCudaLastError("SphSimulation::computeBoundaryDensityContribution: launch kernel");
     }
 }
 
@@ -438,6 +524,7 @@ void SphSimulation::computeBoundaryForces()
                 getBoundaryParticles(),
                 _grid.toDevice(),
                 _simulationData);
+        detail::checkCudaLastError("SphSimulation::computeBoundaryForces: launch periodic pressure kernel");
 
         kernel::
             computeBoundaryFrictionAccelerationPeriodic<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
@@ -446,6 +533,7 @@ void SphSimulation::computeBoundaryForces()
                 _grid.toDevice(),
                 _simulationData,
                 0.0F);
+        detail::checkCudaLastError("SphSimulation::computeBoundaryForces: launch periodic friction kernel");
     }
     else
     {
@@ -454,6 +542,7 @@ void SphSimulation::computeBoundaryForces()
             getBoundaryParticles(),
             _grid.toDevice(),
             _simulationData);
+        detail::checkCudaLastError("SphSimulation::computeBoundaryForces: launch pressure kernel");
 
         const auto lidVelocity = (_scenarioParams.type == ScenarioType::LidDrivenCavity &&
                                   _scenarioParams.lidDrivenCavity.has_value() && _scenarioActivated)
@@ -466,6 +555,7 @@ void SphSimulation::computeBoundaryForces()
             _grid.toDevice(),
             _simulationData,
             lidVelocity);
+        detail::checkCudaLastError("SphSimulation::computeBoundaryForces: launch friction kernel");
     }
 }
 

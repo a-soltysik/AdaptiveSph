@@ -17,7 +17,7 @@
 #include "refinement/criteria/InterfaceCriterion.cuh"
 #include "refinement/criteria/VelocityCriterion.cuh"
 #include "refinement/criteria/VorticityCriterion.cuh"
-#include "utils/DeviceView.cuh"
+#include "utils/CudaError.cuh"
 
 namespace sph::cuda
 {
@@ -43,17 +43,21 @@ AdaptiveSphSimulation::AdaptiveSphSimulation(const Parameters& initialParameters
       _refinementData {
           .split = {.criterionValues = {thrust::device_vector<float>(refinementParams.maxParticleCount)},
                     .particlesIdsToSplit = {thrust::device_vector<uint32_t>(refinementParams.maxParticleCount)},
-                    .particlesSplitCount = DeviceValue<uint32_t>::fromHost(0)},
+                    .particlesSplitCount =
+                        DeviceBuffer<uint32_t>::fromValue(0, "AdaptiveSphSimulation: initialize split-particle count")},
           .merge = {.criterionValues = {thrust::device_vector<float>(refinementParams.maxParticleCount)},
                     .eligibleParticles = {thrust::device_vector<uint32_t>(refinementParams.maxParticleCount)},
-                    .eligibleCount = DeviceValue<uint32_t>::fromHost(0),
+                    .eligibleCount = DeviceBuffer<uint32_t>::fromValue(
+                        0, "AdaptiveSphSimulation: initialize eligible-particle count"),
                     .mergeCandidates = {thrust::device_vector<uint32_t>(refinementParams.maxParticleCount)},
                     .mergePairs = {thrust::device_vector<uint32_t>(refinementParams.maxParticleCount * 2)},
                     .removalFlags = {thrust::device_vector<refinement::RefinementData::RemovalState>(
                         refinementParams.maxParticleCount)},
-                    .mergeCount = DeviceValue<uint32_t>::fromHost(0)},
+                    .mergeCount =
+                        DeviceBuffer<uint32_t>::fromValue(0, "AdaptiveSphSimulation: initialize merge count")},
           .particlesIds = {thrust::device_vector<uint32_t>(refinementParams.maxParticleCount)},
-          .particlesCount = DeviceValue<uint32_t>::fromHost(SphSimulation::getFluidParticlesCount())
+          .particlesCount = DeviceBuffer<uint32_t>::fromValue(SphSimulation::getFluidParticlesCount(),
+                                                              "AdaptiveSphSimulation: initialize particle count")
 }
 {
 }
@@ -88,7 +92,7 @@ void AdaptiveSphSimulation::update(float deltaTime)
 
     halfKickVelocities(deltaTime / 2.F);
 
-    cudaDeviceSynchronize();
+    detail::checkCuda(cudaDeviceSynchronize(), "AdaptiveSphSimulation::update: synchronize completed timestep");
     _frameCounter++;
     _accumulatedSimulationTime += deltaTime;
 }
@@ -152,7 +156,9 @@ void AdaptiveSphSimulation::resetRefinementCounters()
 {
     thrust::fill(_refinementData.split.criterionValues.begin(), _refinementData.split.criterionValues.end(), 0);
     thrust::fill(_refinementData.split.particlesIdsToSplit.begin(), _refinementData.split.particlesIdsToSplit.end(), 0);
-    _refinementData.split.particlesSplitCount = 0;
+    _refinementData.split.particlesSplitCount.copyValueFromHost(
+        0,
+        "AdaptiveSphSimulation::resetRefinementCounters: reset split count");
 
     thrust::fill(_refinementData.merge.criterionValues.begin(), _refinementData.merge.criterionValues.end(), 0);
     thrust::fill(_refinementData.merge.removalFlags.begin(),
@@ -163,8 +169,12 @@ void AdaptiveSphSimulation::resetRefinementCounters()
                  _refinementData.merge.mergeCandidates.end(),
                  refinement::constants::noCandidate);
     thrust::fill(_refinementData.merge.mergePairs.begin(), _refinementData.merge.mergePairs.end(), 0);
-    _refinementData.merge.eligibleCount = 0;
-    _refinementData.merge.mergeCount = 0;
+    _refinementData.merge.eligibleCount.copyValueFromHost(
+        0,
+        "AdaptiveSphSimulation::resetRefinementCounters: reset eligible count");
+    _refinementData.merge.mergeCount.copyValueFromHost(
+        0,
+        "AdaptiveSphSimulation::resetRefinementCounters: reset merge count");
 
     thrust::fill(_refinementData.particlesIds.begin(), _refinementData.particlesIds.end(), 0);
 }
@@ -188,6 +198,7 @@ auto AdaptiveSphSimulation::identifyAndSplitParticles() -> bool
             refinement::interfaceCriterion::SplitCriterionGenerator(minMass, _refinementParams.interfaceParameters),
             getGrid().toDevice(),
             getParameters());
+        detail::checkCudaLastError("AdaptiveSphSimulation::identifyAndSplitParticles: launch interface criterion");
     }
     else if (_refinementParams.criterionType == refinement::RefinementParameters::Criterion::Vorticity)
     {
@@ -197,6 +208,7 @@ auto AdaptiveSphSimulation::identifyAndSplitParticles() -> bool
             refinement::vorticity::SplitCriterionGenerator(minMass, _refinementParams.vorticity),
             getGrid().toDevice(),
             getParameters());
+        detail::checkCudaLastError("AdaptiveSphSimulation::identifyAndSplitParticles: launch vorticity criterion");
     }
     else
     {
@@ -206,6 +218,7 @@ auto AdaptiveSphSimulation::identifyAndSplitParticles() -> bool
             refinement::velocity::SplitCriterionGenerator(minMass, _refinementParams.velocity.split),
             getGrid().toDevice(),
             getParameters());
+        detail::checkCudaLastError("AdaptiveSphSimulation::identifyAndSplitParticles: launch velocity criterion");
     }
 
     refinement::findTopParticlesToSplit(getFluidParticles(),
@@ -213,7 +226,8 @@ auto AdaptiveSphSimulation::identifyAndSplitParticles() -> bool
                                         _refinementParams,
                                         ::cuda::std::greater<float> {});
 
-    const auto candidatesCount = _refinementData.split.particlesSplitCount.toHost();
+    const auto candidatesCount = _refinementData.split.particlesSplitCount.copyValueToHost(
+        "AdaptiveSphSimulation::identifyAndSplitParticles: read split count");
     const auto availableParticleCapacity = _refinementParams.maxParticleCount - currentCount;
     const auto maxSplitCount = availableParticleCapacity / refinement::constants::splitChildCount;
     const auto particlesToSplitCount = std::min(candidatesCount, maxSplitCount);
@@ -223,15 +237,19 @@ auto AdaptiveSphSimulation::identifyAndSplitParticles() -> bool
         return false;
     }
 
-    _refinementData.split.particlesSplitCount = particlesToSplitCount;
+    _refinementData.split.particlesSplitCount.copyValueFromHost(
+        particlesToSplitCount,
+        "AdaptiveSphSimulation::identifyAndSplitParticles: copy split count to device");
     refinement::splitParticles<<<getBlocksPerGridForParticles(particlesToSplitCount), getThreadsPerBlock()>>>(
         getFluidParticles(),
         refinement::RefinementDataView {_refinementData},
         _refinementParams.splitting,
         _refinementParams.maxParticleCount);
+    detail::checkCudaLastError("AdaptiveSphSimulation::identifyAndSplitParticles: launch split kernel");
 
-    cudaDeviceSynchronize();
-    setParticleCount(_refinementData.particlesCount.toHost());
+    detail::checkCuda(cudaDeviceSynchronize(), "AdaptiveSphSimulation::identifyAndSplitParticles: synchronize split");
+    setParticleCount(_refinementData.particlesCount.copyValueToHost(
+        "AdaptiveSphSimulation::identifyAndSplitParticles: read particle count"));
     return getFluidParticlesCount() != currentCount;
 }
 
@@ -248,7 +266,8 @@ void AdaptiveSphSimulation::identifyAndMergeParticles()
 
     refinement::findTopParticlesToMerge(getFluidParticles(), _refinementData, _refinementParams);
 
-    const auto particlesToMergeCount = _refinementData.merge.eligibleCount.toHost();
+    const auto particlesToMergeCount = _refinementData.merge.eligibleCount.copyValueToHost(
+        "AdaptiveSphSimulation::identifyAndMergeParticles: read eligible count");
 
     if (particlesToMergeCount == 0)
     {
@@ -261,12 +280,15 @@ void AdaptiveSphSimulation::identifyAndMergeParticles()
         getGrid().toDevice(),
         getParameters(),
         _refinementParams);
+    detail::checkCudaLastError("AdaptiveSphSimulation::identifyAndMergeParticles: launch candidate kernel");
 
     refinement::resolveMergePairs<<<getBlocksPerGridForParticles(currentCount), getThreadsPerBlock()>>>(
         refinement::RefinementDataView {_refinementData},
         currentCount);
+    detail::checkCudaLastError("AdaptiveSphSimulation::identifyAndMergeParticles: launch pair-resolution kernel");
 
-    const auto mergeCount = _refinementData.merge.mergeCount.toHost();
+    const auto mergeCount = _refinementData.merge.mergeCount.copyValueToHost(
+        "AdaptiveSphSimulation::identifyAndMergeParticles: read merge count");
 
     if (mergeCount == 0)
     {
@@ -277,10 +299,13 @@ void AdaptiveSphSimulation::identifyAndMergeParticles()
         getFluidParticles(),
         refinement::RefinementDataView {_refinementData},
         getParameters());
+    detail::checkCudaLastError("AdaptiveSphSimulation::identifyAndMergeParticles: launch merge kernel");
 
     const auto compactedCount = refinement::compactParticles(getFluidParticles(), _refinementData);
     setParticleCount(compactedCount);
-    _refinementData.particlesCount = compactedCount;
+    _refinementData.particlesCount.copyValueFromHost(
+        compactedCount,
+        "AdaptiveSphSimulation::identifyAndMergeParticles: copy compacted count");
 }
 
 void AdaptiveSphSimulation::calculateMergeCriteria(float* criterionValues)
@@ -295,6 +320,7 @@ void AdaptiveSphSimulation::calculateMergeCriteria(float* criterionValues)
             refinement::interfaceCriterion::MergeCriterionGenerator(maxMass, _refinementParams.interfaceParameters),
             getGrid().toDevice(),
             getParameters());
+        detail::checkCudaLastError("AdaptiveSphSimulation::calculateMergeCriteria: launch interface criterion");
     }
     else if (_refinementParams.criterionType == refinement::RefinementParameters::Criterion::Vorticity)
     {
@@ -304,6 +330,7 @@ void AdaptiveSphSimulation::calculateMergeCriteria(float* criterionValues)
             refinement::vorticity::MergeCriterionGenerator(maxMass, _refinementParams.vorticity),
             getGrid().toDevice(),
             getParameters());
+        detail::checkCudaLastError("AdaptiveSphSimulation::calculateMergeCriteria: launch vorticity criterion");
     }
     else
     {
@@ -313,6 +340,7 @@ void AdaptiveSphSimulation::calculateMergeCriteria(float* criterionValues)
             refinement::velocity::MergeCriterionGenerator(maxMass, _refinementParams.velocity.merge),
             getGrid().toDevice(),
             getParameters());
+        detail::checkCudaLastError("AdaptiveSphSimulation::calculateMergeCriteria: launch velocity criterion");
     }
 }
 }

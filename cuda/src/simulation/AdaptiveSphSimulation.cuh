@@ -11,7 +11,7 @@
 #include "cuda/simulation/Simulation.cuh"
 #include "refinement/Common.cuh"
 #include "simulation/SphSimulation.cuh"
-#include "utils/DeviceValue.cuh"
+#include "utils/DeviceBuffer.cuh"
 
 namespace sph::cuda
 {

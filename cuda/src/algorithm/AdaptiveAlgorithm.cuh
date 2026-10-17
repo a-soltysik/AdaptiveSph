@@ -9,6 +9,7 @@
 #include <cuda/simulation/Simulation.cuh>
 #include <thrust/detail/sequence.inl>
 
+#include "../utils/CudaError.cuh"
 #include "cuda/refinement/RefinementParameters.cuh"
 #include "simulation/SphSimulation.cuh"
 #include "simulation/refinement/Common.cuh"
@@ -60,7 +61,7 @@ auto findTopParticlesToSplit(FluidParticlesData particles,
                              RefinementParameters refinementParameters,
                              CriterionSorter criterionSorter) -> void
 {
-    cudaDeviceSynchronize();
+    ::sph::cuda::detail::checkCuda(cudaDeviceSynchronize(), "findTopParticlesToSplit: synchronize criterion kernel");
 
     thrust::sequence(thrust::device,
                      refinementData.particlesIds.data(),
@@ -86,7 +87,9 @@ auto findTopParticlesToSplit(FluidParticlesData particles,
                  static_cast<uint32_t>(
                      std::round(static_cast<float>(particles.particleCount) * refinementParameters.maxBatchRatio)));
 
-    refinementData.split.particlesSplitCount = maxParticlesCount;
+    refinementData.split.particlesSplitCount.copyValueFromHost(
+        maxParticlesCount,
+        "findTopParticlesToSplit: copy selected-particle count to device");
 
     thrust::copy_n(thrust::device,
                    refinementData.particlesIds.data(),
