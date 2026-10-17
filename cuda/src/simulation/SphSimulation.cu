@@ -47,7 +47,7 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
       _simulationData {initialParameters}, _boundaryParticleCount {boundaryDomain.getParticleCount()},
       _particleCount {static_cast<uint32_t>(positions.size())},
       _grid {initialParameters.domain,
-             2 * initialParameters.baseSmoothingRadius * device::constant::wendlandRangeRatio * multiplier,
+             2 * initialParameters.baseSmoothingRadius* device::constant::wendlandRangeRatio* multiplier,
              maxFluidParticleCapacity,
              maxBoundaryParticleCapacity},
       _scenarioParams {scenarioParams}

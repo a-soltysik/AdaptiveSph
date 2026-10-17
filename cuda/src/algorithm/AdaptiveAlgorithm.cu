@@ -172,18 +172,18 @@ __device__ auto getNewRadius(float mass, float baseMass, float baseRadius) -> fl
 }
 
 constexpr __constant__ __device__ auto icosahedronVertices = std::array {
-    float3 {0.F,                            detail::phi * detail::invnorm,  detail::invnorm               },
-    float3 {0.F,                            detail::phi * detail::invnorm,  -detail::invnorm              },
-    float3 {0.F,                            -detail::phi * detail::invnorm, -detail::invnorm              },
-    float3 {0.F,                            -detail::phi * detail::invnorm, detail::invnorm               },
-    float3 {detail::invnorm,                0,                              detail::phi * detail::invnorm },
-    float3 {-detail::invnorm,               0,                              detail::phi * detail::invnorm },
-    float3 {detail::invnorm,                0,                              -detail::phi * detail::invnorm},
-    float3 {-detail::invnorm,               0,                              -detail::phi * detail::invnorm},
-    float3 {detail::phi * detail::invnorm,  detail::invnorm,                0                             },
-    float3 {detail::phi * detail::invnorm,  -detail::invnorm,               0                             },
-    float3 {-detail::phi * detail::invnorm, detail::invnorm,                0                             },
-    float3 {-detail::phi * detail::invnorm, -detail::invnorm,               0                             }
+    float3 {0.F,                            detail::phi* detail::invnorm,  detail::invnorm              },
+    float3 {0.F,                            detail::phi* detail::invnorm,  -detail::invnorm             },
+    float3 {0.F,                            -detail::phi* detail::invnorm, -detail::invnorm             },
+    float3 {0.F,                            -detail::phi* detail::invnorm, detail::invnorm              },
+    float3 {detail::invnorm,                0,                             detail::phi* detail::invnorm },
+    float3 {-detail::invnorm,               0,                             detail::phi* detail::invnorm },
+    float3 {detail::invnorm,                0,                             -detail::phi* detail::invnorm},
+    float3 {-detail::invnorm,               0,                             -detail::phi* detail::invnorm},
+    float3 {detail::phi * detail::invnorm,  detail::invnorm,               0                            },
+    float3 {detail::phi * detail::invnorm,  -detail::invnorm,              0                            },
+    float3 {-detail::phi * detail::invnorm, detail::invnorm,               0                            },
+    float3 {-detail::phi * detail::invnorm, -detail::invnorm,              0                            }
 };
 static_assert(icosahedronVertices.size() == constants::splitChildCount);
 
