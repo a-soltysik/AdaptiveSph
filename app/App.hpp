@@ -47,7 +47,7 @@ private:
 
     void updateDomain(const cuda::Simulation::Parameters::Domain& newDomain);
 
-    void updateScenario(uint32_t simulationStep);
+    void updateScenario();
 
     std::vector<glm::vec4> _particles;
     std::unique_ptr<panda::gfx::Scene> _scene;
@@ -60,7 +60,6 @@ private:
     cuda::ScenarioParameters _scenarioParameters {};
     std::optional<cuda::refinement::RefinementParameters> _refinementParameters;
     utils::ExperimentConfig _experimentConfig {};
-    uint32_t _simulationStep = 0;
     bool _scenarioActivated = false;
 };
 }

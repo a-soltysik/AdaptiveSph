@@ -309,7 +309,7 @@ auto App::mainLoop() -> void
         std::chrono::seconds {1}));
 
     taskScheduler.addTask(std::make_unique<utils::PerTimeTask>(
-        [this, targetSimulationTime, cooldownTime] {
+        [this, cooldownTime] {
             const float currentTime = _simulation->getCurrentSimulationTime();
 
             if (currentTime < cooldownTime)
@@ -347,7 +347,7 @@ auto App::mainLoop() -> void
             auto endTime = std::chrono::high_resolution_clock::now();
             float computationTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
 
-            updateScenario(_simulationStep++);
+            updateScenario();
 
             // Collect experiment data
             experimentCollector->onFrameCompleted(computationTimeMs);
@@ -448,16 +448,6 @@ void App::createParticlesInGrid(const utils::InitialParameters& initialParameter
     _particles.clear();
     _particles.reserve(initialParameters.getScalarCount());
 
-    static constexpr auto margin = 0.001F;
-
-    const auto domainSize = _simulationParameters.domain.max - _simulationParameters.domain.min;
-    const auto availableSize = domainSize - 2.0F * margin;
-    //const auto availableSize = glm::vec3 {domainSize.x - 0.2F, domainSize.y, domainSize.z} - 2.F * margin;
-
-    const auto spacingPerDim = glm::vec3 {availableSize.x / static_cast<float>(initialParameters.particleCount.x - 1),
-                                          availableSize.y / static_cast<float>(initialParameters.particleCount.y - 1),
-                                          availableSize.z / static_cast<float>(initialParameters.particleCount.z - 1)};
-
     for (uint32_t i = 0; i < initialParameters.particleCount.x; i++)
     {
         for (uint32_t j = 0; j < initialParameters.particleCount.y; j++)
@@ -539,7 +529,7 @@ void App::updateDomain(const cuda::Simulation::Parameters::Domain& newDomain)
     domainObject.transform.scale = newDomain.getScale();
 }
 
-void App::updateScenario(uint32_t simulationStep)
+void App::updateScenario()
 {
     // Check if cooldown has passed (using physical time instead of steps)
     const float currentTime = _simulation->getCurrentSimulationTime();

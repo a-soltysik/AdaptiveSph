@@ -194,41 +194,4 @@ auto validateConfiguration(const Configuration& configuration) -> void
     validateRefinementParameters(configuration.refinementParameters, particleCount);
 }
 
-auto dumpTemplateConfiguration(const std::string& filePath) -> void
-{
-    try
-    {
-        std::ofstream file(filePath);
-        if (!file.is_open())
-        {
-            panda::log::Error("Failed to open file: {}", filePath);
-        }
-
-        const json jsonFile = Configuration {
-            .initialParameters = InitialParameters {},
-            .simulationParameters = cuda::Simulation::Parameters {},
-            .refinementParameters = cuda::refinement::RefinementParameters {},
-            .renderingParameters = RenderingParameters {},
-            .scenarioParameters =
-                cuda::ScenarioParameters {
-                                                    .lidDrivenCavity = cuda::LidDrivenCavityParameters {},
-                                                    .damBreak = cuda::DamBreakParameters {},
-                                                    .poiseuilleFlow = cuda::PoiseuilleFlowParameters {},
-                                                    },
-            .experimentConfig = ExperimentConfig {}
-        };
-        file << jsonFile.dump(4);
-
-        panda::log::Info("Configuration file saved: {}", filePath);
-    }
-    catch (const json::exception& e)
-    {
-        panda::log::Error("JSON parsing error: {}", e.what());
-    }
-    catch (const std::exception& e)
-    {
-        panda::log::Error("Error saving configuration: {}", e.what());
-    }
-}
-
 }

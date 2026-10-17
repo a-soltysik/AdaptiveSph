@@ -57,6 +57,5 @@ struct Configuration
 
 auto loadConfigurationFromFile(const std::string& filePath) -> std::optional<Configuration>;
 auto validateConfiguration(const Configuration& configuration) -> void;
-auto dumpTemplateConfiguration(const std::string& filePath) -> void;
 
 }
