@@ -62,6 +62,32 @@ struct AdaptiveRefinementStatistics
 
 constexpr auto simulationTimeStep = 0.0001F;
 
+auto generateBoundaryDomain(const sph::cuda::Simulation::Parameters& simulationParameters,
+                            const sph::cuda::ScenarioParameters& scenarioParameters,
+                            const sph::cuda::Simulation::Parameters::Domain& domain)
+    -> sph::cuda::physics::StaticBoundaryDomain
+{
+    const auto particleSpacing = simulationParameters.baseParticleRadius * 2;
+    auto wallFlags = sph::cuda::physics::StaticBoundaryDomain::WallFlags::All;
+    const auto periodicX = scenarioParameters.type == sph::cuda::ScenarioType::PoiseuilleFlow;
+
+    if (periodicX)
+    {
+        // Poiseuille flow wraps X, so its boundary particles only cover the Y and Z walls.
+        wallFlags = sph::cuda::physics::StaticBoundaryDomain::WallFlags::MinY |
+                    sph::cuda::physics::StaticBoundaryDomain::WallFlags::MaxY |
+                    sph::cuda::physics::StaticBoundaryDomain::WallFlags::MinZ |
+                    sph::cuda::physics::StaticBoundaryDomain::WallFlags::MaxZ;
+    }
+
+    return sph::cuda::physics::StaticBoundaryDomain::generate(domain,
+                                                              particleSpacing,
+                                                              simulationParameters.restDensity,
+                                                              simulationParameters.baseSmoothingRadius,
+                                                              wallFlags,
+                                                              periodicX);
+}
+
 auto recordAdaptiveRefinementPass(AdaptiveRefinementStatistics& statistics,
                                   const std::optional<sph::cuda::Simulation::AdaptiveRefinementPass>& refinementPass)
     -> void
@@ -197,28 +223,13 @@ auto App::run() -> int
 
     setDefaultScene(_simulationParameters, initialParameters);
 
-    const auto particleSpacing = _simulationParameters.baseParticleRadius * 2;
-
-    // Determine which walls to generate based on scenario
-    auto wallFlags = cuda::physics::StaticBoundaryDomain::WallFlags::All;
-    bool periodicX = false;
     if (_scenarioParameters.type == cuda::ScenarioType::PoiseuilleFlow)
     {
-        // For Poiseuille flow, exclude left and right walls (MinX and MaxX) for periodic boundaries
-        wallFlags = cuda::physics::StaticBoundaryDomain::WallFlags::MinY |
-                    cuda::physics::StaticBoundaryDomain::WallFlags::MaxY |
-                    cuda::physics::StaticBoundaryDomain::WallFlags::MinZ |
-                    cuda::physics::StaticBoundaryDomain::WallFlags::MaxZ;
-        periodicX = true;
         panda::log::Info("Poiseuille flow scenario: using periodic boundaries in X direction");
     }
 
-    const auto boundaryDomain = cuda::physics::StaticBoundaryDomain::generate(_simulationParameters.domain,
-                                                                              particleSpacing,
-                                                                              _simulationParameters.restDensity,
-                                                                              _simulationParameters.baseSmoothingRadius,
-                                                                              wallFlags,
-                                                                              periodicX);
+    const auto boundaryDomain =
+        generateBoundaryDomain(_simulationParameters, _scenarioParameters, _simulationParameters.domain);
 
     panda::log::Info("Generated {} boundary particles for static domain", boundaryDomain.getParticleCount());
 
@@ -472,26 +483,7 @@ void App::updateDomain(const cuda::Simulation::Parameters::Domain& newDomain)
 
     _simulationParameters.domain = newDomain;
 
-    const auto particleSpacing = _simulationParameters.baseParticleRadius * 2;
-
-    // Determine which walls to generate based on scenario
-    auto wallFlags = cuda::physics::StaticBoundaryDomain::WallFlags::All;
-    bool periodicX = false;
-    if (_scenarioParameters.type == cuda::ScenarioType::PoiseuilleFlow)
-    {
-        wallFlags = cuda::physics::StaticBoundaryDomain::WallFlags::MinY |
-                    cuda::physics::StaticBoundaryDomain::WallFlags::MaxY |
-                    cuda::physics::StaticBoundaryDomain::WallFlags::MinZ |
-                    cuda::physics::StaticBoundaryDomain::WallFlags::MaxZ;
-        periodicX = true;
-    }
-
-    const auto boundaryDomain = cuda::physics::StaticBoundaryDomain::generate(newDomain,
-                                                                              particleSpacing,
-                                                                              _simulationParameters.restDensity,
-                                                                              _simulationParameters.baseSmoothingRadius,
-                                                                              wallFlags,
-                                                                              periodicX);
+    const auto boundaryDomain = generateBoundaryDomain(_simulationParameters, _scenarioParameters, newDomain);
 
     panda::log::Info("Generated {} boundary particles for new domain", boundaryDomain.getParticleCount());
 

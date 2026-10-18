@@ -88,7 +88,6 @@ inline __device__ auto SplitCriterionGenerator::operator()(FluidParticlesData pa
         return -1.0F;
     }
 
-    // Normalize to get the interface proximity indicator
     const auto u_i = weightedDisplacement / weightSum;
     const auto proximityMagnitude = glm::length(u_i);
 
@@ -146,7 +145,6 @@ inline __device__ auto MergeCriterionGenerator::operator()(FluidParticlesData pa
         return -1.0F;
     }
 
-    // Normalize to get the interface proximity indicator
     const auto u_i = weightedDisplacement / weightSum;
     const auto proximityMagnitude = glm::length(u_i);
 

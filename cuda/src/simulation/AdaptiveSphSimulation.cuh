@@ -11,7 +11,6 @@
 #include "cuda/simulation/Simulation.cuh"
 #include "refinement/Common.cuh"
 #include "simulation/SphSimulation.cuh"
-#include "utils/DeviceBuffer.cuh"
 
 namespace sph::cuda
 {
@@ -36,8 +35,10 @@ private:
     [[nodiscard]] auto performAdaptiveRefinement() -> bool;
     [[nodiscard]] auto getBlocksPerGridForParticles(uint32_t count) const -> dim3;
     void calculateMergeCriteria(float* criterionValues);
+    void calculateSplitCriteria(float minMass);
     void resetRefinementCounters();
     [[nodiscard]] auto identifyAndSplitParticles() -> bool;
+    [[nodiscard]] auto applyParticleSplits(uint32_t currentCount, uint32_t particlesToSplitCount) -> bool;
     void identifyAndMergeParticles();
 
     refinement::RefinementParameters _refinementParams;
