@@ -14,7 +14,6 @@
 #include <array>
 #include <chrono>
 #include <csignal>
-#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cuda/simulation/Simulation.cuh>
@@ -28,7 +27,6 @@
 #include <glm/trigonometric.hpp>
 #include <limits>
 #include <memory>
-#include <numeric>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -42,16 +40,11 @@
 #include "ui/SimulationDataGui.hpp"
 #include "utils/Configuration.hpp"
 #include "utils/FrameTimeManager.hpp"
+#include "utils/InitialParticleGrid.hpp"
 #include "utils/TaskScheduler.hpp"
 
 namespace
 {
-struct GridCoordinate
-{
-    std::size_t particleCount;
-    std::size_t particleIndex;
-};
-
 struct AdaptiveRefinementStatistics
 {
     uint32_t passCount {};
@@ -113,17 +106,6 @@ auto recordAdaptiveRefinementPass(AdaptiveRefinementStatistics& statistics,
         refinementPass->particlesAfter,
         refinementPass->mergedPairs,
         refinementPass->splitParents);
-}
-
-auto getInitialGridCoordinate(float min, float max, GridCoordinate grid) -> float
-{
-    if (grid.particleCount == 1)
-    {
-        return std::midpoint(min, max);
-    }
-    const auto spacing =
-        (max - min - (2.F * sph::utils::initialParticleMargin)) / static_cast<float>(grid.particleCount - 1);
-    return min + sph::utils::initialParticleMargin + (spacing * static_cast<float>(grid.particleIndex));
 }
 
 [[nodiscard]] constexpr auto getSignalName(const int signalValue) noexcept -> std::string_view
@@ -432,25 +414,32 @@ void App::createParticlesInGrid(const utils::InitialParameters& initialParameter
     _particles.clear();
     _particles.reserve(initialParameters.getScalarCount());
 
+    const auto xRange = utils::getInitialParticleGridRange(_simulationParameters.domain.min.x,
+                                                           _simulationParameters.domain.max.x,
+                                                           1.F,
+                                                           _simulationParameters.baseParticleRadius,
+                                                           false);
+    const auto yRange = utils::getInitialParticleGridRange(_simulationParameters.domain.min.y,
+                                                           _simulationParameters.domain.max.y,
+                                                           initialParameters.verticalFillRatio,
+                                                           _simulationParameters.baseParticleRadius,
+                                                           true);
+    const auto zRange = utils::getInitialParticleGridRange(_simulationParameters.domain.min.z,
+                                                           _simulationParameters.domain.max.z,
+                                                           1.F,
+                                                           _simulationParameters.baseParticleRadius,
+                                                           false);
+
     for (uint32_t i = 0; i < initialParameters.particleCount.x; i++)
     {
         for (uint32_t j = 0; j < initialParameters.particleCount.y; j++)
         {
             for (uint32_t k = 0; k < initialParameters.particleCount.z; k++)
             {
-                const auto position = glm::vec3 {
-                    getInitialGridCoordinate(
-                        _simulationParameters.domain.min.x,
-                        _simulationParameters.domain.max.x,
-                        GridCoordinate {.particleCount = initialParameters.particleCount.x, .particleIndex = i}),
-                    getInitialGridCoordinate(
-                        _simulationParameters.domain.min.y,
-                        _simulationParameters.domain.max.y,
-                        GridCoordinate {.particleCount = initialParameters.particleCount.y, .particleIndex = j}),
-                    getInitialGridCoordinate(
-                        _simulationParameters.domain.min.z,
-                        _simulationParameters.domain.max.z,
-                        GridCoordinate {.particleCount = initialParameters.particleCount.z, .particleIndex = k})};
+                const auto position =
+                    glm::vec3 {utils::getInitialParticleGridCoordinate(xRange, initialParameters.particleCount.x, i),
+                               utils::getInitialParticleGridCoordinate(yRange, initialParameters.particleCount.y, j),
+                               utils::getInitialParticleGridCoordinate(zRange, initialParameters.particleCount.z, k)};
 
                 _particles.emplace_back(position, 0.F);
             }

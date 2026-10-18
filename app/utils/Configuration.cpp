@@ -20,6 +20,7 @@
 #include <string>
 #include <string_view>
 
+#include "utils/InitialParticleGrid.hpp"
 #include "utils/Serializers.hpp"  // NOLINT(misc-include-cleaner)
 
 using json = nlohmann::json;
@@ -50,15 +51,6 @@ void requireNonNegative(float value, std::string_view name)
 {
     requireFinite(value, name);
     panda::expect(value >= 0.F, fmt::format("{} must not be negative", name));
-}
-
-auto getGridSpacing(float min, float max, uint32_t count) -> float
-{
-    if (count == 1)
-    {
-        return 0.F;
-    }
-    return (max - min - (2.F * initialParticleMargin)) / static_cast<float>(count - 1);
 }
 
 void warnAboutGridCompatibility(const InitialParameters& initial,
@@ -116,10 +108,31 @@ void validateSimulationParameters(const cuda::Simulation::Parameters& simulation
 void validateInitialParticleDistribution(const InitialParameters& initial,
                                          const cuda::Simulation::Parameters& simulation)
 {
-    const auto spacing =
-        glm::vec3 {getGridSpacing(simulation.domain.min.x, simulation.domain.max.x, initial.particleCount.x),
-                   getGridSpacing(simulation.domain.min.y, simulation.domain.max.y, initial.particleCount.y),
-                   getGridSpacing(simulation.domain.min.z, simulation.domain.max.z, initial.particleCount.z)};
+    requireFinite(initial.verticalFillRatio, "initialParameters.verticalFillRatio");
+    panda::expect(initial.verticalFillRatio > 0.F && initial.verticalFillRatio <= 1.F,
+                  "initialParameters.verticalFillRatio must be in the range (0, 1]");
+
+    const auto xRange = getInitialParticleGridRange(simulation.domain.min.x,
+                                                    simulation.domain.max.x,
+                                                    1.F,
+                                                    simulation.baseParticleRadius,
+                                                    false);
+    const auto yRange = getInitialParticleGridRange(simulation.domain.min.y,
+                                                    simulation.domain.max.y,
+                                                    initial.verticalFillRatio,
+                                                    simulation.baseParticleRadius,
+                                                    true);
+    const auto zRange = getInitialParticleGridRange(simulation.domain.min.z,
+                                                    simulation.domain.max.z,
+                                                    1.F,
+                                                    simulation.baseParticleRadius,
+                                                    false);
+    panda::expect(initial.particleCount.y == 1 || yRange.second > yRange.first,
+                  "initialParameters.verticalFillRatio is too small for the configured particle radius");
+
+    const auto spacing = glm::vec3 {getInitialParticleGridSpacing(xRange, initial.particleCount.x),
+                                    getInitialParticleGridSpacing(yRange, initial.particleCount.y),
+                                    getInitialParticleGridSpacing(zRange, initial.particleCount.z)};
     warnAboutGridCompatibility(initial, simulation, spacing);
     if (initial.particleCount.x == 1 || initial.particleCount.y == 1 || initial.particleCount.z == 1)
     {

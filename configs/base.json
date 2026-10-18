@@ -1,6 +1,7 @@
 {
   "initialParameters": {
-    "particleCount": { "x": 12, "y": 15, "z": 12 }
+    "particleCount": { "x": 23, "y": 26, "z": 23 },
+    "verticalFillRatio": 0.75
   },
   "simulationParameters": {
     "domain": {
@@ -14,9 +15,9 @@
     "viscosityConstant": 0.01,
     "surfaceTensionConstant": 0.0,
     "maxVelocity": 20.0,
-    "baseSmoothingRadius": 0.12,
-    "baseParticleRadius": 0.05,
-    "baseParticleMass": 1.0,
+    "baseSmoothingRadius": 0.06,
+    "baseParticleRadius": 0.025,
+    "baseParticleMass": 0.1225,
     "threadsPerBlock": 256
   },
   "refinementParameters": null,
