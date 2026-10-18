@@ -24,6 +24,7 @@ namespace gfx
 {
 
 class Buffer;
+class CudaVulkanSemaphore;
 class DescriptorPool;
 class Device;
 class Renderer;
@@ -43,10 +44,11 @@ public:
 
     static constexpr auto maxFramesInFlight = size_t {2};
 
+    [[nodiscard]] auto beginFrame() -> bool;
     auto initializeParticleSystem(size_t particleCount) -> sph::cuda::FluidParticlesDataImportedBuffer;
     auto initializeBoundaryParticleSystem(size_t particleCount, bool shouldRender)
         -> sph::cuda::BoundaryParticlesDataImportedBuffer;
-    auto makeFrame(Scene& scene) const -> void;
+    auto makeFrame(Scene& scene) -> void;
     [[nodiscard]] auto getDevice() const noexcept -> const Device&;
     auto registerTexture(std::unique_ptr<Texture> texture) -> void;
     auto registerMesh(std::unique_ptr<Mesh> mesh) -> void;
@@ -83,6 +85,8 @@ private:
     std::unique_ptr<vk::Instance, InstanceDeleter> _instance;
     std::unique_ptr<Device> _device;
     std::unique_ptr<Renderer> _renderer;
+    std::unique_ptr<CudaVulkanSemaphore> _cudaReadySemaphore;
+    std::unique_ptr<CudaVulkanSemaphore> _vulkanDoneSemaphore;
     std::unique_ptr<RenderSystem> _renderSystem;
     std::unique_ptr<FluidParticleRenderSystem> _particleRenderSystem;
     std::unique_ptr<BoundaryParticleRenderSystem> _boundaryParticleRenderSystem;
@@ -92,6 +96,7 @@ private:
     std::vector<std::unique_ptr<Buffer>> _uboFragBuffers;
     std::vector<std::unique_ptr<Buffer>> _uboVertBuffers;
     std::unique_ptr<DescriptorPool> _guiPool;
+    bool _hasSubmittedFrame = false;
 
     const Window& _window;
 };

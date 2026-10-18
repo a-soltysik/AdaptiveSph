@@ -14,6 +14,7 @@
 #include <vulkan/vulkan_handles.hpp>
 #include <vulkan/vulkan_structs.hpp>
 
+#include "FrameSemaphores.h"
 #include "SwapChain.h"
 #include "panda/gfx/Context.h"
 #include "panda/gfx/Device.h"
@@ -51,11 +52,11 @@ auto Renderer::beginFrame() -> vk::CommandBuffer
     return commandBuffer;
 }
 
-auto Renderer::endFrame() -> void
+auto Renderer::endFrame(const FrameSemaphores& semaphores) -> void
 {
     expect(_isFrameStarted, "Can't end frame which isn't began");
     expect(getCurrentCommandBuffer().end(), vk::Result::eSuccess, "Can't end command buffer");
-    _swapChain->submitCommandBuffers(getCurrentCommandBuffer(), _currentImageIndex);
+    _swapChain->submitCommandBuffers(getCurrentCommandBuffer(), _currentImageIndex, semaphores);
 
     _isFrameStarted = false;
     _currentFrameIndex = (_currentFrameIndex + 1) % Context::maxFramesInFlight;

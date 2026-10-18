@@ -319,6 +319,11 @@ auto App::mainLoop() -> void
 
             timeManager.update();
 
+            if (!_api->beginFrame())
+            {
+                continue;
+            }
+
             _simulation->update(0.0001F);
 
             recordAdaptiveRefinementPass(refinementStatistics, _simulation->takeAdaptiveRefinementPass());

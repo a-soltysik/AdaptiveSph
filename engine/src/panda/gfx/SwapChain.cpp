@@ -17,6 +17,7 @@
 #include <vulkan/vulkan_handles.hpp>
 
 #include "Device.h"
+#include "FrameSemaphores.h"
 #include "panda/Logger.h"
 #include "panda/Window.h"
 #include "panda/gfx/Context.h"
@@ -410,7 +411,9 @@ auto SwapChain::acquireNextImage() -> std::optional<uint32_t>
     return imageIndex.value;
 }
 
-auto SwapChain::submitCommandBuffers(const vk::CommandBuffer& commandBuffer, uint32_t imageIndex) -> void
+auto SwapChain::submitCommandBuffers(const vk::CommandBuffer& commandBuffer,
+                                     uint32_t imageIndex,
+                                     const FrameSemaphores& semaphores) -> void
 {
     if (_imagesInFlight[imageIndex] != nullptr) [[likely]]
     {
@@ -423,14 +426,17 @@ auto SwapChain::submitCommandBuffers(const vk::CommandBuffer& commandBuffer, uin
     _imagesInFlight[imageIndex] = &_inFlightFences[_currentFrame];
 
     static constexpr auto waitStages =
-        std::array {vk::PipelineStageFlags {vk::PipelineStageFlagBits::eColorAttachmentOutput}};
-    const auto submitInfo = vk::SubmitInfo {.waitSemaphoreCount = 1,
-                                            .pWaitSemaphores = &_imageAvailableSemaphores[_currentFrame],
+        std::array {vk::PipelineStageFlags {vk::PipelineStageFlagBits::eColorAttachmentOutput},
+                    vk::PipelineStageFlags {vk::PipelineStageFlagBits::eVertexShader}};
+    const auto waitSemaphores = std::array {_imageAvailableSemaphores[_currentFrame], semaphores.cudaReady};
+    const auto signalSemaphores = std::array {_renderFinishedSemaphores[imageIndex], semaphores.vulkanDone};
+    const auto submitInfo = vk::SubmitInfo {.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size()),
+                                            .pWaitSemaphores = waitSemaphores.data(),
                                             .pWaitDstStageMask = waitStages.data(),
                                             .commandBufferCount = 1,
                                             .pCommandBuffers = &commandBuffer,
-                                            .signalSemaphoreCount = 1,
-                                            .pSignalSemaphores = &_renderFinishedSemaphores[imageIndex]};
+                                            .signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size()),
+                                            .pSignalSemaphores = signalSemaphores.data()};
 
     shouldBe(_device.logicalDevice.resetFences(_inFlightFences[_currentFrame]),
              vk::Result::eSuccess,

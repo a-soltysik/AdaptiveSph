@@ -12,6 +12,8 @@ add_library(
         src/simulation/physics/StaticBoundaryDomain.cu
         src/simulation/neighbors/NeighborGrid.cu
         src/algorithm/neighbors/NeighborKernels.cu
+        src/memory/ImportedSemaphore.cu
+        src/utils/DeviceSelection.cu
 )
 
 add_library(AdaptiveSph::Cuda ALIAS AdaptiveSphCuda)

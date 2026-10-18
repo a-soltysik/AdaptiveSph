@@ -5,7 +5,9 @@
 #include "panda/gfx/Device.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
+#include <cuda/Api.cuh>
 #include <optional>
 #include <ranges>
 #include <span>
@@ -50,7 +52,7 @@ auto Device::pickPhysicalDevice(const vk::Instance& instance,
         return isDeviceSuitable(currentDevice, surface, requiredExtensions);
     });
 
-    expectNot(it, devices.cend(), "None_ of physical devices is suitable");
+    expectNot(it, devices.cend(), "No physical device is suitable for both Vulkan rendering and CUDA compute");
     return *it;
 }
 
@@ -61,9 +63,40 @@ auto Device::isDeviceSuitable(vk::PhysicalDevice device,
     const auto queueFamilies = findQueueFamilies(device, surface);
     const auto swapChainSupport = querySwapChainSupport(device, surface);
 
-    return queueFamilies && checkDeviceExtensionSupport(device, requiredExtensions) &&
-           !swapChainSupport.formats.empty() && !swapChainSupport.presentationModes.empty() &&
-           device.getFeatures().samplerAnisotropy > 0;
+    if (!queueFamilies || !checkDeviceExtensionSupport(device, requiredExtensions) ||
+        swapChainSupport.formats.empty() || swapChainSupport.presentationModes.empty() ||
+        device.getFeatures().samplerAnisotropy == 0)
+    {
+        return false;
+    }
+
+#ifdef WIN32
+    static constexpr auto semaphoreHandleType = vk::ExternalSemaphoreHandleTypeFlagBits::eOpaqueWin32;
+#else
+    static constexpr auto semaphoreHandleType = vk::ExternalSemaphoreHandleTypeFlagBits::eOpaqueFd;
+#endif
+    const auto semaphoreProperties = device.getExternalSemaphoreProperties({.handleType = semaphoreHandleType});
+    if (!static_cast<bool>(semaphoreProperties.externalSemaphoreFeatures &
+                           vk::ExternalSemaphoreFeatureFlagBits::eExportable))
+    {
+        log::Warning("GPU does not support exporting the semaphore handle required for CUDA interop");
+        return false;
+    }
+
+    auto idProperties = vk::PhysicalDeviceIDProperties {};
+    auto properties = vk::PhysicalDeviceProperties2 {.pNext = &idProperties};
+    device.getProperties2(&properties);
+
+    static constexpr auto uuidSize = 16;
+    auto uuid = std::array<std::uint8_t, uuidSize> {};
+    std::ranges::copy(idProperties.deviceUUID, uuid.begin());
+    if (!sph::cuda::selectDeviceForUuid(uuid))
+    {
+        log::Warning("GPU has no CUDA device with a matching UUID");
+        return false;
+    }
+
+    return true;
 }
 
 auto Device::findQueueFamilies(vk::PhysicalDevice device, vk::SurfaceKHR surface) -> std::optional<QueueFamilies>
