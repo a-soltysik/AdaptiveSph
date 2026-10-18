@@ -17,6 +17,7 @@ namespace sph::utils
 struct InitialParameters
 {
     glm::uvec3 particleCount = {40, 40, 25};
+    float verticalFillRatio = 1.F;
 
     [[nodiscard]] auto getScalarCount() const -> uint32_t
     {

@@ -104,8 +104,25 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::cuda::Simulation::Parameters,
                                    baseParticleMass,
                                    threadsPerBlock)
 
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::utils::InitialParameters, particleCount)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(sph::utils::RenderingParameters, renderBoundaryParticles)
+
+template <>
+struct adl_serializer<sph::utils::InitialParameters>
+{
+    static void to_json(json& j, const sph::utils::InitialParameters& parameters)
+    {
+        j = json {
+            {"particleCount",     parameters.particleCount    },
+            {"verticalFillRatio", parameters.verticalFillRatio}
+        };
+    }
+
+    static void from_json(const json& j, sph::utils::InitialParameters& parameters)
+    {
+        j.at("particleCount").get_to(parameters.particleCount);
+        parameters.verticalFillRatio = j.value("verticalFillRatio", 1.F);
+    }
+};
 
 NLOHMANN_JSON_SERIALIZE_ENUM(sph::cuda::ScenarioType,
                              {

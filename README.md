@@ -1,62 +1,34 @@
 # AdaptiveSph
 
-AdaptiveSph is an experimental weakly compressible SPH (WCSPH) fluid solver written in CUDA, with particle rendering through Vulkan. It explores neighbor search on a uniform grid and adaptive particle refinement; the refinement path and numerical behavior still need dedicated validation.
+Experimental CUDA implementation of a weakly compressible smoothed particle hydrodynamics (WCSPH) fluid solver. It uses a uniform grid for particle-neighbor search, supports adaptive particle splitting and merging, and renders particles with Vulkan.
 
-## What is implemented
+## Build
 
-- CUDA kernels for density, pressure, viscosity, boundary forces, and particle integration.
-- Uniform-grid neighbor search with particles sorted by cell key.
-- Optional particle splitting and merging, enabled by an adaptive configuration.
-- A Vulkan renderer for fluid and boundary particles, with CUDA/Vulkan shared memory.
-- A small ImGui overlay for simulation statistics and controls.
+Requirements: Windows 10+ or Linux, CMake 3.25+, Ninja, an NVIDIA CUDA Toolkit with a supported host compiler, the Vulkan SDK, and a GPU/driver supporting CUDA–Vulkan external memory and semaphores. CMake downloads missing dependencies during configuration.
 
-The renderer is for inspecting simulation behavior. Its frame rate is not a solver benchmark.
-
-## Project layout
-
-- `cuda/` contains the SPH kernels, neighbor grid, boundary handling, and refinement code.
-- `app/` contains the application loop, configuration loading, input, and GUI.
-- `engine/` contains the Vulkan rendering support used by the application.
-- `configs/` contains the base, adaptive and Poiseuille example scenes.
-
-### CUDA–Vulkan interop
-
-Vulkan creates the shared particle buffers and two binary semaphores; CUDA imports them. CUDA writes particle data, and Vulkan reads it. Before writing the next frame, CUDA waits for `vulkanDone` from the previous render. After updating the particles, CUDA signals `cudaReady`; Vulkan waits for it before drawing and signals `vulkanDone` when the render finishes.
-
-## Requirements
-
-Both builds need CMake 3.25 or later, Ninja, an NVIDIA CUDA Toolkit, and a host compiler supported by that Toolkit. They also need the Vulkan SDK or development headers and a GPU/driver that supports both CUDA and the Vulkan external-memory path used by the renderer. CMake downloads project dependencies on the first configure if the dependency cache is empty.
-
-- Windows: Windows 10 or later and an MSVC version supported by the selected CUDA Toolkit.
-- Linux: GCC or Clang, plus the Vulkan development packages for the distribution.
-
-The repository has Windows MSVC and Linux GCC/Clang presets. CUDA targets forward MSVC's `/Zc:preprocessor` option, which is required by the CUDA 13.4 CCCL headers. The Linux GCC preset with clang-tidy builds in WSL; Linux GPU/Vulkan runtime remains unverified.
-
-## Build and run
-
-Run commands from the repository root. The Windows executable is written to `build/windows-msvc-release/bin/AdaptiveSph.exe`; CMake copies the example configurations beside it for IDE launches.
+Choose a preset for your platform:
 
 ```powershell
 cmake --preset windows-msvc-release
 cmake --build --preset windows-msvc-release --parallel
-.\build\windows-msvc-release\bin\AdaptiveSph.exe configs\base.json
 ```
-
-On Linux, the GCC Release preset writes `build/linux-gcc-release/bin/AdaptiveSph`:
 
 ```sh
 cmake --preset linux-gcc-release
 cmake --build --preset linux-gcc-release --parallel
-./build/linux-gcc-release/bin/AdaptiveSph configs/base.json
 ```
 
-To use Clang on Linux, replace `linux-gcc-release` with `linux-clang-release` in both CMake commands and the executable path. CUDA must support the selected host compiler.
+The executable is written to `build/<preset>/bin/`. Linux users can replace `linux-gcc-release` with `linux-clang-release` to use Clang.
 
-The base scene starts with 2,160 fluid particles. It uses a 0.1 m grid pitch, a 0.05 m particle radius, a 0.12 m smoothing radius, 1 kg particle mass, and 1,000 kg/m³ rest density. The mass matches rest density times the initial grid-cell volume. Coordinates, time, mass, density, and speed values use SI units in the example configurations.
+## Run
 
-The solver advances by a fixed 0.0001 s timestep per non-minimized application-loop iteration, including iterations where no swapchain image is available. Frame time controls camera movement and wall-clock diagnostics; scenario cooldowns use accumulated simulation time.
+Run from the repository root and pass one of the example JSON configurations to the executable:
 
-The adaptive variant uses the same initial scene and physical parameters, with an 8,192 particle capacity. Run it with the matching executable:
+| Configuration | Use |
+| --- | --- |
+| [configs/base.json](configs/base.json) | 13,754 particles; fixed resolution; 75% vertical fill. |
+| [configs/adaptive.json](configs/adaptive.json) | 13,754 particles; adaptive splitting and merging; 75% vertical fill. |
+| [configs/poiseuille.json](configs/poiseuille.json) | 15,341 particles; periodic channel flow; full vertical fill. |
 
 ```powershell
 .\build\windows-msvc-release\bin\AdaptiveSph.exe configs\adaptive.json
@@ -66,24 +38,10 @@ The adaptive variant uses the same initial scene and physical parameters, with a
 ./build/linux-gcc-release/bin/AdaptiveSph configs/adaptive.json
 ```
 
-Adaptive refinement runs automatically when enabled in the configuration. It starts after `initialCooldown` simulation steps and repeats after each configured `cooldown`. The GUI also provides a one-shot button to request an extra refinement pass on the next simulation step without changing that schedule.
+Configuration paths are relative to the current working directory. Without an argument, the application looks for `configs/base.json` beside the executable. See the [configuration guide](configs/README.md) for parameter meanings and experiment ideas. When refinement is enabled, the GUI can also request a one-shot refinement pass.
 
-For a channel with periodic X boundaries, zero gravity and a driving acceleration of 0.1 m/s² in X, use `configs/poiseuille.json`:
+## Status and references
 
-```powershell
-.\build\windows-msvc-release\bin\AdaptiveSph.exe configs\poiseuille.json
-```
+This is an experimental project. Numerical validation of adaptive refinement and the Poiseuille example is pending, and Linux GPU/Vulkan runtime has not been verified. The renderer is for visual inspection, not performance benchmarking.
 
-```sh
-./build/linux-gcc-release/bin/AdaptiveSph configs/poiseuille.json
-```
-
-`drivingForce` is added only to the X component of each fluid particle's acceleration, and only while the Poiseuille scenario is active. Scenario cooldowns use simulation time; this example uses zero cooldown. It enables vorticity-based adaptive refinement after 100 simulation steps, then repeats refinement every 100 steps. Numerical validation of the flow remains pending.
-
-Without a configuration argument, the application looks for `configs/base.json` beside the executable. Explicit configuration paths are relative to the current working directory. `AdaptiveSph --help` logs the command syntax. A missing or invalid configuration aborts startup; the application does not generate fallback parameters. Runs have no automatic duration limit.
-
-## Controls
-
-- Hold the left mouse button and move the mouse to look around.
-- Use `W`, `A`, `S`, and `D` to move; use `Space` and `Left Shift` to move vertically.
-- Use the GUI to inspect density and neighbor statistics or change the domain. When adaptive refinement is enabled, the GUI can request an extra pass at any time.
+Background papers are listed in [doc/REFERENCES.md](doc/REFERENCES.md). The project implementation is not claimed to reproduce their methods or results exactly.
