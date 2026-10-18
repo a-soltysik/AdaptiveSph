@@ -10,6 +10,7 @@
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_handles.hpp>
 
+#include "FrameSemaphores.h"
 #include "panda/Common.h"
 #include "panda/gfx/object/Object.h"
 
@@ -32,7 +33,7 @@ public:
     ~Renderer() noexcept;
 
     [[nodiscard]] auto beginFrame() -> vk::CommandBuffer;
-    auto endFrame() -> void;
+    auto endFrame(const FrameSemaphores& semaphores) -> void;
     auto beginSwapChainRenderPass() const -> void;
     auto endSwapChainRenderPass() const -> void;
 

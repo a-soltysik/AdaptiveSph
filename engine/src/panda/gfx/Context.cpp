@@ -30,6 +30,7 @@
 #include <vulkan/vulkan_structs.hpp>
 
 #include "Buffer.h"
+#include "CudaVulkanSemaphore.hpp"
 #include "FrameInfo.h"
 #include "Renderer.h"
 #include "UboLight.h"
@@ -52,11 +53,15 @@
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE  // cppcheck-suppress unknownMacro
 
 #ifdef WIN32
-    constexpr auto requiredDeviceExtensions = std::array {
-        vk::KHRSwapchainExtensionName, vk::KHRPushDescriptorExtensionName, vk::KHRExternalMemoryWin32ExtensionName};
+    constexpr auto requiredDeviceExtensions = std::array {vk::KHRSwapchainExtensionName,
+                                                          vk::KHRPushDescriptorExtensionName,
+                                                          vk::KHRExternalMemoryWin32ExtensionName,
+                                                          vk::KHRExternalSemaphoreWin32ExtensionName};
 #else
-    constexpr auto requiredDeviceExtensions = std::array {
-        vk::KHRSwapchainExtensionName, vk::KHRPushDescriptorExtensionName, vk::KHRExternalMemoryFdExtensionName};
+    constexpr auto requiredDeviceExtensions = std::array {vk::KHRSwapchainExtensionName,
+                                                          vk::KHRPushDescriptorExtensionName,
+                                                          vk::KHRExternalMemoryFdExtensionName,
+                                                          vk::KHRExternalSemaphoreFdExtensionName};
 #endif
 
 namespace panda::gfx
@@ -109,6 +114,9 @@ Context::Context(const Window& window)
     log::Info("Chosen GPU: {}", std::string_view {_device->physicalDevice.getProperties().deviceName});
 
     VULKAN_HPP_DEFAULT_DISPATCHER.init(_device->logicalDevice);
+
+    _cudaReadySemaphore = std::make_unique<CudaVulkanSemaphore>(*_device);
+    _vulkanDoneSemaphore = std::make_unique<CudaVulkanSemaphore>(*_device);
 
     _renderer = std::make_unique<Renderer>(window, *_device, _surface);
 
@@ -174,6 +182,20 @@ auto Context::initializeBoundaryParticleSystem(size_t particleCount, bool should
                                                                                    shouldRender);
 
     return _boundaryParticleRenderSystem->getImportedMemory();
+}
+
+auto Context::beginFrame() -> bool
+{
+    if (!_renderer->beginFrame())
+    {
+        return false;
+    }
+
+    if (_hasSubmittedFrame)
+    {
+        _vulkanDoneSemaphore->waitCuda();
+    }
+    return true;
 }
 
 auto Context::createInstance(const Window& window) -> std::unique_ptr<vk::Instance, InstanceDeleter>
@@ -322,13 +344,10 @@ auto Context::areValidationLayersSupported() const -> bool
     return true;
 }
 
-auto Context::makeFrame(Scene& scene) const -> void
+auto Context::makeFrame(Scene& scene) -> void
 {
-    const auto commandBuffer = _renderer->beginFrame();
-    if (!commandBuffer)
-    {
-        return;
-    }
+    expect(_renderer->isFrameInProgress(), "Can't make a frame before beginFrame succeeds");
+    const auto commandBuffer = _renderer->getCurrentCommandBuffer();
 
     const auto frameIndex = _renderer->getFrameIndex();
 
@@ -400,7 +419,10 @@ auto Context::makeFrame(Scene& scene) const -> void
 
     _renderer->endSwapChainRenderPass();
 
-    _renderer->endFrame();
+    _cudaReadySemaphore->signalCuda();
+    _renderer->endFrame(
+        {.cudaReady = _cudaReadySemaphore->getHandle(), .vulkanDone = _vulkanDoneSemaphore->getHandle()});
+    _hasSubmittedFrame = true;
 }
 
 auto Context::getDevice() const noexcept -> const Device&

@@ -19,6 +19,10 @@ The renderer is for inspecting simulation behavior. Its frame rate is not a solv
 - `engine/` contains the Vulkan rendering support used by the application.
 - `configs/` contains the base, adaptive and Poiseuille example scenes.
 
+### CUDA–Vulkan interop
+
+Vulkan creates the shared particle buffers and two binary semaphores; CUDA imports them. CUDA writes particle data, and Vulkan reads it. Before writing the next frame, CUDA waits for `vulkanDone` from the previous render. After updating the particles, CUDA signals `cudaReady`; Vulkan waits for it before drawing and signals `vulkanDone` when the render finishes.
+
 ## Requirements
 
 Both builds need CMake 3.25 or later, Ninja, an NVIDIA CUDA Toolkit, and a host compiler supported by that Toolkit. They also need the Vulkan SDK or development headers and a GPU/driver that supports both CUDA and the Vulkan external-memory path used by the renderer. CMake downloads project dependencies on the first configure if the dependency cache is empty.
@@ -26,7 +30,7 @@ Both builds need CMake 3.25 or later, Ninja, an NVIDIA CUDA Toolkit, and a host 
 - Windows: Windows 10 or later and an MSVC version supported by the selected CUDA Toolkit.
 - Linux: GCC or Clang, plus the Vulkan development packages for the distribution.
 
-The repository has Windows MSVC and Linux GCC/Clang presets. CUDA targets forward MSVC's `/Zc:preprocessor` option, which is required by the CUDA 13.4 CCCL headers. The Linux presets and GPU/Vulkan runtime have not been verified here.
+The repository has Windows MSVC and Linux GCC/Clang presets. CUDA targets forward MSVC's `/Zc:preprocessor` option, which is required by the CUDA 13.4 CCCL headers. The Linux GCC preset with clang-tidy builds in WSL; Linux GPU/Vulkan runtime remains unverified.
 
 ## Build and run
 

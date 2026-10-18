@@ -13,6 +13,7 @@
 #include <vulkan/vulkan_enums.hpp>
 #include <vulkan/vulkan_handles.hpp>
 
+#include "FrameSemaphores.h"
 #include "panda/Common.h"
 #include "panda/utils/Signals.h"
 
@@ -39,7 +40,9 @@ public:
     [[nodiscard]] auto getExtentAspectRatio() const noexcept -> float;
     [[nodiscard]] auto acquireNextImage() -> std::optional<uint32_t>;
     [[nodiscard]] auto imagesCount() const noexcept -> size_t;
-    auto submitCommandBuffers(const vk::CommandBuffer& commandBuffer, uint32_t imageIndex) -> void;
+    auto submitCommandBuffers(const vk::CommandBuffer& commandBuffer,
+                              uint32_t imageIndex,
+                              const FrameSemaphores& semaphores) -> void;
 
 private:
     [[nodiscard]] static auto createSwapChain(const vk::SurfaceKHR& surface,
