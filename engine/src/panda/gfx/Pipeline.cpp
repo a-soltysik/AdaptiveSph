@@ -53,8 +53,9 @@ auto Pipeline::createPipeline(const Device& device, const PipelineConfig& config
     }
 
     static constexpr auto dynamicStates = std::array {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
-    static constexpr auto dynamicState = vk::PipelineDynamicStateCreateInfo {.dynamicStateCount = dynamicStates.size(),
-                                                                             .pDynamicStates = dynamicStates.data()};
+    static constexpr auto dynamicState =
+        vk::PipelineDynamicStateCreateInfo {.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+                                            .pDynamicStates = dynamicStates.data()};
 
     const auto vertexInputInfo = vk::PipelineVertexInputStateCreateInfo {
         .vertexBindingDescriptionCount = static_cast<uint32_t>(config.vertexBindingDescriptions.size()),

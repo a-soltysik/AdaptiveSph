@@ -11,6 +11,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_set>
 #include <utility>
 #include <variant>
@@ -63,6 +64,8 @@ public:
     [[nodiscard]] auto getAllNames() const noexcept -> const std::unordered_set<std::string_view>&;
 
     template <typename Light>
+    requires(std::is_same_v<Light, PointLight> || std::is_same_v<Light, DirectionalLight> ||
+             std::is_same_v<Light, SpotLight>)
     auto addLight(std::string name) -> std::optional<std::reference_wrapper<Light>>
     {
         if constexpr (std::is_same_v<Light, PointLight>)
@@ -92,7 +95,7 @@ public:
             _names.insert(_lights.directionalLights.back().name);
             return _lights.directionalLights.back();
         }
-        else if constexpr (std::is_same_v<Light, SpotLight>)
+        else
         {
             if (_lights.spotLights.size() >= maxLights)
             {
@@ -112,7 +115,6 @@ public:
             _names.insert(_lights.spotLights.back().name);
             return _lights.spotLights.back();
         }
-        return {};
     }
 
 private:

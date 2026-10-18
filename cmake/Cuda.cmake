@@ -8,12 +8,6 @@ macro(sph_target_link_cuda target_name)
             CUDA_SEPARABLE_COMPILATION OFF
     )
 
-    if (ASPH_CUDA_ENABLE_CUSTOM_ARCHITECTURES)
-        set_target_properties(${target_name} PROPERTIES
-                CUDA_ARCHITECTURES "${ASPH_CUDA_ARCHITECTURES}"
-        )
-    endif ()
-
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         target_compile_options(${target_name} PRIVATE
                 $<$<COMPILE_LANGUAGE:CUDA>:-g>
@@ -24,13 +18,14 @@ macro(sph_target_link_cuda target_name)
             )
         endif ()
     else ()
-        if (ASPH_CUDA_ENABLE_LINEINFO)
-            target_compile_options(${target_name} PRIVATE
-                    $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>
-            )
-        endif ()
         target_compile_options(${target_name} PRIVATE
                 $<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-O3>
+        )
+    endif ()
+
+    if (ASPH_CUDA_ENABLE_LINEINFO)
+        target_compile_options(${target_name} PRIVATE
+                $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>
         )
     endif ()
 

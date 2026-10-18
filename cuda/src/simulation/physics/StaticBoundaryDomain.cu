@@ -67,9 +67,18 @@ auto computeDeltaWithKDTree(const KDTree& kdtree, glm::vec4 particlePosition, fl
 }
 }
 
-StaticBoundaryDomain::StaticBoundaryDomain(Simulation::Parameters::Domain bounds, std::vector<Particle> particles)
-    : _bounds {bounds},
-      _particles {std::move(particles)}
+StaticBoundaryDomain::StaticBoundaryDomain(const StaticBoundaryDomain& other) = default;
+
+auto StaticBoundaryDomain::operator=(const StaticBoundaryDomain& other) -> StaticBoundaryDomain& = default;
+
+StaticBoundaryDomain::StaticBoundaryDomain(StaticBoundaryDomain&& other) noexcept = default;
+
+auto StaticBoundaryDomain::operator=(StaticBoundaryDomain&& other) noexcept -> StaticBoundaryDomain& = default;
+
+StaticBoundaryDomain::~StaticBoundaryDomain() = default;
+
+StaticBoundaryDomain::StaticBoundaryDomain(std::vector<Particle> particles)
+    : _particles {std::move(particles)}
 {
 }
 
@@ -84,7 +93,7 @@ auto StaticBoundaryDomain::generate(const Simulation::Parameters::Domain& bounds
     const auto smoothingRadius = fluidSmoothingRadius;
     auto particles = computePsi(positions, smoothingRadius, fluidRestDensity);
 
-    return StaticBoundaryDomain {bounds, std::move(particles)};
+    return StaticBoundaryDomain {std::move(particles)};
 }
 
 auto StaticBoundaryDomain::generateWallParticles(const Simulation::Parameters::Domain& bounds,

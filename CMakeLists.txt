@@ -32,10 +32,6 @@ set(CMAKE_CUDA_EXTENSIONS OFF)
 sph_setup_options()
 sph_global_options()
 
-if (SPH_ENABLE_COMPILE_COMMANDS)
-    sph_enable_compile_commands()
-endif ()
-
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 

@@ -3,6 +3,7 @@ set(SHADER_SRC_DIR ${CMAKE_CURRENT_LIST_DIR})
 file(
         GLOB_RECURSE
         SHADER_SRC_LIST
+        CONFIGURE_DEPENDS
         ${SHADER_SRC_DIR}/*.vert
         ${SHADER_SRC_DIR}/*.tesc
         ${SHADER_SRC_DIR}/*.tese

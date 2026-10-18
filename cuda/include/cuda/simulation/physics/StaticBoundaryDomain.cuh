@@ -11,7 +11,7 @@
 namespace sph::cuda::physics
 {
 
-class SPH_CUDA_API StaticBoundaryDomain
+class StaticBoundaryDomain
 {
 public:
     struct Particle
@@ -32,12 +32,18 @@ public:
         All = MinX | MaxX | MinY | MaxY | MinZ | MaxZ
     };
 
-    static auto generate(const Simulation::Parameters::Domain& bounds,
-                         float particleSpacing,
-                         float fluidRestDensity,
-                         float fluidSmoothingRadius,
-                         WallFlags wallFlags = WallFlags::All,
-                         bool periodicX = false) -> StaticBoundaryDomain;
+    SPH_CUDA_API StaticBoundaryDomain(const StaticBoundaryDomain& other);
+    SPH_CUDA_API auto operator=(const StaticBoundaryDomain& other) -> StaticBoundaryDomain&;
+    SPH_CUDA_API StaticBoundaryDomain(StaticBoundaryDomain&& other) noexcept;
+    SPH_CUDA_API auto operator=(StaticBoundaryDomain&& other) noexcept -> StaticBoundaryDomain&;
+    SPH_CUDA_API ~StaticBoundaryDomain();
+
+    static SPH_CUDA_API auto generate(const Simulation::Parameters::Domain& bounds,
+                                      float particleSpacing,
+                                      float fluidRestDensity,
+                                      float fluidSmoothingRadius,
+                                      WallFlags wallFlags = WallFlags::All,
+                                      bool periodicX = false) -> StaticBoundaryDomain;
 
     [[nodiscard]] auto getParticles() const -> const std::vector<Particle>&
     {
@@ -50,29 +56,29 @@ public:
     }
 
 private:
-    StaticBoundaryDomain(Simulation::Parameters::Domain bounds, std::vector<Particle> particles);
+    explicit StaticBoundaryDomain(std::vector<Particle> particles);
 
     static auto generateWallParticles(const Simulation::Parameters::Domain& bounds,
                                       float spacing,
                                       WallFlags wallFlags,
-                                      bool periodicX)
-        -> std::vector<glm::vec4>;
+                                      bool periodicX) -> std::vector<glm::vec4>;
     static auto computePsi(const std::vector<glm::vec4>& positions, float smoothingRadius, float restDensity)
         -> std::vector<Particle>;
     static auto computeDelta(const std::vector<glm::vec4>& positions, glm::vec4 particlePosition, float smoothingRadius)
         -> float;
 
-    Simulation::Parameters::Domain _bounds;
     std::vector<Particle> _particles {};
 };
 
-constexpr auto operator|(StaticBoundaryDomain::WallFlags lhs, StaticBoundaryDomain::WallFlags rhs) -> StaticBoundaryDomain::WallFlags
+constexpr auto operator|(StaticBoundaryDomain::WallFlags lhs, StaticBoundaryDomain::WallFlags rhs)
+    -> StaticBoundaryDomain::WallFlags
 {
     // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange): bitwise combinations are valid WallFlags values.
     return static_cast<StaticBoundaryDomain::WallFlags>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
 }
 
-constexpr auto operator&(StaticBoundaryDomain::WallFlags lhs, StaticBoundaryDomain::WallFlags rhs) -> StaticBoundaryDomain::WallFlags
+constexpr auto operator&(StaticBoundaryDomain::WallFlags lhs, StaticBoundaryDomain::WallFlags rhs)
+    -> StaticBoundaryDomain::WallFlags
 {
     return static_cast<StaticBoundaryDomain::WallFlags>(static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs));
 }

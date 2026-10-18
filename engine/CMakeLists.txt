@@ -1,4 +1,26 @@
-file(GLOB_RECURSE ENGINE_SRC_LIST src/*.cpp)
+set(ENGINE_SRC_LIST
+        src/panda/gfx/Buffer.cpp
+        src/panda/gfx/Camera.cpp
+        src/panda/gfx/CommandBuffer.cpp
+        src/panda/gfx/Context.cpp
+        src/panda/gfx/CudaVulkanSemaphore.cpp
+        src/panda/gfx/Descriptor.cpp
+        src/panda/gfx/Device.cpp
+        src/panda/gfx/object/Mesh.cpp
+        src/panda/gfx/object/Object.cpp
+        src/panda/gfx/object/Surface.cpp
+        src/panda/gfx/object/Texture.cpp
+        src/panda/gfx/Pipeline.cpp
+        src/panda/gfx/Renderer.cpp
+        src/panda/gfx/Scene.cpp
+        src/panda/gfx/Shader.cpp
+        src/panda/gfx/SharedBuffer.cpp
+        src/panda/gfx/SwapChain.cpp
+        src/panda/gfx/systems/BoundaryParticleRenderSystem.cpp
+        src/panda/gfx/systems/FluidParticleRenderSystem.cpp
+        src/panda/gfx/systems/RenderSystem.cpp
+        src/panda/Logger.cpp
+)
 
 add_library(AdaptiveSphEngine STATIC ${ENGINE_SRC_LIST})
 add_library(AdaptiveSph::Engine ALIAS AdaptiveSphEngine)
