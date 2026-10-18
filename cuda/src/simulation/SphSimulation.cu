@@ -74,7 +74,7 @@ SphSimulation::SphSimulation(const Parameters& initialParameters,
       _simulationData {initialParameters}, _boundaryParticleCount {},
       _particleCount {checkedParticleCount(positions.size())}, _boundaryParticleCapacity {maxBoundaryParticleCapacity},
       _grid {initialParameters.domain,
-             2 * initialParameters.baseSmoothingRadius* device::constant::wendlandRangeRatio* multiplier,
+             2 * initialParameters.baseSmoothingRadius * device::constant::wendlandRangeRatio * multiplier,
              maxFluidParticleCapacity,
              maxBoundaryParticleCapacity},
       _scenarioParams {scenarioParams}
@@ -566,8 +566,6 @@ void SphSimulation::updateGrid()
                       thrust::raw_pointer_cast(_fluidParticlesData.internal.smoothingRadii.data()),
                       getFluidParticlesCount());
 }
-
-void SphSimulation::enableAdaptiveRefinement() { }
 
 auto SphSimulation::getCurrentSimulationTime() const -> float
 {

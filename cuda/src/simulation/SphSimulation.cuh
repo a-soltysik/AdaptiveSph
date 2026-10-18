@@ -47,8 +47,6 @@ public:
     [[nodiscard]] auto calculateAverageNeighborCount() -> float override;
     [[nodiscard]] auto getDensityInfo(float threshold) -> DensityInfo override;
 
-    void enableAdaptiveRefinement() override;
-
     void setScenarioActivated(bool activated) override
     {
         _scenarioActivated = activated;

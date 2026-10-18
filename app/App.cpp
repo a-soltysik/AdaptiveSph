@@ -60,6 +60,8 @@ struct AdaptiveRefinementStatistics
     uint32_t particlesAfterLastPass {};
 };
 
+constexpr auto simulationTimeStep = 0.0001F;
+
 auto recordAdaptiveRefinementPass(AdaptiveRefinementStatistics& statistics,
                                   const std::optional<sph::cuda::Simulation::AdaptiveRefinementPass>& refinementPass)
     -> void
@@ -262,6 +264,20 @@ auto App::loadConfigurationFromFile(const std::string& configPath) -> utils::Con
     return config;
 }
 
+auto App::configureSimulationGui(SimulationDataGui& gui) -> void
+{
+    gui.setDomain(_simulationParameters.domain);
+    gui.onDomainChanged([this](const cuda::Simulation::Parameters::Domain& newDomain) {
+        updateDomain(newDomain);
+    });
+    if (_refinementParameters.has_value() && _refinementParameters->enabled)
+    {
+        gui.onRequestAdaptiveRefinement([this] {
+            _simulation->requestAdaptiveRefinement();
+        });
+    }
+}
+
 auto App::mainLoop() -> void
 {
     auto cameraObject = panda::gfx::Transform {};
@@ -272,27 +288,20 @@ auto App::mainLoop() -> void
 
     auto gui = SimulationDataGui {};
     auto refinementStatistics = AdaptiveRefinementStatistics {};
-    gui.setDomain(_simulationParameters.domain);
-    gui.onDomainChanged([this](const cuda::Simulation::Parameters::Domain& newDomain) {
-        updateDomain(newDomain);
-    });
-    gui.onEnableRefinement([this]() {
-        _simulation->enableAdaptiveRefinement();
-    });
-
+    configureSimulationGui(gui);
     auto timeManager = utils::FrameTimeManager {};
     auto taskScheduler = utils::TaskScheduler {};
-    taskScheduler.addTask(std::make_unique<utils::PerTimeTask>(
+    taskScheduler.addTask(
         [&gui, this] {
             gui.setAverageNeighbourCount(_simulation->calculateAverageNeighborCount());
         },
-        std::chrono::seconds {1}));
-    taskScheduler.addTask(std::make_unique<utils::PerTimeTask>(
+        std::chrono::seconds {1});
+    taskScheduler.addTask(
         [&gui, this] {
             gui.setDensityInfo(_simulation->getDensityInfo(0.1F));
         },
-        std::chrono::seconds {1}));
-    taskScheduler.addTask(std::make_unique<utils::PerTimeTask>(
+        std::chrono::seconds {1});
+    taskScheduler.addTask(
         [&] {
             if (refinementStatistics.passCount == 0)
             {
@@ -308,7 +317,7 @@ auto App::mainLoop() -> void
             refinementStatistics.mergedPairCount = 0;
             refinementStatistics.splitParentCount = 0;
         },
-        std::chrono::seconds {1}));
+        std::chrono::seconds {1});
 
     while (!_window->shouldClose()) [[likely]]
     {
@@ -319,18 +328,14 @@ auto App::mainLoop() -> void
 
             timeManager.update();
 
-            if (!_api->beginFrame())
-            {
-                continue;
-            }
+            _api->waitForSimulationAccess();
 
-            _simulation->update(0.0001F);
+            updateScenario();
+            _simulation->update(simulationTimeStep);
 
             recordAdaptiveRefinementPass(refinementStatistics, _simulation->takeAdaptiveRefinementPass());
 
-            updateScenario();
-
-            taskScheduler.update(std::chrono::milliseconds {static_cast<uint32_t>(timeManager.getDelta() * 1000)}, 1);
+            taskScheduler.update(std::chrono::milliseconds {static_cast<uint32_t>(timeManager.getDelta() * 1000)});
             _scene->setParticleCount(_simulation->getFluidParticlesCount());
             _scene->setBoundaryParticleCount(_simulation->getBoundaryParticlesCount());
 
@@ -341,7 +346,7 @@ auto App::mainLoop() -> void
                                                      .zFar = 100});
             processCamera(timeManager.getDelta(), *_window, cameraObject, _scene->getCamera());
 
-            _api->makeFrame(*_scene);
+            _api->renderFrame(*_scene);
         }
         else [[unlikely]]
         {

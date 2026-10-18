@@ -18,6 +18,8 @@
 
 namespace sph
 {
+class SimulationDataGui;
+
 class App
 {
 public:
@@ -33,6 +35,8 @@ private:
     static auto loadConfigurationFromFile(const std::string& configPath) -> utils::Configuration;
 
     auto mainLoop() -> void;
+
+    auto configureSimulationGui(SimulationDataGui& gui) -> void;
 
     auto setDefaultScene(const cuda::Simulation::Parameters& simulationParameters,
                          const utils::InitialParameters& initialParameters) -> void;
