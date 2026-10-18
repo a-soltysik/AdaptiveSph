@@ -100,7 +100,6 @@ auto StaticBoundaryDomain::generateWallParticles(const Simulation::Parameters::D
     const auto min = bounds.min - offset;
     const auto max = bounds.max + offset;
 
-    // MinY wall (bottom)
     if (hasFlag(wallFlags, WallFlags::MinY))
     {
         for (float x = min.x; x < max.x; x += spacing)
@@ -112,7 +111,6 @@ auto StaticBoundaryDomain::generateWallParticles(const Simulation::Parameters::D
         }
     }
 
-    // MaxY wall (top)
     if (hasFlag(wallFlags, WallFlags::MaxY))
     {
         for (float x = min.x; x < max.x; x += spacing)
@@ -124,7 +122,7 @@ auto StaticBoundaryDomain::generateWallParticles(const Simulation::Parameters::D
         }
     }
 
-    // MinX wall (left)
+    // X- and Z-facing walls omit shared edges already emitted by earlier walls.
     if (hasFlag(wallFlags, WallFlags::MinX))
     {
         for (float y = min.y + spacing; y < max.y; y += spacing)
@@ -136,7 +134,6 @@ auto StaticBoundaryDomain::generateWallParticles(const Simulation::Parameters::D
         }
     }
 
-    // MaxX wall (right)
     if (hasFlag(wallFlags, WallFlags::MaxX))
     {
         for (float y = min.y + spacing; y < max.y; y += spacing)
@@ -148,7 +145,6 @@ auto StaticBoundaryDomain::generateWallParticles(const Simulation::Parameters::D
         }
     }
 
-    // MinZ wall (front)
     if (hasFlag(wallFlags, WallFlags::MinZ))
     {
         for (float x = min.x + spacing; x < max.x; x += spacing)
@@ -160,7 +156,6 @@ auto StaticBoundaryDomain::generateWallParticles(const Simulation::Parameters::D
         }
     }
 
-    // MaxZ wall (back)
     if (hasFlag(wallFlags, WallFlags::MaxZ))
     {
         for (float x = min.x + spacing; x < max.x; x += spacing)

@@ -4,6 +4,7 @@ add_library(
         AdaptiveSphCuda SHARED
         src/algorithm/Algorithm.cu
         src/algorithm/BoundaryAlgorithm.cu
+        src/algorithm/BoundaryAlgorithmPeriodic.cu
         src/simulation/SphSimulation.cu
         src/memory/ImportedParticleMemory.cu
         src/algorithm/AdaptiveAlgorithm.cu

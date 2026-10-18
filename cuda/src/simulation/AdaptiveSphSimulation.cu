@@ -1,6 +1,4 @@
 #include <cuda_runtime_api.h>
-#include <driver_types.h>
-#include <thrust/execution_policy.h>
 #include <vector_types.h>
 
 #include <cstdint>
@@ -182,6 +180,59 @@ void AdaptiveSphSimulation::resetRefinementCounters()
     thrust::fill(_refinementData.particlesIds.begin(), _refinementData.particlesIds.end(), 0);
 }
 
+void AdaptiveSphSimulation::calculateSplitCriteria(const float minMass)
+{
+    if (_refinementParams.criterionType == refinement::RefinementParameters::Criterion::Interface)
+    {
+        refinement::getCriterionValues<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
+            getFluidParticles(),
+            thrust::raw_pointer_cast(_refinementData.split.criterionValues.data()),
+            refinement::interfaceCriterion::SplitCriterionGenerator(minMass, _refinementParams.interfaceParameters),
+            getGrid().toDevice(),
+            getParameters());
+        detail::checkCudaLastError("AdaptiveSphSimulation::calculateSplitCriteria: launch interface criterion");
+    }
+    else if (_refinementParams.criterionType == refinement::RefinementParameters::Criterion::Vorticity)
+    {
+        refinement::getCriterionValues<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
+            getFluidParticles(),
+            thrust::raw_pointer_cast(_refinementData.split.criterionValues.data()),
+            refinement::vorticity::SplitCriterionGenerator(minMass, _refinementParams.vorticity),
+            getGrid().toDevice(),
+            getParameters());
+        detail::checkCudaLastError("AdaptiveSphSimulation::calculateSplitCriteria: launch vorticity criterion");
+    }
+    else
+    {
+        refinement::getCriterionValues<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
+            getFluidParticles(),
+            thrust::raw_pointer_cast(_refinementData.split.criterionValues.data()),
+            refinement::velocity::SplitCriterionGenerator(minMass, _refinementParams.velocity.split),
+            getGrid().toDevice(),
+            getParameters());
+        detail::checkCudaLastError("AdaptiveSphSimulation::calculateSplitCriteria: launch velocity criterion");
+    }
+}
+
+auto AdaptiveSphSimulation::applyParticleSplits(const uint32_t currentCount, const uint32_t particlesToSplitCount)
+    -> bool
+{
+    _refinementData.split.particlesSplitCount.copyValueFromHost(
+        particlesToSplitCount,
+        "AdaptiveSphSimulation::applyParticleSplits: copy split count to device");
+    refinement::splitParticles<<<getBlocksPerGridForParticles(particlesToSplitCount), getThreadsPerBlock()>>>(
+        getFluidParticles(),
+        refinement::RefinementDataView {_refinementData},
+        _refinementParams.splitting,
+        _refinementParams.maxParticleCount);
+    detail::checkCudaLastError("AdaptiveSphSimulation::applyParticleSplits: launch split kernel");
+
+    detail::checkCuda(cudaDeviceSynchronize(), "AdaptiveSphSimulation::applyParticleSplits: synchronize split");
+    setParticleCount(_refinementData.particlesCount.copyValueToHost(
+        "AdaptiveSphSimulation::applyParticleSplits: read particle count"));
+    return getFluidParticlesCount() != currentCount;
+}
+
 auto AdaptiveSphSimulation::identifyAndSplitParticles() -> bool
 {
     const auto currentCount = getFluidParticlesCount();
@@ -192,37 +243,7 @@ auto AdaptiveSphSimulation::identifyAndSplitParticles() -> bool
     }
 
     const float minMass = _refinementParams.minMassRatio * getParameters().baseParticleMass;
-
-    if (_refinementParams.criterionType == refinement::RefinementParameters::Criterion::Interface)
-    {
-        refinement::getCriterionValues<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
-            getFluidParticles(),
-            thrust::raw_pointer_cast(_refinementData.split.criterionValues.data()),
-            refinement::interfaceCriterion::SplitCriterionGenerator(minMass, _refinementParams.interfaceParameters),
-            getGrid().toDevice(),
-            getParameters());
-        detail::checkCudaLastError("AdaptiveSphSimulation::identifyAndSplitParticles: launch interface criterion");
-    }
-    else if (_refinementParams.criterionType == refinement::RefinementParameters::Criterion::Vorticity)
-    {
-        refinement::getCriterionValues<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
-            getFluidParticles(),
-            thrust::raw_pointer_cast(_refinementData.split.criterionValues.data()),
-            refinement::vorticity::SplitCriterionGenerator(minMass, _refinementParams.vorticity),
-            getGrid().toDevice(),
-            getParameters());
-        detail::checkCudaLastError("AdaptiveSphSimulation::identifyAndSplitParticles: launch vorticity criterion");
-    }
-    else
-    {
-        refinement::getCriterionValues<<<getBlocksPerGridForFluidParticles(), getThreadsPerBlock()>>>(
-            getFluidParticles(),
-            thrust::raw_pointer_cast(_refinementData.split.criterionValues.data()),
-            refinement::velocity::SplitCriterionGenerator(minMass, _refinementParams.velocity.split),
-            getGrid().toDevice(),
-            getParameters());
-        detail::checkCudaLastError("AdaptiveSphSimulation::identifyAndSplitParticles: launch velocity criterion");
-    }
+    calculateSplitCriteria(minMass);
 
     refinement::findTopParticlesToSplit(getFluidParticles(),
                                         _refinementData,
@@ -240,20 +261,7 @@ auto AdaptiveSphSimulation::identifyAndSplitParticles() -> bool
         return false;
     }
 
-    _refinementData.split.particlesSplitCount.copyValueFromHost(
-        particlesToSplitCount,
-        "AdaptiveSphSimulation::identifyAndSplitParticles: copy split count to device");
-    refinement::splitParticles<<<getBlocksPerGridForParticles(particlesToSplitCount), getThreadsPerBlock()>>>(
-        getFluidParticles(),
-        refinement::RefinementDataView {_refinementData},
-        _refinementParams.splitting,
-        _refinementParams.maxParticleCount);
-    detail::checkCudaLastError("AdaptiveSphSimulation::identifyAndSplitParticles: launch split kernel");
-
-    detail::checkCuda(cudaDeviceSynchronize(), "AdaptiveSphSimulation::identifyAndSplitParticles: synchronize split");
-    setParticleCount(_refinementData.particlesCount.copyValueToHost(
-        "AdaptiveSphSimulation::identifyAndSplitParticles: read particle count"));
-    return getFluidParticlesCount() != currentCount;
+    return applyParticleSplits(currentCount, particlesToSplitCount);
 }
 
 void AdaptiveSphSimulation::identifyAndMergeParticles()
