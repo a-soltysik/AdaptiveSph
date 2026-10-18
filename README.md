@@ -54,6 +54,8 @@ To use Clang on Linux, replace `linux-gcc-release` with `linux-clang-release` in
 
 The base scene starts with 2,160 fluid particles. It uses a 0.1 m grid pitch, a 0.05 m particle radius, a 0.12 m smoothing radius, 1 kg particle mass, and 1,000 kg/m³ rest density. The mass matches rest density times the initial grid-cell volume. Coordinates, time, mass, density, and speed values use SI units in the example configurations.
 
+The solver advances by a fixed 0.0001 s timestep per non-minimized application-loop iteration, including iterations where no swapchain image is available. Frame time controls camera movement and wall-clock diagnostics; scenario cooldowns use accumulated simulation time.
+
 The adaptive variant uses the same initial scene and physical parameters, with an 8,192 particle capacity. Run it with the matching executable:
 
 ```powershell
@@ -64,7 +66,7 @@ The adaptive variant uses the same initial scene and physical parameters, with a
 ./build/linux-gcc-release/bin/AdaptiveSph configs/adaptive.json
 ```
 
-Refinement starts automatically after the configured initial cooldown in simulation steps. The GUI button advances that schedule.
+Adaptive refinement runs automatically when enabled in the configuration. It starts after `initialCooldown` simulation steps and repeats after each configured `cooldown`. The GUI also provides a one-shot button to request an extra refinement pass on the next simulation step without changing that schedule.
 
 For a channel with periodic X boundaries, zero gravity and a driving acceleration of 0.1 m/s² in X, use `configs/poiseuille.json`:
 
@@ -76,7 +78,7 @@ For a channel with periodic X boundaries, zero gravity and a driving acceleratio
 ./build/linux-gcc-release/bin/AdaptiveSph configs/poiseuille.json
 ```
 
-The force is applied after the Poiseuille scenario activates. This config starts the scenario immediately and enables vorticity-based adaptive refinement after 100 simulation steps, then repeats refinement every 100 steps. Numerical validation of the flow remains pending.
+`drivingForce` is added only to the X component of each fluid particle's acceleration, and only while the Poiseuille scenario is active. Scenario cooldowns use simulation time; this example uses zero cooldown. It enables vorticity-based adaptive refinement after 100 simulation steps, then repeats refinement every 100 steps. Numerical validation of the flow remains pending.
 
 Without a configuration argument, the application looks for `configs/base.json` beside the executable. Explicit configuration paths are relative to the current working directory. `AdaptiveSph --help` logs the command syntax. A missing or invalid configuration aborts startup; the application does not generate fallback parameters. Runs have no automatic duration limit.
 
@@ -84,4 +86,4 @@ Without a configuration argument, the application looks for `configs/base.json` 
 
 - Hold the left mouse button and move the mouse to look around.
 - Use `W`, `A`, `S`, and `D` to move; use `Space` and `Left Shift` to move vertically.
-- Use the GUI to inspect density and neighbor statistics, change the domain, or enable adaptive refinement.
+- Use the GUI to inspect density and neighbor statistics or change the domain. When adaptive refinement is enabled, the GUI can request an extra pass at any time.

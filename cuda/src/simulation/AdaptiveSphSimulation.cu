@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cuda/std/functional>
 #include <glm/ext/vector_float4.hpp>
+#include <utility>
 #include <vector>
 
 #include "AdaptiveSphSimulation.cuh"
@@ -70,8 +71,10 @@ void AdaptiveSphSimulation::update(float deltaTime)
     updatePositions(deltaTime);
 
     auto gridNeedsRefresh = true;
-    if (_frameCounter == _refinementParams.initialCooldown ||
-        (_frameCounter > _refinementParams.initialCooldown && _frameCounter % _refinementParams.cooldown == 0))
+    const auto scheduledRefinement =
+        _frameCounter == _refinementParams.initialCooldown ||
+        (_frameCounter > _refinementParams.initialCooldown && _frameCounter % _refinementParams.cooldown == 0);
+    if (std::exchange(_refinementRequested, false) || scheduledRefinement)
     {
         gridNeedsRefresh = performAdaptiveRefinement();
     }
@@ -97,9 +100,9 @@ void AdaptiveSphSimulation::update(float deltaTime)
     _accumulatedSimulationTime += deltaTime;
 }
 
-void AdaptiveSphSimulation::enableAdaptiveRefinement()
+void AdaptiveSphSimulation::requestAdaptiveRefinement()
 {
-    _frameCounter = _refinementParams.initialCooldown;
+    _refinementRequested = true;
 }
 
 auto AdaptiveSphSimulation::takeAdaptiveRefinementPass() -> std::optional<AdaptiveRefinementPass>

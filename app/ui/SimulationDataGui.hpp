@@ -13,7 +13,7 @@ class SimulationDataGui
 {
 public:
     using DomainChangedCallback = std::function<void(const cuda::Simulation::Parameters::Domain&)>;
-    using EnableRefinementCallback = std::function<void()>;
+    using AdaptiveRefinementCallback = std::function<void()>;
 
     explicit SimulationDataGui();
 
@@ -22,7 +22,7 @@ public:
     void setDomain(const cuda::Simulation::Parameters::Domain& domain);
 
     void onDomainChanged(DomainChangedCallback callback);
-    void onEnableRefinement(EnableRefinementCallback callback);
+    void onRequestAdaptiveRefinement(AdaptiveRefinementCallback callback);
 
 private:
     void render();
@@ -37,6 +37,6 @@ private:
     cuda::Simulation::DensityInfo _densityInfo {};
     cuda::Simulation::Parameters::Domain _domain {};
     DomainChangedCallback _domainChangedCallback;
-    EnableRefinementCallback _enableRefinementCallback;
+    AdaptiveRefinementCallback _adaptiveRefinementCallback;
 };
 }

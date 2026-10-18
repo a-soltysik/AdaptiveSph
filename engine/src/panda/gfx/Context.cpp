@@ -184,18 +184,13 @@ auto Context::initializeBoundaryParticleSystem(size_t particleCount, bool should
     return _boundaryParticleRenderSystem->getImportedMemory();
 }
 
-auto Context::beginFrame() -> bool
+auto Context::waitForSimulationAccess() -> void
 {
-    if (!_renderer->beginFrame())
-    {
-        return false;
-    }
-
-    if (_hasSubmittedFrame)
+    if (_vulkanCompletionPending)
     {
         _vulkanDoneSemaphore->waitCuda();
+        _vulkanCompletionPending = false;
     }
-    return true;
 }
 
 auto Context::createInstance(const Window& window) -> std::unique_ptr<vk::Instance, InstanceDeleter>
@@ -344,9 +339,13 @@ auto Context::areValidationLayersSupported() const -> bool
     return true;
 }
 
-auto Context::makeFrame(Scene& scene) -> void
+auto Context::renderFrame(Scene& scene) -> void
 {
-    expect(_renderer->isFrameInProgress(), "Can't make a frame before beginFrame succeeds");
+    if (!static_cast<bool>(_renderer->beginFrame()))
+    {
+        return;
+    }
+
     const auto commandBuffer = _renderer->getCurrentCommandBuffer();
 
     const auto frameIndex = _renderer->getFrameIndex();
@@ -422,7 +421,7 @@ auto Context::makeFrame(Scene& scene) -> void
     _cudaReadySemaphore->signalCuda();
     _renderer->endFrame(
         {.cudaReady = _cudaReadySemaphore->getHandle(), .vulkanDone = _vulkanDoneSemaphore->getHandle()});
-    _hasSubmittedFrame = true;
+    _vulkanCompletionPending = true;
 }
 
 auto Context::getDevice() const noexcept -> const Device&

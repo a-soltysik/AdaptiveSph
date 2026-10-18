@@ -62,7 +62,10 @@ auto SimulationDataGui::render() -> void
     displayAverageNeighborCount(_averageNeighbourCount);
     displayDensityStatistics(_densityInfo);
     displayDomainControls();
-    displayRefinementControls();
+    if (_adaptiveRefinementCallback)
+    {
+        displayRefinementControls();
+    }
 }
 
 void SimulationDataGui::displayAverageNeighborCount(float averageNeighbors) const
@@ -162,9 +165,21 @@ void SimulationDataGui::onDomainChanged(DomainChangedCallback callback)
     _domainChangedCallback = std::move(callback);
 }
 
-void SimulationDataGui::onEnableRefinement(EnableRefinementCallback callback)
+void SimulationDataGui::onRequestAdaptiveRefinement(AdaptiveRefinementCallback callback)
 {
-    _enableRefinementCallback = std::move(callback);
+    _adaptiveRefinementCallback = std::move(callback);
+}
+
+void SimulationDataGui::displayRefinementControls()
+{
+    ImGui::Begin("Adaptive Refinement");
+
+    if (ImGui::Button("Run adaptive refinement now"))
+    {
+        _adaptiveRefinementCallback();
+    }
+
+    ImGui::End();
 }
 
 void SimulationDataGui::displayDomainControls()
@@ -199,21 +214,6 @@ void SimulationDataGui::displayDomainControls()
             cuda::Simulation::Parameters::Domain {.min = domainMin, .max = domainMax, .friction = friction};
         _domain = newDomain;
         _domainChangedCallback(newDomain);
-    }
-
-    ImGui::End();
-}
-
-void SimulationDataGui::displayRefinementControls()
-{
-    ImGui::Begin("Refinement Controls");
-
-    if (ImGui::Button("Enable Adaptive Refinement"))
-    {
-        if (_enableRefinementCallback)
-        {
-            _enableRefinementCallback();
-        }
     }
 
     ImGui::End();

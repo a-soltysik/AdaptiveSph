@@ -567,8 +567,6 @@ void SphSimulation::updateGrid()
                       getFluidParticlesCount());
 }
 
-void SphSimulation::enableAdaptiveRefinement() { }
-
 auto SphSimulation::getCurrentSimulationTime() const -> float
 {
     return _accumulatedSimulationTime;

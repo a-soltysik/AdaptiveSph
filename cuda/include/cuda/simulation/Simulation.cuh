@@ -137,6 +137,8 @@ public:
         return std::nullopt;
     }
 
+    virtual void requestAdaptiveRefinement() { }
+
     [[nodiscard]] virtual auto getFluidParticlesCount() const -> uint32_t = 0;
     [[nodiscard]] virtual auto getBoundaryParticlesCount() const -> uint32_t = 0;
 
@@ -144,7 +146,6 @@ public:
 
     [[nodiscard]] virtual auto getDensityInfo(float threshold) -> DensityInfo = 0;
 
-    virtual void enableAdaptiveRefinement() = 0;
     virtual void setScenarioActivated(bool activated) = 0;
 
     [[nodiscard]] virtual auto getCurrentSimulationTime() const -> float = 0;

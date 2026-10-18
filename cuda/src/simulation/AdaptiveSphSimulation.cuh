@@ -29,8 +29,8 @@ public:
                           const ScenarioParameters& scenarioParams);
 
     void update(float deltaTime) override;
-    void enableAdaptiveRefinement() override;
     [[nodiscard]] auto takeAdaptiveRefinementPass() -> std::optional<AdaptiveRefinementPass> override;
+    void requestAdaptiveRefinement() override;
 
 private:
     [[nodiscard]] auto performAdaptiveRefinement() -> bool;
@@ -44,6 +44,7 @@ private:
     refinement::RefinementData _refinementData;
     uint32_t _frameCounter = 0;
     float _deltaTime = 0.0F;
+    bool _refinementRequested = false;
     std::optional<AdaptiveRefinementPass> _lastRefinementPass;
 };
 
