@@ -31,5 +31,3 @@ function(sph_enable_cache)
         message(WARNING "${CACHE_OPTION} is enabled but was not found. Not using it")
     endif ()
 endfunction()
-
-option(sph_ENABLE_CACHE "Enable ccache" OFF)

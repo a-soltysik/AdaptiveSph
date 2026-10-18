@@ -187,7 +187,7 @@ auto SwapChain::createRenderPass(const vk::SurfaceFormatKHR& imageFormat,
 
     const auto attachments = std::array {colorAttachment, depthAttachment};
 
-    const auto renderPassInfo = vk::RenderPassCreateInfo {.attachmentCount = attachments.size(),
+    const auto renderPassInfo = vk::RenderPassCreateInfo {.attachmentCount = static_cast<uint32_t>(attachments.size()),
                                                           .pAttachments = attachments.data(),
                                                           .subpassCount = 1,
                                                           .pSubpasses = &subpass,
@@ -213,12 +213,13 @@ auto SwapChain::createFrameBuffers(const std::vector<vk::ImageView>& swapChainIm
     for (auto i = size_t {}; i < swapChainImageViews.size(); i++)
     {
         const auto attachments = std::array {swapChainImageViews[i], depthImageViews[i]};
-        const auto frameBufferInfo = vk::FramebufferCreateInfo {.renderPass = renderPass,
-                                                                .attachmentCount = attachments.size(),
-                                                                .pAttachments = attachments.data(),
-                                                                .width = swapChainExtent.width,
-                                                                .height = swapChainExtent.height,
-                                                                .layers = 1};
+        const auto frameBufferInfo =
+            vk::FramebufferCreateInfo {.renderPass = renderPass,
+                                       .attachmentCount = static_cast<uint32_t>(attachments.size()),
+                                       .pAttachments = attachments.data(),
+                                       .width = swapChainExtent.width,
+                                       .height = swapChainExtent.height,
+                                       .layers = 1};
         result.push_back(expect(device.logicalDevice.createFramebuffer(frameBufferInfo),
                                 vk::Result::eSuccess,
                                 "Can't create framebuffer"));

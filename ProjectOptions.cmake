@@ -20,18 +20,15 @@ macro(sph_setup_options)
     option(ASPH_ENABLE_SANITIZER_LEAK "Enable leak sanitizer" OFF)
     option(ASPH_ENABLE_SANITIZER_THREAD "Enable thread sanitizer" OFF)
     option(ASPH_ENABLE_SANITIZER_MEMORY "Enable memory sanitizer" OFF)
-    option(ASPH_ENABLE_UNITY_BUILD "Enable unity builds" OFF)
     option(ASPH_ENABLE_CLANG_TIDY "Enable clang-tidy" OFF)
     option(ASPH_ENABLE_CPPCHECK "Enable cpp-check analysis" OFF)
     option(ASPH_ENABLE_IWYU "Enable include-what-you-use analysis" OFF)
     option(ASPH_ENABLE_PCH "Enable precompiled headers" OFF)
-    option(ASPH_ENABLE_CACHE "Enable ccache" OFF)
-    option(ASPH_ENABLE_COMPILE_COMMANDS "Enable support for compile_commnads.json" OFF)
+    option(ASPH_ENABLE_CACHE "Enable compiler cache" OFF)
+    option(ASPH_CREATE_COMPILE_COMMANDS_SYMLINK "Create a source-tree symlink to compile_commands.json" OFF)
     option(ASPH_ENABLE_FAST_MATH "Enable fast math compilation flags" OFF)
-    option(ASPH_CUDA_ENABLE_CUSTOM_ARCHITECTURES "Enable choosing CUDA architectures" OFF)
     option(ASPH_CUDA_ENABLE_DEBUG "Enable CUDA debug symbols (-G)" OFF)
     option(ASPH_CUDA_ENABLE_LINEINFO "Enable CUDA line info" OFF)
-
 
     if (NOT PROJECT_IS_TOP_LEVEL)
         mark_as_advanced(
@@ -44,17 +41,15 @@ macro(sph_setup_options)
                 ASPH_ENABLE_SANITIZER_UNDEFINED
                 ASPH_ENABLE_SANITIZER_THREAD
                 ASPH_ENABLE_SANITIZER_MEMORY
-                ASPH_ENABLE_UNITY_BUILD
                 ASPH_ENABLE_CLANG_TIDY
                 ASPH_ENABLE_CPPCHECK
                 ASPH_ENABLE_IWYU
                 ASPH_ENABLE_PCH
                 ASPH_ENABLE_CACHE
-                ASPH_ENABLE_COMPILE_COMMANDS
+                ASPH_CREATE_COMPILE_COMMANDS_SYMLINK
                 ASPH_ENABLE_FAST_MATH
-                ASPH_CUDA_ENABLE_CUSTOM_ARCHITECTURES OFF
-                ASPH_CUDA_ENABLE_DEBUG OFF
-                ASPH_CUDA_ENABLE_LINEINFO OFF)
+                ASPH_CUDA_ENABLE_DEBUG
+                ASPH_CUDA_ENABLE_LINEINFO)
     endif ()
 
 endmacro()
@@ -84,9 +79,8 @@ macro(sph_local_options)
         include(cmake/StandardProjectSettings.cmake)
     endif ()
 
-    if (ASPH_ENABLE_COMPILE_COMMANDS)
-        include(cmake/CompileCommands.cmake)
-        sph_enable_compile_commands()
+    if (ASPH_CREATE_COMPILE_COMMANDS_SYMLINK)
+        sph_create_compile_commands_symlink()
     endif ()
 
     add_library(sph_warnings INTERFACE)
@@ -112,8 +106,6 @@ macro(sph_local_options)
             ${ASPH_ENABLE_SANITIZER_UNDEFINED}
             ${ASPH_ENABLE_SANITIZER_THREAD}
             ${ASPH_ENABLE_SANITIZER_MEMORY})
-
-    set_target_properties(sph_options PROPERTIES UNITY_BUILD ${ASPH_ENABLE_UNITY_BUILD})
 
     if (ASPH_ENABLE_PCH)
         target_precompile_headers(
@@ -160,5 +152,4 @@ macro(sph_local_options)
         endif ()
         sph_enable_hardening(sph_options OFF ${ENABLE_UBSAN_MINIMAL_RUNTIME})
     endif ()
-
 endmacro()

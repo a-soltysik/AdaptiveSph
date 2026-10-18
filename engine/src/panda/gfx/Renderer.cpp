@@ -75,7 +75,7 @@ auto Renderer::beginSwapChainRenderPass() const -> void
         .renderPass = _swapChain->getRenderPass(),
         .framebuffer = _swapChain->getFrameBuffer(_currentImageIndex),
         .renderArea = {.offset = {.x = 0, .y = 0}, .extent = _swapChain->getExtent()},
-        .clearValueCount = clearValues.size(),
+        .clearValueCount = static_cast<uint32_t>(clearValues.size()),
         .pClearValues = clearValues.data(),
     };
 

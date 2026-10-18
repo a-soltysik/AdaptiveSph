@@ -26,7 +26,9 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fdiagnostics-color=always>)
     endif ()
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND MSVC_VERSION GREATER 1900)
-    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/diagnostics:column>)
+    add_compile_options(
+            $<$<COMPILE_LANGUAGE:CXX>:/diagnostics:column>
+            $<$<COMPILE_LANGUAGE:CXX>:/Zc:__cplusplus>)
 else ()
     message(STATUS "No colored compiler diagnostic set for '${CMAKE_CXX_COMPILER_ID}' compiler.")
 endif ()

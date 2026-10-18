@@ -11,7 +11,6 @@
       "hidden": true,
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/${presetName}",
-      "installDir": "${sourceDir}/install/${presetName}",
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
@@ -48,7 +47,7 @@
       },
       "cacheVariables": {
         "CPM_SOURCE_CACHE": "$env{HOME}/.cache/CPM",
-        "ASPH_ENABLE_COMPILE_COMMANDS": "ON"
+        "ASPH_CREATE_COMPILE_COMMANDS_SYMLINK": "ON"
       }
     },
     {
@@ -56,8 +55,7 @@
       "hidden": true,
       "cacheVariables": {
         "ASPH_ENABLE_WARNINGS": "ON",
-        "ASPH_ENABLE_CACHE": "ON",
-        "ASPH_ENABLE_UNITY_BUILD": "ON"
+        "ASPH_ENABLE_CACHE": "ON"
       }
     },
     {
@@ -65,7 +63,6 @@
       "hidden": true,
       "cacheVariables": {
         "ASPH_ENABLE_IPO": "ON",
-        "ASPH_ENABLE_UNITY_BUILD": "ON",
         "ASPH_ENABLE_CACHE": "ON"
       }
     },
@@ -73,7 +70,6 @@
       "name": "with-warnings",
       "hidden": true,
       "cacheVariables": {
-        "ASPH_ENABLE_UNITY_BUILD": "ON",
         "ASPH_ENABLE_WARNINGS_AS_ERRORS": "ON"
       }
     },
@@ -81,7 +77,6 @@
       "name": "with-clang-tidy",
       "hidden": true,
       "cacheVariables": {
-        "ASPH_ENABLE_UNITY_BUILD": "ON",
         "ASPH_ENABLE_CLANG_TIDY": "ON"
       }
     },
@@ -89,7 +84,6 @@
       "name": "with-cppcheck",
       "hidden": true,
       "cacheVariables": {
-        "ASPH_ENABLE_UNITY_BUILD": "ON",
         "ASPH_ENABLE_CPPCHECK": "ON"
       }
     },
